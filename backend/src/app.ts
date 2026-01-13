@@ -11,6 +11,7 @@ import { router } from './routes';
 
 const app = express();
 app.set('etag', false);
+app.set('trust proxy', 1);
 
 const allowedOrigins = env.FRONTEND_URL.split(',').map((origin) => origin.trim());
 
