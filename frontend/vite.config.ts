@@ -43,18 +43,6 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       chunkSizeWarningLimit: 750,
-      rollupOptions: {
-        output: {
-          manualChunks(id) {
-            if (!id.includes('node_modules')) return undefined;
-            if (id.includes('react')) return 'react-vendor';
-            if (id.includes('@tanstack')) return 'query-vendor';
-            if (id.includes('react-router')) return 'router-vendor';
-            if (id.includes('lucide-react')) return 'icons-vendor';
-            return 'vendor';
-          },
-        },
-      },
     },
   };
 });
