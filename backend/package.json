@@ -33,6 +33,7 @@
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
     "nanoid": "^5.1.6",
+    "nodemailer": "^6.9.15",
     "prisma": "^5.18.0",
     "slugify": "^1.6.6",
     "zod": "^4.2.1"

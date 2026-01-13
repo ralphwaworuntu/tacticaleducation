@@ -7,6 +7,7 @@ import { env } from '../../config/env';
 import { hashPassword, comparePassword } from '../../utils/password';
 import { generateAccessToken, generateRefreshToken } from '../../utils/token';
 import { getActiveMembership } from '../../utils/membership';
+import { sendVerificationEmail } from '../../utils/mailer';
 import { HttpError } from '../../middlewares/errorHandler';
 import type { ChangePasswordInput, LoginInput, RegisterInput, UpdateProfileInput } from './auth.schemas';
 import type { Prisma } from '@prisma/client';
@@ -182,6 +183,12 @@ export async function registerUser(input: RegisterInput) {
         },
       });
     }
+  }
+
+  try {
+    await sendVerificationEmail({ to: user.email, name: user.name, token: verificationToken });
+  } catch (error) {
+    throw new HttpError('Gagal mengirim email verifikasi. Silakan coba kirim ulang token.', 500);
   }
 
   return {
@@ -424,6 +431,12 @@ export async function resendEmailVerification(email: string) {
 
   const verificationToken = nanoid(40);
   await prisma.user.update({ where: { id: user.id }, data: { emailVerificationToken: verificationToken } });
+
+  try {
+    await sendVerificationEmail({ to: user.email, name: user.name, token: verificationToken });
+  } catch (error) {
+    throw new HttpError('Gagal mengirim ulang email verifikasi. Silakan coba beberapa saat lagi.', 500);
+  }
 
   return {
     email: user.email,
