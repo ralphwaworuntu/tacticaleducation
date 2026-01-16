@@ -1,15 +1,15 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
 
-const transporter = nodemailer.createTransport({
-  host: env.SMTP_HOST,
-  port: env.SMTP_PORT,
-  secure: env.SMTP_SECURE,
-  auth: {
-    user: env.SMTP_USER,
-    pass: env.SMTP_PASS,
-  },
-});
+function isSmtpConfigured() {
+  return Boolean(
+    env.SMTP_HOST &&
+      env.SMTP_USER &&
+      env.SMTP_PASS &&
+      env.SMTP_FROM_NAME &&
+      env.SMTP_FROM_EMAIL,
+  );
+}
 
 type VerificationPayload = {
   to: string;
@@ -18,8 +18,23 @@ type VerificationPayload = {
 };
 
 export async function sendVerificationEmail({ to, name, token }: VerificationPayload) {
+  if (!isSmtpConfigured()) {
+    // SMTP belum disiapkan, abaikan pengiriman email.
+    return false;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: env.SMTP_HOST,
+    port: env.SMTP_PORT,
+    secure: env.SMTP_SECURE,
+    auth: {
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASS,
+    },
+  });
+
   const safeName = name?.trim() ? name.trim() : 'Sahabat Tactical Education';
-  const appUrl = env.APP_URL.replace(/\/+$/, '');
+  const appUrl = (env.APP_URL || 'http://localhost:5173').replace(/\/+$/, '');
   const verifyUrl = `${appUrl}/auth/verify`;
 
   const subject = 'Verifikasi Email Tactical Education';
@@ -58,4 +73,6 @@ export async function sendVerificationEmail({ to, name, token }: VerificationPay
     text,
     html,
   });
+
+  return true;
 }

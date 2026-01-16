@@ -188,7 +188,8 @@ export async function registerUser(input: RegisterInput) {
   try {
     await sendVerificationEmail({ to: user.email, name: user.name, token: verificationToken });
   } catch (error) {
-    throw new HttpError('Gagal mengirim email verifikasi. Silakan coba kirim ulang token.', 500);
+    // eslint-disable-next-line no-console
+    console.warn('Gagal mengirim email verifikasi:', error);
   }
 
   return {
@@ -435,7 +436,8 @@ export async function resendEmailVerification(email: string) {
   try {
     await sendVerificationEmail({ to: user.email, name: user.name, token: verificationToken });
   } catch (error) {
-    throw new HttpError('Gagal mengirim ulang email verifikasi. Silakan coba beberapa saat lagi.', 500);
+    // eslint-disable-next-line no-console
+    console.warn('Gagal mengirim ulang email verifikasi:', error);
   }
 
   return {
