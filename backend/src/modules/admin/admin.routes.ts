@@ -184,13 +184,15 @@ adminRouter.delete('/landing/videos/:id', deleteVideoController);
 
 adminRouter.post(
   '/landing/announcements',
-  contentImageUpload.single('image'),\n  optimizeUploadedImages,
+  contentImageUpload.single('image'),
+  optimizeUploadedImages,
   validateResource(createAnnouncementSchema),
   createAnnouncementController,
 );
 adminRouter.put(
   '/landing/announcements/:id',
-  contentImageUpload.single('image'),\n  optimizeUploadedImages,
+  contentImageUpload.single('image'),
+  optimizeUploadedImages,
   validateResource(updateAnnouncementSchema),
   updateAnnouncementController,
 );
@@ -202,13 +204,15 @@ adminRouter.delete('/landing/faq/:id', deleteFaqController);
 
 adminRouter.post(
   '/landing/news',
-  contentImageUpload.single('coverImage'),\n  optimizeUploadedImages,
+  contentImageUpload.single('coverImage'),
+  optimizeUploadedImages,
   validateResource(createNewsSchema),
   createNewsController,
 );
 adminRouter.put(
   '/landing/news/:id',
-  contentImageUpload.single('coverImage'),\n  optimizeUploadedImages,
+  contentImageUpload.single('coverImage'),
+  optimizeUploadedImages,
   validateResource(updateNewsSchema),
   updateNewsController,
 );
@@ -217,13 +221,15 @@ adminRouter.delete('/landing/news/:id', deleteNewsController);
 adminRouter.get('/tryouts/categories', listTryoutCategoriesController);
 adminRouter.post(
   '/tryouts/categories',
-  contentImageUpload.single('image'),\n  optimizeUploadedImages,
+  contentImageUpload.single('image'),
+  optimizeUploadedImages,
   validateResource(createTryoutCategorySchema),
   createTryoutCategoryController,
 );
 adminRouter.put(
   '/tryouts/categories/:id',
-  contentImageUpload.single('image'),\n  optimizeUploadedImages,
+  contentImageUpload.single('image'),
+  optimizeUploadedImages,
   validateResource(updateTryoutCategorySchema),
   updateTryoutCategoryController,
 );
@@ -232,13 +238,15 @@ adminRouter.delete('/tryouts/categories/:id', deleteTryoutCategoryController);
 adminRouter.get('/tryouts/sub-categories', listTryoutSubCategoriesController);
 adminRouter.post(
   '/tryouts/sub-categories',
-  contentImageUpload.single('image'),\n  optimizeUploadedImages,
+  contentImageUpload.single('image'),
+  optimizeUploadedImages,
   validateResource(createTryoutSubCategorySchema),
   createTryoutSubCategoryController,
 );
 adminRouter.put(
   '/tryouts/sub-categories/:id',
-  contentImageUpload.single('image'),\n  optimizeUploadedImages,
+  contentImageUpload.single('image'),
+  optimizeUploadedImages,
   validateResource(updateTryoutSubCategorySchema),
   updateTryoutSubCategoryController,
 );
@@ -270,13 +278,15 @@ adminRouter.delete('/tryouts/:id', deleteTryoutController);
 adminRouter.get('/practice/categories', listPracticeCategoriesController);
 adminRouter.post(
   '/practice/categories',
-  contentImageUpload.single('image'),\n  optimizeUploadedImages,
+  contentImageUpload.single('image'),
+  optimizeUploadedImages,
   validateResource(createPracticeCategorySchema),
   createPracticeCategoryController,
 );
 adminRouter.put(
   '/practice/categories/:id',
-  contentImageUpload.single('image'),\n  optimizeUploadedImages,
+  contentImageUpload.single('image'),
+  optimizeUploadedImages,
   validateResource(updatePracticeCategorySchema),
   updatePracticeCategoryController,
 );
@@ -285,13 +295,15 @@ adminRouter.delete('/practice/categories/:id', deletePracticeCategoryController)
 adminRouter.get('/practice/sub-categories', listPracticeSubCategoriesController);
 adminRouter.post(
   '/practice/sub-categories',
-  contentImageUpload.single('image'),\n  optimizeUploadedImages,
+  contentImageUpload.single('image'),
+  optimizeUploadedImages,
   validateResource(createPracticeSubCategorySchema),
   createPracticeSubCategoryController,
 );
 adminRouter.put(
   '/practice/sub-categories/:id',
-  contentImageUpload.single('image'),\n  optimizeUploadedImages,
+  contentImageUpload.single('image'),
+  optimizeUploadedImages,
   validateResource(updatePracticeSubCategorySchema),
   updatePracticeSubCategoryController,
 );
@@ -300,13 +312,15 @@ adminRouter.delete('/practice/sub-categories/:id', deletePracticeSubCategoryCont
 adminRouter.get('/practice/sub-sub-categories', listPracticeSubSubCategoriesController);
 adminRouter.post(
   '/practice/sub-sub-categories',
-  contentImageUpload.single('image'),\n  optimizeUploadedImages,
+  contentImageUpload.single('image'),
+  optimizeUploadedImages,
   validateResource(createPracticeSubSubCategorySchema),
   createPracticeSubSubCategoryController,
 );
 adminRouter.put(
   '/practice/sub-sub-categories/:id',
-  contentImageUpload.single('image'),\n  optimizeUploadedImages,
+  contentImageUpload.single('image'),
+  optimizeUploadedImages,
   validateResource(updatePracticeSubSubCategorySchema),
   updatePracticeSubSubCategoryController,
 );
@@ -357,15 +371,19 @@ adminRouter.put('/site/contact-config', validateResource(contactConfigSchema), u
 adminRouter.get('/site/exam-control', getExamControlAdminController);
 adminRouter.put('/site/exam-control', validateResource(examControlSchema), updateExamControlAdminController);
 adminRouter.get('/site/welcome-modal', listWelcomeModalAdminController);
-adminRouter.post('/site/welcome-modal', contentImageUpload.single('image'),\n  optimizeUploadedImages, createWelcomeModalAdminController);
-adminRouter.put('/site/welcome-modal/:id', contentImageUpload.single('image'),\n  optimizeUploadedImages, updateWelcomeModalAdminController);
+adminRouter.post('/site/welcome-modal', contentImageUpload.single('image'),
+  optimizeUploadedImages, createWelcomeModalAdminController);
+adminRouter.put('/site/welcome-modal/:id', contentImageUpload.single('image'),
+  optimizeUploadedImages, updateWelcomeModalAdminController);
 adminRouter.delete('/site/welcome-modal/:id', deleteWelcomeModalAdminController);
 adminRouter.get('/exams/cermat-config', getCermatConfigAdminController);
 adminRouter.put('/exams/cermat-config', validateResource(cermatConfigSchema), updateCermatConfigAdminController);
 adminRouter.get('/site/hero-image', getHeroImageController);
-adminRouter.post('/site/hero-image', heroImageUpload.single('hero'),\n  optimizeUploadedImages, uploadHeroImageController);
+adminRouter.post('/site/hero-image', heroImageUpload.single('hero'),
+  optimizeUploadedImages, uploadHeroImageController);
 adminRouter.get('/site/hero-slides', listHeroSlidesController);
-adminRouter.post('/site/hero-slides', heroImageUpload.single('slide'),\n  optimizeUploadedImages, createHeroSlideController);
+adminRouter.post('/site/hero-slides', heroImageUpload.single('slide'),
+  optimizeUploadedImages, createHeroSlideController);
 adminRouter.delete('/site/hero-slides/:id', deleteHeroSlideController);
 adminRouter.get('/dashboard/slides', listMemberSlidesController);
 adminRouter.post('/dashboard/slides', validateResource(createMemberSlideSchema), createMemberSlideController);
@@ -391,4 +409,6 @@ adminRouter.post('/users/:id/reset-password', validateResource(userResetPassword
 adminRouter.post('/users/:id/impersonate', validateResource(userImpersonateSchema), impersonateUserController);
 
 adminRouter.use('/monitoring', monitoringRouter);
+
+
 
