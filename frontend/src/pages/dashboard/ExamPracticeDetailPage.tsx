@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useExamControlStatus } from '@/hooks/useExamControl';
+import { useFullscreenExam } from '@/hooks/useFullscreenExam';
 import { toast } from 'sonner';
 
 function formatDateTime(value?: string | null) {
@@ -37,6 +38,7 @@ export function ExamPracticeDetailPage() {
     queryFn: () => apiGet<PracticeSetInfo>(`/ujian/practice/${slug}/info`),
     enabled: Boolean(slug) && examEnabled,
   });
+  const { request: requestFullscreen, isSupported: fullscreenSupported } = useFullscreenExam({ active: false });
   const returnTo = slug ? `/app/ujian/soal/detail/${slug}` : '/app/ujian/soal';
 
   const status = useMemo(() => getScheduleStatus(data?.openAt, data?.closeAt), [data?.closeAt, data?.openAt]);
@@ -81,7 +83,14 @@ export function ExamPracticeDetailPage() {
             Kembali
           </Button>
           <Button
-            onClick={() => setFullscreenGateOpen(true)}
+            onClick={() => {
+              if (!fullscreenSupported) {
+                sessionStorage.setItem('exam_practice_start_slug', data.slug);
+                navigate('/app/ujian/soal/mulai', { state: { startPractice: { slug: data.slug }, returnTo } });
+                return;
+              }
+              setFullscreenGateOpen(true);
+            }}
             disabled={!status.canStart}
           >
             {status.canStart ? 'Mulai Ujian Soal' : status.label}
@@ -113,7 +122,7 @@ export function ExamPracticeDetailPage() {
           </div>
         </CardContent>
       </Card>
-      {fullscreenGateOpen && (
+      {fullscreenGateOpen && fullscreenSupported && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/70 px-4">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-2xl">
             <p className="text-xs uppercase tracking-[0.4em] text-brand-500">Persiapan Ujian</p>
@@ -126,9 +135,7 @@ export function ExamPracticeDetailPage() {
               <Button
                 onClick={async () => {
                   try {
-                    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-                      await document.documentElement.requestFullscreen();
-                    }
+                    await requestFullscreen();
                   } catch {
                     toast.error('Mode layar penuh wajib diizinkan untuk memulai ujian.');
                     return;

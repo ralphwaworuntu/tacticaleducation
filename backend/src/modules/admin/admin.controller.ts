@@ -1251,6 +1251,7 @@ export async function deleteMaterialAdminController(req: Request, res: Response,
 export async function listMembershipPackagesController(_req: Request, res: Response, next: NextFunction) {
   try {
     const packages = await prisma.membershipPackage.findMany({
+      where: { isActive: true },
       orderBy: { price: 'asc' },
       include: { materials: { select: { materialId: true } } },
     });
@@ -1346,6 +1347,15 @@ export async function updateMembershipPackageController(req: Request, res: Respo
 export async function deleteMembershipPackageController(req: Request, res: Response, next: NextFunction) {
   try {
     const id = getIdParam(req);
+    const transactionCount = await prisma.transaction.count({ where: { packageId: id } });
+    if (transactionCount > 0) {
+      await prisma.membershipPackage.update({
+        where: { id },
+        data: { isActive: false },
+      });
+      res.status(204).send();
+      return;
+    }
     await prisma.membershipPackage.delete({ where: { id } });
     res.status(204).send();
   } catch (error) {

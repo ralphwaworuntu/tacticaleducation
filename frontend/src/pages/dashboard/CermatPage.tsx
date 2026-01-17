@@ -8,6 +8,7 @@ import { useMembershipStatus } from '@/hooks/useMembershipStatus';
 import { MembershipRequired } from '@/components/dashboard/MembershipRequired';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFullscreenExam } from '@/hooks/useFullscreenExam';
+import { ExamCountdownModal } from '@/components/dashboard/ExamCountdownModal';
 
 type CermatMode = 'NUMBER' | 'LETTER';
 
@@ -66,9 +67,13 @@ export function CermatPage() {
   >(null);
   const [pendingMode, setPendingMode] = useState<CermatMode | null>(null);
   const [pendingNext, setPendingNext] = useState<CermatSession | null>(null);
+  const [pendingSession, setPendingSession] = useState<CermatSession | null>(null);
+  const [countdownOpen, setCountdownOpen] = useState(false);
+  const [countdownToken, setCountdownToken] = useState(0);
   const autoSubmitRef = useRef<string>('');
+  const answersRef = useRef<Record<number, string | null>>({});
 
-  const { request: requestFullscreen, exit: exitFullscreen, setViolationHandler } = useFullscreenExam({
+  const { request: requestFullscreen, exit: exitFullscreen, setViolationHandler, isSupported: fullscreenSupported } = useFullscreenExam({
     active: Boolean(session),
   });
 
@@ -125,21 +130,10 @@ export function CermatPage() {
     onMutate: (mode) => {
       setPendingMode(mode);
     },
-    onSuccess: async (payload) => {
-      try {
-        await requestFullscreen();
-      } catch {
-        toast.error('Izinkan mode layar penuh untuk mulai tes.');
-        return;
-      }
-      setSession(payload);
-      setAnswers({});
-      setResult(null);
-      setCurrentIndex(0);
-      setTimeLeft(payload.timerSeconds ?? 60);
-      setBreakLeft(0);
-      setIsBreaking(false);
-      toast.success('Tes kecermatan dimulai. Fokus pada setiap soal!');
+    onSuccess: (payload) => {
+      setPendingSession(payload);
+      setCountdownToken((prev) => prev + 1);
+      setCountdownOpen(true);
     },
     onError: () => toast.error('Gagal memulai sesi'),
     onSettled: () => setPendingMode(null),
@@ -149,6 +143,7 @@ export function CermatPage() {
     (value?: string | null) => {
       if (!session || !currentQuestion || submitMutation.isPending) return;
       const nextAnswers = { ...answers, [currentQuestion.order]: typeof value === 'string' ? value : null };
+      answersRef.current = nextAnswers;
       setAnswers(nextAnswers);
       const isLast = currentIndex + 1 >= session.questions.length;
       if (isLast) {
@@ -165,12 +160,16 @@ export function CermatPage() {
   }, [session?.sessionId]);
 
   useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
+
+  useEffect(() => {
     if (!session) return undefined;
     if (isBreaking) return undefined;
     if (timeLeft <= 0) {
       if (!submitMutation.isPending && autoSubmitRef.current !== session.sessionId) {
         autoSubmitRef.current = session.sessionId;
-        submitMutation.mutate({ sessionId: session.sessionId, answerMap: answers });
+        submitMutation.mutate({ sessionId: session.sessionId, answerMap: answersRef.current });
       }
       return undefined;
     }
@@ -178,7 +177,7 @@ export function CermatPage() {
       setTimeLeft((prev) => (prev <= 1 ? 0 : prev - 1));
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [session, isBreaking, timeLeft, submitMutation, answers]);
+  }, [session, isBreaking, timeLeft, submitMutation]);
 
   useEffect(() => {
     if (!pendingNext || breakLeft <= 0 || !isBreaking) return;
@@ -214,6 +213,7 @@ export function CermatPage() {
       setResult(null);
       setIsBreaking(false);
       setPendingNext(null);
+      setPendingSession(null);
       exitFullscreen();
     },
     [exitFullscreen],
@@ -386,6 +386,43 @@ export function CermatPage() {
           </div>
         </div>
       )}
+      <ExamCountdownModal
+        open={countdownOpen}
+        resetKey={countdownToken}
+        title="Mulai Tes Kecermatan"
+        subtitle="Fokus dan pastikan koneksi stabil."
+        warning="Tes akan dihentikan jika Anda berpindah tab atau meninggalkan halaman."
+        onComplete={async () => {
+          if (!pendingSession) {
+            setCountdownOpen(false);
+            return;
+          }
+          if (fullscreenSupported) {
+            try {
+              await requestFullscreen();
+            } catch {
+              toast.error('Izinkan mode layar penuh untuk mulai tes.');
+              setCountdownOpen(false);
+              setPendingSession(null);
+              return;
+            }
+          }
+          setSession(pendingSession);
+          setAnswers({});
+          setResult(null);
+          setCurrentIndex(0);
+          setTimeLeft(pendingSession.timerSeconds ?? 60);
+          setBreakLeft(0);
+          setIsBreaking(false);
+          setCountdownOpen(false);
+          setPendingSession(null);
+          toast.success('Tes kecermatan dimulai. Fokus pada setiap soal!');
+        }}
+        onCancel={() => {
+          setCountdownOpen(false);
+          setPendingSession(null);
+        }}
+      />
 
     </section>
   );

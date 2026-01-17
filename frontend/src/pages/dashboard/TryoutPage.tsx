@@ -96,7 +96,8 @@ export function TryoutPage() {
   const selectedSubCategory =
     selectedCategory?.subCategories.find((subCategory) => subCategory.id === resolvedSubCategoryId) ?? null;
 
-  const { request: requestFullscreen, exit: exitFullscreen, setViolationHandler } = useFullscreenExam({
+  const { request: requestFullscreen, exit: exitFullscreen, setViolationHandler, isSupported: fullscreenSupported } =
+    useFullscreenExam({
     active: Boolean(session),
   });
 
@@ -262,14 +263,14 @@ export function TryoutPage() {
       }
       countdownStartRef.current = false;
       setPendingTryout(item);
-      if (!document.fullscreenElement) {
+      if (fullscreenSupported && !document.fullscreenElement) {
         setFullscreenGateOpen(true);
         return;
       }
       setCountdownToken((prev) => prev + 1);
       setCountdownOpen(true);
     },
-    [tryoutBlock],
+    [fullscreenSupported, tryoutBlock],
   );
 
   useEffect(() => {
@@ -309,7 +310,7 @@ export function TryoutPage() {
     if (countdownStartRef.current) {
       return;
     }
-    if (!document.fullscreenElement) {
+    if (fullscreenSupported && !document.fullscreenElement) {
       setCountdownOpen(false);
       setFullscreenGateOpen(true);
       return;
@@ -322,26 +323,28 @@ export function TryoutPage() {
         setPendingTryout(null);
       },
     });
-  }, [pendingTryout, startMutation]);
+  }, [fullscreenSupported, pendingTryout, startMutation]);
 
   const handleFullscreenGate = useCallback(async () => {
     if (!pendingTryout) {
       setFullscreenGateOpen(false);
       return;
     }
-    try {
-      await requestFullscreen();
-    } catch {
-      toast.error('Mode layar penuh wajib diizinkan untuk memulai tryout.');
-      setPendingTryout(null);
-      const fallback = returnToRef.current ?? `/app/latihan/tryout/detail/${pendingTryout.slug}`;
-      navigate(fallback);
-      return;
+    if (fullscreenSupported) {
+      try {
+        await requestFullscreen();
+      } catch {
+        toast.error('Mode layar penuh wajib diizinkan untuk memulai tryout.');
+        setPendingTryout(null);
+        const fallback = returnToRef.current ?? `/app/latihan/tryout/detail/${pendingTryout.slug}`;
+        navigate(fallback);
+        return;
+      }
     }
     setFullscreenGateOpen(false);
     setCountdownToken((prev) => prev + 1);
     setCountdownOpen(true);
-  }, [navigate, pendingTryout, requestFullscreen]);
+  }, [fullscreenSupported, navigate, pendingTryout, requestFullscreen]);
 
   const handleJumpToQuestion = useCallback((index: number) => {
     setCurrentQuestionIndex(index);

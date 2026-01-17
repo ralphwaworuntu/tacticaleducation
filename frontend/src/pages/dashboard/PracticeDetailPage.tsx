@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useMembershipStatus } from '@/hooks/useMembershipStatus';
 import { MembershipRequired } from '@/components/dashboard/MembershipRequired';
+import { useFullscreenExam } from '@/hooks/useFullscreenExam';
 import { toast } from 'sonner';
 
 function formatDateTime(value?: string | null) {
@@ -37,6 +38,7 @@ export function PracticeDetailPage() {
     queryFn: () => apiGet<PracticeSetInfo>(`/exams/practice/${slug}/info`),
     enabled: Boolean(slug) && Boolean(membership.data?.isActive),
   });
+  const { request: requestFullscreen, isSupported: fullscreenSupported } = useFullscreenExam({ active: false });
   const returnTo = slug ? `/app/latihan-soal/detail/${slug}` : '/app/latihan-soal';
 
   const status = useMemo(() => getScheduleStatus(data?.openAt, data?.closeAt), [data?.closeAt, data?.openAt]);
@@ -85,7 +87,14 @@ export function PracticeDetailPage() {
             Kembali
           </Button>
           <Button
-            onClick={() => setFullscreenGateOpen(true)}
+            onClick={() => {
+              if (!fullscreenSupported) {
+                sessionStorage.setItem('practice_start_slug', data.slug);
+                navigate('/app/latihan-soal/mulai', { state: { startPractice: { slug: data.slug }, returnTo } });
+                return;
+              }
+              setFullscreenGateOpen(true);
+            }}
             disabled={!status.canStart}
           >
             {status.canStart ? 'Mulai Latihan Soal' : status.label}
@@ -117,7 +126,7 @@ export function PracticeDetailPage() {
           </div>
         </CardContent>
       </Card>
-      {fullscreenGateOpen && (
+      {fullscreenGateOpen && fullscreenSupported && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/70 px-4">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-2xl">
             <p className="text-xs uppercase tracking-[0.4em] text-brand-500">Persiapan Latihan</p>
@@ -130,9 +139,7 @@ export function PracticeDetailPage() {
               <Button
                 onClick={async () => {
                   try {
-                    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-                      await document.documentElement.requestFullscreen();
-                    }
+                    await requestFullscreen();
                   } catch {
                     toast.error('Mode layar penuh wajib diizinkan untuk memulai latihan.');
                     return;

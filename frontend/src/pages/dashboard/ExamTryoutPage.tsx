@@ -96,9 +96,10 @@ export function ExamTryoutPage() {
   const selectedSubCategory =
     selectedCategory?.subCategories.find((subCategory) => subCategory.id === resolvedSubCategoryId) ?? null;
 
-  const { request: requestFullscreen, exit: exitFullscreen, setViolationHandler } = useFullscreenExam({
-    active: Boolean(session),
-  });
+  const { request: requestFullscreen, exit: exitFullscreen, setViolationHandler, isSupported: fullscreenSupported } =
+    useFullscreenExam({
+      active: Boolean(session),
+    });
 
   const violationMutation = useMutation({
     mutationFn: (reason: string) => apiPost('/ujian/blocks', { type: 'TRYOUT', reason }),
@@ -262,14 +263,14 @@ export function ExamTryoutPage() {
       }
       countdownStartRef.current = false;
       setPendingTryout(item);
-      if (!document.fullscreenElement) {
+      if (fullscreenSupported && !document.fullscreenElement) {
         setFullscreenGateOpen(true);
         return;
       }
       setCountdownToken((prev) => prev + 1);
       setCountdownOpen(true);
     },
-    [tryoutBlock],
+    [fullscreenSupported, tryoutBlock],
   );
 
   useEffect(() => {
@@ -309,7 +310,7 @@ export function ExamTryoutPage() {
     if (countdownStartRef.current) {
       return;
     }
-    if (!document.fullscreenElement) {
+    if (fullscreenSupported && !document.fullscreenElement) {
       setCountdownOpen(false);
       setFullscreenGateOpen(true);
       return;
@@ -322,26 +323,28 @@ export function ExamTryoutPage() {
         setPendingTryout(null);
       },
     });
-  }, [pendingTryout, startMutation]);
+  }, [fullscreenSupported, pendingTryout, startMutation]);
 
   const handleFullscreenGate = useCallback(async () => {
     if (!pendingTryout) {
       setFullscreenGateOpen(false);
       return;
     }
-    try {
-      await requestFullscreen();
-    } catch {
-      toast.error('Mode layar penuh wajib diizinkan untuk memulai tryout.');
-      setPendingTryout(null);
-      const fallback = returnToRef.current ?? `/app/ujian/tryout/detail/${pendingTryout.slug}`;
-      navigate(fallback);
-      return;
+    if (fullscreenSupported) {
+      try {
+        await requestFullscreen();
+      } catch {
+        toast.error('Mode layar penuh wajib diizinkan untuk memulai tryout.');
+        setPendingTryout(null);
+        const fallback = returnToRef.current ?? `/app/ujian/tryout/detail/${pendingTryout.slug}`;
+        navigate(fallback);
+        return;
+      }
     }
     setFullscreenGateOpen(false);
     setCountdownToken((prev) => prev + 1);
     setCountdownOpen(true);
-  }, [navigate, pendingTryout, requestFullscreen]);
+  }, [fullscreenSupported, navigate, pendingTryout, requestFullscreen]);
 
   const handleJumpToQuestion = useCallback((index: number) => {
     setCurrentQuestionIndex(index);

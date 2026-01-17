@@ -48,7 +48,7 @@ export function PracticePage() {
   const returnToRef = useRef<string | null>(null);
   const pendingStartRef = useRef<string | null>(null);
   const practiceBlock = blocks?.find((block) => block.type === 'PRACTICE');
-  const { exit: exitFullscreen, setViolationHandler } = useFullscreenExam({
+  const { exit: exitFullscreen, setViolationHandler, isSupported: fullscreenSupported } = useFullscreenExam({
     active: examActive,
   });
 
@@ -242,7 +242,7 @@ export function PracticePage() {
 
   const handleStartPractice = useCallback(() => {
     if (!detail) return;
-    if (!document.fullscreenElement) {
+    if (fullscreenSupported && !document.fullscreenElement) {
       toast.error('Mode layar penuh wajib diaktifkan untuk memulai latihan.');
       setCountdownOpen(false);
       setDetail(null);
@@ -252,7 +252,7 @@ export function PracticePage() {
     }
     setExamActive(true);
     setCountdownOpen(false);
-  }, [detail, navigate]);
+  }, [detail, fullscreenSupported, navigate]);
 
   const handleCancelPractice = useCallback(() => {
     setExamActive(false);
