@@ -72,6 +72,7 @@ export function CermatPage() {
   const [countdownToken, setCountdownToken] = useState(0);
   const autoSubmitRef = useRef<string>('');
   const answersRef = useRef<Record<number, string | null>>({});
+  const timerRef = useRef<number | null>(null);
 
   const { request: requestFullscreen, exit: exitFullscreen, setViolationHandler, isSupported: fullscreenSupported } = useFullscreenExam({
     active: Boolean(session),
@@ -167,20 +168,35 @@ export function CermatPage() {
   }, [answers]);
 
   useEffect(() => {
-    if (!session) return undefined;
-    if (isBreaking) return undefined;
-    if (timeLeft <= 0) {
-      if (!submitMutation.isPending && autoSubmitRef.current !== session.sessionId) {
-        autoSubmitRef.current = session.sessionId;
-        submitMutation.mutate({ sessionId: session.sessionId, answerMap: answersRef.current });
+    if (!session || isBreaking) {
+      if (timerRef.current !== null) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
       }
       return undefined;
     }
-    const timer = window.setInterval(() => {
+    if (timerRef.current !== null) {
+      return undefined;
+    }
+    timerRef.current = window.setInterval(() => {
       setTimeLeft((prev) => (prev <= 1 ? 0 : prev - 1));
     }, 1000);
-    return () => window.clearInterval(timer);
-  }, [session, isBreaking, timeLeft, submitMutation]);
+    return () => {
+      if (timerRef.current !== null) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [session, isBreaking]);
+
+  useEffect(() => {
+    if (!session || isBreaking) return;
+    if (timeLeft > 0) return;
+    if (!submitMutation.isPending && autoSubmitRef.current !== session.sessionId) {
+      autoSubmitRef.current = session.sessionId;
+      submitMutation.mutate({ sessionId: session.sessionId, answerMap: answersRef.current });
+    }
+  }, [isBreaking, session, submitMutation, timeLeft]);
 
   useEffect(() => {
     if (!pendingNext || breakLeft <= 0 || !isBreaking) return;
