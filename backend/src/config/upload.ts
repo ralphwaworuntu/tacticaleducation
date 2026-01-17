@@ -2,7 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
 import slugify from 'slugify';
+import sharp from 'sharp';
 import { HttpError } from '../middlewares/errorHandler';
+import type { NextFunction, Request, Response } from 'express';
 
 const uploadsRoot = path.resolve(__dirname, '../../uploads');
 const paymentsRoot = path.join(uploadsRoot, 'payments');
@@ -13,6 +15,53 @@ const examCoverRoot = path.join(uploadsRoot, 'exams', 'covers');
 const examCsvRoot = path.join(uploadsRoot, 'exams', 'questions');
 
 const normalizePath = (value: string) => value.replace(/\\/g, '/');
+
+async function resizeImage(filePath: string) {
+  const tempPath = `${filePath}.tmp`;
+  await sharp(filePath)
+    .rotate()
+    .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true })
+    .toFile(tempPath);
+  await fs.promises.rename(tempPath, filePath);
+}
+
+function collectUploadedImages(req: Request) {
+  const files: Express.Multer.File[] = [];
+  const pushFile = (file?: Express.Multer.File | null) => {
+    if (file && file.mimetype?.startsWith('image/')) {
+      files.push(file);
+    }
+  };
+
+  const single = (req as Request & { file?: Express.Multer.File }).file;
+  if (single) {
+    pushFile(single);
+  }
+
+  const multiple = (req as Request & { files?: Express.Multer.File[] | Record<string, Express.Multer.File[]> }).files;
+  if (multiple) {
+    if (Array.isArray(multiple)) {
+      multiple.forEach((file) => pushFile(file));
+    } else {
+      Object.values(multiple).forEach((group) => group.forEach((file) => pushFile(file)));
+    }
+  }
+
+  return files;
+}
+
+export async function optimizeUploadedImages(req: Request, _res: Response, next: NextFunction) {
+  try {
+    const files = collectUploadedImages(req);
+    if (!files.length) {
+      return next();
+    }
+    await Promise.all(files.map((file) => resizeImage(file.path)));
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+}
 
 export function buildPublicUploadPath(fullPath: string) {
   const normalizedRoot = normalizePath(uploadsRoot);

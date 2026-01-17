@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { authenticate, authorize } from '../../middlewares/auth';
-import { paymentProofUpload } from '../../config/upload';
+import { paymentProofUpload, optimizeUploadedImages } from '../../config/upload';
 import { validateResource } from '../../middlewares/validateResource';
 import {
   addonPackagesController,
@@ -25,6 +25,7 @@ commerceRouter.post('/transactions', validateResource(createTransactionSchema), 
 commerceRouter.post(
   '/transactions/:code/confirm',
   paymentProofUpload.single('proof'),
+  optimizeUploadedImages,
   validateResource(confirmTransactionSchema),
   confirmTransactionController,
 );

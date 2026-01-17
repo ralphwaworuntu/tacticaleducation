@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authRateLimiter } from '../../middlewares/rateLimiter';
 import { authenticate } from '../../middlewares/auth';
-import { avatarUpload } from '../../config/upload';
+import { avatarUpload, optimizeUploadedImages } from '../../config/upload';
 import { validateResource } from '../../middlewares/validateResource';
 import {
   changePasswordController,
@@ -41,4 +41,4 @@ authRouter.post('/logout', authenticate, logoutController);
 authRouter.get('/me', authenticate, profileController);
 authRouter.patch('/me', authenticate, validateResource(updateProfileSchema), updateProfileController);
 authRouter.post('/password', authenticate, validateResource(changePasswordSchema), changePasswordController);
-authRouter.post('/avatar', authenticate, avatarUpload.single('avatar'), uploadAvatarController);
+authRouter.post('/avatar', authenticate, avatarUpload.single('avatar'), optimizeUploadedImages, uploadAvatarController);
