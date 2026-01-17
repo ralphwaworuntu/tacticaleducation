@@ -80,7 +80,7 @@ export function TryoutReviewPage() {
         <Card>
           <CardHeader title="Skor" />
           <CardContent>
-            <p className="text-4xl font-bold text-brand-600">{Math.round(data.score)}%</p>
+            <p className="text-4xl font-bold text-brand-600">{Math.round(data.score)}</p>
             <p className="text-sm text-slate-500">{data.questions.filter((q) => q.isCorrect).length}/{data.questions.length} soal benar</p>
           </CardContent>
         </Card>

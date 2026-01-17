@@ -211,7 +211,7 @@ export function PracticePage() {
     },
     onSuccess: (payload) => {
       setResult(payload);
-      toast.success(`Latihan selesai. Skor ${Math.round(payload.score)}%`);
+      toast.success(`Latihan selesai. Skor ${Math.round(payload.score)}`);
       setExamActive(false);
       setDetail(null);
       setAnswers({});
@@ -521,7 +521,7 @@ export function PracticePage() {
               <h3 className="text-2xl font-semibold text-slate-900">{recentSet?.title ?? 'Latihan Terakhir'}</h3>
               {recentSet && <p className="text-sm text-slate-500">Kategori {recentSet.category}</p>}
               <p className="mt-2 text-sm text-slate-600">
-                Skor {Math.round(result.score)}% - {result.correct}/{result.total} soal benar
+                Skor {Math.round(result.score)} - {result.correct}/{result.total} soal benar
               </p>
             </div>
             {result.resultId && (

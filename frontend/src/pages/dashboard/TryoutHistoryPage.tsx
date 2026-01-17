@@ -62,7 +62,7 @@ export function TryoutHistoryPage() {
                 <td className="px-4 py-3 font-semibold text-slate-900">{item.tryout.name}</td>
                 <td className="px-4 py-3 text-slate-600">{item.tryout.subCategory.category.name}</td>
                 <td className="px-4 py-3 text-slate-600">{formatDate(item.createdAt)}</td>
-                <td className="px-4 py-3 font-bold text-brand-500">{Math.round(item.score)}%</td>
+                <td className="px-4 py-3 font-bold text-brand-500">{Math.round(item.score)}</td>
                 <td className="px-4 py-3">
                   <Button asChild size="sm" variant="outline">
                     <Link to={`/app/latihan/tryout/review/${item.id}`}>Lihat</Link>

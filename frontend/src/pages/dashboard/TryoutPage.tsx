@@ -198,7 +198,7 @@ export function TryoutPage() {
       setResult(payload);
       setSession(null);
       setCurrentQuestionIndex(0);
-      toast.success(`Tryout selesai. Skor kamu ${Math.round(payload.score)}%`);
+      toast.success(`Tryout selesai. Skor kamu ${Math.round(payload.score)}`);
       exitFullscreen();
       queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
       queryClient.invalidateQueries({ queryKey: ['tryout-history'] });
@@ -685,7 +685,7 @@ export function TryoutPage() {
       {result && !session && (
         <section className="rounded-3xl border border-brand-200 bg-brand-50 p-6 text-brand-800">
           <p className="text-sm font-semibold uppercase tracking-[0.3em]">Hasil Terakhir</p>
-          <p className="mt-2 text-3xl font-bold">{Math.round(result.score)}%</p>
+          <p className="mt-2 text-3xl font-bold">{Math.round(result.score)}</p>
           <p className="text-sm">{result.correct}/{result.total} soal benar</p>
           {result.resultId && (
             <Button

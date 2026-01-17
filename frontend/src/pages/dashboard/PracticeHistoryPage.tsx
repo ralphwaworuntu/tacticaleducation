@@ -71,7 +71,7 @@ export function PracticeHistoryPage() {
                   {item.set.subSubCategory.name}
                 </td>
                 <td className="px-4 py-3 text-slate-600">{formatDate(item.createdAt)}</td>
-                <td className="px-4 py-3 font-bold text-brand-500">{Math.round(item.score)}%</td>
+                <td className="px-4 py-3 font-bold text-brand-500">{Math.round(item.score)}</td>
                 <td className="px-4 py-3">
                   <Button asChild size="sm" variant="outline">
                     <Link to={`/app/latihan-soal/review/${item.id}`}>Lihat</Link>

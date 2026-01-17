@@ -112,7 +112,7 @@ export function DashboardHomePage() {
                   <p className="text-xs text-slate-500">
                     {result.tryout.subCategory.category.name} - {formatDate(result.startedAt)}
                   </p>
-                  <p className="mt-1 text-2xl font-bold text-brand-500">{Math.round(result.score)}%</p>
+                  <p className="mt-1 text-2xl font-bold text-brand-500">{Math.round(result.score)}</p>
                 </li>
               ))}
             </ul>
