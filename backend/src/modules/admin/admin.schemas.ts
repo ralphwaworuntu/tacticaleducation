@@ -85,12 +85,13 @@ const tryoutOptionSchema = z.object({
 });
 
 const tryoutQuestionSchema = z
-  .object({
-    prompt: z.string().min(3),
-    explanation: z.string().optional(),
-    order: z.number().int().positive().optional(),
-    options: z.array(tryoutOptionSchema).min(2),
-  })
+    .object({
+      prompt: z.string().min(3),
+      explanation: z.string().optional(),
+      explanationImageUrl: z.string().optional(),
+      order: z.number().int().positive().optional(),
+      options: z.array(tryoutOptionSchema).min(2),
+    })
   .refine((value) => value.options.some((opt) => opt.isCorrect), {
     message: 'Each question must have at least one correct option',
     path: ['options'],
@@ -102,12 +103,13 @@ const practiceOptionSchema = z.object({
 });
 
 const practiceQuestionSchema = z
-  .object({
-    prompt: z.string().min(3),
-    explanation: z.string().optional(),
-    order: z.number().int().positive().optional(),
-    options: z.array(practiceOptionSchema).min(2),
-  })
+    .object({
+      prompt: z.string().min(3),
+      explanation: z.string().optional(),
+      explanationImageUrl: z.string().optional(),
+      order: z.number().int().positive().optional(),
+      options: z.array(practiceOptionSchema).min(2),
+    })
   .refine((value) => value.options.some((opt) => opt.isCorrect), {
     message: 'Each question must have at least one correct option',
     path: ['options'],

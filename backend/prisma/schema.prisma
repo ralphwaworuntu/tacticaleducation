@@ -248,6 +248,7 @@ model TryoutQuestion {
   prompt      String         @db.LongText
   imageUrl    String?
   explanation String?        @db.LongText
+  explanationImageUrl String?
   order       Int
   tryoutId    String
   tryout      Tryout         @relation(fields: [tryoutId], references: [id])
@@ -353,6 +354,7 @@ model PracticeQuestion {
   prompt      String           @db.LongText
   imageUrl    String?
   explanation String?          @db.LongText
+  explanationImageUrl String?
   order       Int
   setId       String
   set         PracticeSet      @relation(fields: [setId], references: [id])

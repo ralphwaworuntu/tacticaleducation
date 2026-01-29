@@ -250,13 +250,14 @@ export async function getTryoutReview(resultId: string, userId: string) {
     return {
       id: question.id,
       order: question.order,
-      prompt: question.prompt,
-      imageUrl: question.imageUrl,
-      explanation: question.explanation,
-      options: question.options,
-      userOptionId: answer?.optionId ?? null,
-      isCorrect: answer?.isCorrect ?? false,
-    };
+        prompt: question.prompt,
+        imageUrl: question.imageUrl,
+        explanation: question.explanation,
+        explanationImageUrl: question.explanationImageUrl ?? null,
+        options: question.options,
+        userOptionId: answer?.optionId ?? null,
+        isCorrect: answer?.isCorrect ?? false,
+      };
   });
 
   return {

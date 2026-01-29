@@ -1,3 +1,3 @@
-prompt,explanation,option_a,option_a_correct,option_b,option_b_correct,option_c,option_c_correct,option_d,option_d_correct
-Hitung 2 + 2,,4,TRUE,3,FALSE,5,FALSE,6,FALSE
-Huruf setelah A adalah?,,B,TRUE,C,FALSE,D,FALSE,E,FALSE
+prompt,explanation,explanationImageUrl,option_a,option_a_correct,option_b,option_b_correct,option_c,option_c_correct,option_d,option_d_correct
+Hitung 2 + 2,,https://example.com/pembahasan-1.png,4,TRUE,3,FALSE,5,FALSE,6,FALSE
+Huruf setelah A adalah?,,https://example.com/pembahasan-2.png,B,TRUE,C,FALSE,D,FALSE,E,FALSE

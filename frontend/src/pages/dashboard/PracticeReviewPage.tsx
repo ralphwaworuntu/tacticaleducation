@@ -154,6 +154,14 @@ export function PracticeReviewPage() {
                 <p>Kunci jawaban: {question.options.find((opt) => opt.isCorrect)?.label ?? '-'}</p>
               </div>
               <p className="mt-3 whitespace-pre-line">{question.explanation ?? 'Pembahasan belum tersedia.'}</p>
+              {question.explanationImageUrl && (
+                <img
+                  src={getAssetUrl(question.explanationImageUrl)}
+                  alt="Ilustrasi pembahasan"
+                  className="mt-3 w-full rounded-2xl border border-slate-100 object-cover"
+                  loading="lazy"
+                />
+              )}
             </div>
           </article>
         ))}

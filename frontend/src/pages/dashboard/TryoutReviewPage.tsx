@@ -153,6 +153,14 @@ export function TryoutReviewPage() {
               <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
                 <p className="font-semibold text-slate-900">Pembahasan</p>
                 <p className="mt-2 whitespace-pre-line">{question.explanation}</p>
+                {question.explanationImageUrl && (
+                  <img
+                    src={getAssetUrl(question.explanationImageUrl)}
+                    alt="Ilustrasi pembahasan"
+                    className="mt-3 w-full rounded-2xl border border-slate-100 object-cover"
+                    loading="lazy"
+                  />
+                )}
               </div>
             )}
           </article>

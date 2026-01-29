@@ -18,6 +18,7 @@ export type TryoutQuestion = {
   imageUrl?: string | null;
   order: number;
   explanation?: string | null;
+  explanationImageUrl?: string | null;
   options: Array<{ id: string; label: string; imageUrl?: string | null; isCorrect?: boolean }>;
 };
 
@@ -94,6 +95,7 @@ export type PracticeSet = {
     imageUrl?: string | null;
     order: number;
     explanation?: string | null;
+    explanationImageUrl?: string | null;
     options: Array<{ id: string; label: string; imageUrl?: string | null; isCorrect?: boolean }>;
   }>;
 };

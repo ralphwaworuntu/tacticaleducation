@@ -5,6 +5,7 @@ type ParsedQuestion = {
   prompt: string;
   imageUrl?: string | null;
   explanation?: string | null;
+  explanationImageUrl?: string | null;
   order?: number;
   options: Array<{ label: string; imageUrl?: string | null; isCorrect?: boolean }>;
 };
@@ -22,6 +23,7 @@ const CSV_HEADERS = [
   'prompt',
   'prompt_image',
   'explanation',
+  'explanationImageUrl',
   'order',
   'option_a',
   'option_a_image',
@@ -43,6 +45,8 @@ const TEXT_COLUMNS = new Set([
   'prompt',
   'prompt_image',
   'explanation',
+  'explanationImageUrl',
+  'explanation_image',
   'option_a',
   'option_a_image',
   'option_b',
@@ -75,7 +79,16 @@ function detectDelimiter(content: string) {
   return ',';
 }
 
-function parseLegacyCsv(content: string, delimiter: string): CsvRow[] {
+function extractHeaders(content: string, delimiter: string) {
+  const headerLine = stripBom(content.split(/\r?\n/).find((line) => line.trim().length > 0) ?? '');
+  if (!headerLine) {
+    return CSV_HEADERS;
+  }
+  const headers = headerLine.split(delimiter).map((header) => normalizeCell(header));
+  return headers.length ? headers : CSV_HEADERS;
+}
+
+function parseLegacyCsv(content: string, delimiter: string, headers: string[]): CsvRow[] {
   const lines = content
     .split(/\r?\n/)
     .map((line) => stripBom(line).trim())
@@ -89,8 +102,8 @@ function parseLegacyCsv(content: string, delimiter: string): CsvRow[] {
     const tokens = rawLine.split(delimiter);
     const row: CsvRow = {};
     let tokenIndex = 0;
-    CSV_HEADERS.forEach((header, headerIndex) => {
-      const isLastColumn = headerIndex === CSV_HEADERS.length - 1;
+    headers.forEach((header, headerIndex) => {
+      const isLastColumn = headerIndex === headers.length - 1;
       const isTextual = TEXT_COLUMNS.has(header);
       if (isLastColumn) {
         const remaining = tokens.slice(tokenIndex).join(delimiter);
@@ -105,7 +118,7 @@ function parseLegacyCsv(content: string, delimiter: string): CsvRow[] {
           const nextToken = tokens[tokenIndex++] ?? '';
           chunk.push(nextToken);
           const remainingTokens = tokens.length - tokenIndex;
-          const remainingColumns = CSV_HEADERS.length - headerIndex - 1;
+          const remainingColumns = headers.length - headerIndex - 1;
           if (remainingTokens <= remainingColumns) {
             break;
           }
@@ -133,7 +146,8 @@ function readCsvRows(filePath: string): CsvRow[] {
     }) as CsvRow[];
   } catch (error) {
     if (error instanceof Error && /Invalid Record Length/i.test(error.message)) {
-      return parseLegacyCsv(content, delimiter);
+      const headers = extractHeaders(content, delimiter);
+      return parseLegacyCsv(content, delimiter, headers);
     }
     throw error;
   }
@@ -162,11 +176,13 @@ export function parseTryoutCsv(filePath: string): ParsedQuestion[] {
     if (!explanation) {
       throw new Error(`CSV tryout: pembahasan wajib diisi (baris ${index + 2}).`);
     }
+    const explanationImageUrl = row.explanationImageUrl?.trim() || row.explanation_image?.trim() || null;
     const parsedOrder = Number(row.order);
     return {
       prompt: row.prompt?.trim() ?? `Soal ${index + 1}`,
       imageUrl: row.prompt_image?.trim() || null,
       explanation,
+      explanationImageUrl,
       order: Number.isFinite(parsedOrder) ? parsedOrder : index + 1,
       options: parseOptions(row),
     };
@@ -180,11 +196,13 @@ export function parsePracticeCsv(filePath: string): ParsedQuestion[] {
     if (!explanation) {
       throw new Error(`CSV latihan: pembahasan wajib diisi (baris ${index + 2}).`);
     }
+    const explanationImageUrl = row.explanationImageUrl?.trim() || row.explanation_image?.trim() || null;
     const parsedOrder = Number(row.order);
     return {
       prompt: row.prompt?.trim() ?? `Soal ${index + 1}`,
       imageUrl: row.prompt_image?.trim() || null,
       explanation,
+      explanationImageUrl,
       order: Number.isFinite(parsedOrder) ? parsedOrder : index + 1,
       options: parseOptions(row),
     };

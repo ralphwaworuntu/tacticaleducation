@@ -698,15 +698,16 @@ export async function createTryoutController(req: Request, res: Response, next: 
         closeAt: payload.closeAt ? new Date(payload.closeAt) : null,
         subCategoryId: payload.subCategoryId,
         questions: {
-          create: questions.map((question, index) => ({
-            prompt: question.prompt,
-            imageUrl: question.imageUrl ?? null,
-            explanation: question.explanation ?? null,
-            order: question.order ?? index + 1,
-            options: {
-              create: question.options.map((option) => ({
-                label: option.label,
-                imageUrl: option.imageUrl ?? null,
+            create: questions.map((question, index) => ({
+              prompt: question.prompt,
+              imageUrl: question.imageUrl ?? null,
+              explanation: question.explanation ?? null,
+              explanationImageUrl: question.explanationImageUrl ?? null,
+              order: question.order ?? index + 1,
+              options: {
+                create: question.options.map((option) => ({
+                  label: option.label,
+                  imageUrl: option.imageUrl ?? null,
                 isCorrect: option.isCorrect ?? false,
               })),
             },
@@ -790,15 +791,16 @@ export async function updateTryoutController(req: Request, res: Response, next: 
             ...updateData,
             totalQuestions,
             questions: {
-              create: questions.map((question, index) => ({
-                prompt: question.prompt,
-                imageUrl: question.imageUrl ?? null,
-                explanation: question.explanation ?? null,
-                order: question.order ?? index + 1,
-                options: {
-                  create: question.options.map((option) => ({
-                    label: option.label,
-                    imageUrl: option.imageUrl ?? null,
+                create: questions.map((question, index) => ({
+                  prompt: question.prompt,
+                  imageUrl: question.imageUrl ?? null,
+                  explanation: question.explanation ?? null,
+                  explanationImageUrl: question.explanationImageUrl ?? null,
+                  order: question.order ?? index + 1,
+                  options: {
+                    create: question.options.map((option) => ({
+                      label: option.label,
+                      imageUrl: option.imageUrl ?? null,
                     isCorrect: option.isCorrect ?? false,
                   })),
                 },
@@ -1095,15 +1097,16 @@ export async function createPracticeSetController(req: Request, res: Response, n
         closeAt: payload.closeAt ? new Date(payload.closeAt) : null,
         subSubCategoryId: payload.subSubCategoryId,
         questions: {
-          create: questions.map((question, index) => ({
-            prompt: question.prompt,
-            imageUrl: question.imageUrl ?? null,
-            explanation: question.explanation ?? null,
-            order: question.order ?? index + 1,
-            options: {
-              create: question.options.map((option) => ({
-                label: option.label,
-                imageUrl: option.imageUrl ?? null,
+            create: questions.map((question, index) => ({
+              prompt: question.prompt,
+              imageUrl: question.imageUrl ?? null,
+              explanation: question.explanation ?? null,
+              explanationImageUrl: question.explanationImageUrl ?? null,
+              order: question.order ?? index + 1,
+              options: {
+                create: question.options.map((option) => ({
+                  label: option.label,
+                  imageUrl: option.imageUrl ?? null,
                 isCorrect: option.isCorrect ?? false,
               })),
             },
@@ -1184,15 +1187,16 @@ export async function updatePracticeSetController(req: Request, res: Response, n
             ...updateData,
             totalQuestions,
             questions: {
-              create: questions.map((question, index) => ({
-                prompt: question.prompt,
-                imageUrl: question.imageUrl ?? null,
-                explanation: question.explanation ?? null,
-                order: question.order ?? index + 1,
-                options: {
-                  create: question.options.map((option) => ({
-                    label: option.label,
-                    imageUrl: option.imageUrl ?? null,
+                create: questions.map((question, index) => ({
+                  prompt: question.prompt,
+                  imageUrl: question.imageUrl ?? null,
+                  explanation: question.explanation ?? null,
+                  explanationImageUrl: question.explanationImageUrl ?? null,
+                  order: question.order ?? index + 1,
+                  options: {
+                    create: question.options.map((option) => ({
+                      label: option.label,
+                      imageUrl: option.imageUrl ?? null,
                     isCorrect: option.isCorrect ?? false,
                   })),
                 },
