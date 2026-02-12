@@ -1,7 +1,7 @@
 import { ExamBlockType } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { HttpError } from '../../middlewares/errorHandler';
-import { consumeTryoutQuota } from '../../utils/membership';
+import { assertMembershipFeature, consumeTryoutQuota, getActiveMembership } from '../../utils/membership';
 import { ensureExamAccess as ensureExamBlockAccess } from './exam-block.service';
 import { assertExamAccess } from './exam-control.service';
 
@@ -30,7 +30,7 @@ export async function getTryoutInfo(slug: string) {
   return tryout;
 }
 
-export async function getTryoutDetail(slug: string) {
+export async function getTryoutDetail(slug: string, userId: string) {
   const tryout = await prisma.tryout.findUnique({
     where: { slug },
     include: {
@@ -50,9 +50,11 @@ export async function getTryoutDetail(slug: string) {
     },
   });
 
-  if (!tryout) {
-    throw new HttpError('Tryout not found', 404);
+  if (!tryout || !tryout.isPublished) {
+    throw new HttpError('Tryout tidak ditemukan', 404);
   }
+
+  await ensureTryoutAccess(userId, tryout);
 
   const shuffle = <T,>(arr: T[]) => {
     for (let i = arr.length - 1; i > 0; i -= 1) {
@@ -75,13 +77,26 @@ export async function getTryoutDetail(slug: string) {
   };
 }
 
+async function ensureTryoutAccess(userId: string, tryout: { isFree: boolean }) {
+  const membership = await getActiveMembership(userId);
+  if (!membership) {
+    if (!tryout.isFree) {
+      throw new HttpError('Membership tidak aktif atau belum divalidasi admin.', 403, { code: 'MEMBERSHIP_REQUIRED' });
+    }
+    return null;
+  }
+  assertMembershipFeature(membership, 'TRYOUT');
+  return membership;
+}
+
 export async function startTryout(slug: string, userId: string) {
   const tryout = await prisma.tryout.findUnique({ where: { slug } });
-  if (!tryout) {
-    throw new HttpError('Tryout not found', 404);
+  if (!tryout || !tryout.isPublished) {
+    throw new HttpError('Tryout tidak ditemukan', 404);
   }
 
-  await ensureExamBlockAccess(userId, ExamBlockType.TRYOUT);
+  await ensureExamBlockAccess(userId, ExamBlockType.TRYOUT, 'STANDARD');
+  const membership = await ensureTryoutAccess(userId, tryout);
 
   const recentWindowMs = 2 * 60 * 1000;
   const recentThreshold = new Date(Date.now() - recentWindowMs);
@@ -107,7 +122,9 @@ export async function startTryout(slug: string, userId: string) {
     throw new HttpError('Tryout telah ditutup.', 403);
   }
 
-  await consumeTryoutQuota(userId);
+  if (membership) {
+    await consumeTryoutQuota(userId);
+  }
 
   const result = await prisma.tryoutResult.create({
     data: {
@@ -121,11 +138,11 @@ export async function startTryout(slug: string, userId: string) {
 
 export async function startExamTryout(slug: string, userId: string) {
   const tryout = await prisma.tryout.findUnique({ where: { slug } });
-  if (!tryout) {
-    throw new HttpError('Tryout not found', 404);
+  if (!tryout || !tryout.isPublished) {
+    throw new HttpError('Tryout tidak ditemukan', 404);
   }
 
-  await ensureExamBlockAccess(userId, ExamBlockType.TRYOUT);
+  await ensureExamBlockAccess(userId, ExamBlockType.TRYOUT, 'UJIAN');
   await assertExamAccess(userId, 'TRYOUT');
 
   const now = new Date();
@@ -155,9 +172,11 @@ export async function submitTryout(
     where: { slug },
     include: { questions: { include: { options: true } } },
   });
-  if (!tryout) {
-    throw new HttpError('Tryout not found', 404);
+  if (!tryout || !tryout.isPublished) {
+    throw new HttpError('Tryout tidak ditemukan', 404);
   }
+
+  await ensureTryoutAccess(userId, tryout);
 
   const result = await prisma.tryoutResult.findUnique({ where: { id: input.resultId } });
   if (!result || result.userId !== userId) {

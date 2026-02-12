@@ -220,25 +220,34 @@ export const createTryoutSchema = z.object({
     openAt: z.string().optional(),
     closeAt: z.string().optional(),
     isPublished: z.boolean().optional(),
+    isFree: z.coerce.boolean().optional(),
   }),
 });
 
 export const updateTryoutSchema = z.object({
   params: idParam.shape.params,
-  body: z
-    .object({
-      name: z.string().min(3).optional(),
-      summary: z.string().optional(),
-      description: z.string().optional(),
-      coverImageUrl: z.string().url().optional(),
-      durationMinutes: z.coerce.number().int().positive().optional(),
-      totalQuestions: z.coerce.number().int().positive().optional(),
-      isPublished: z.coerce.boolean().optional(),
-      subCategoryId: z.string().min(1).optional(),
-      openAt: z.string().optional(),
-      closeAt: z.string().optional(),
-    })
+    body: z
+      .object({
+        name: z.string().min(3).optional(),
+        summary: z.string().optional(),
+        description: z.string().optional(),
+        coverImageUrl: z.string().url().optional(),
+        durationMinutes: z.coerce.number().int().positive().optional(),
+        totalQuestions: z.coerce.number().int().positive().optional(),
+        isPublished: z.coerce.boolean().optional(),
+        isFree: z.coerce.boolean().optional(),
+        subCategoryId: z.string().min(1).optional(),
+        openAt: z.string().optional(),
+        closeAt: z.string().optional(),
+      })
     .refine((value) => Object.keys(value).length > 0, { message: 'No data provided' }),
+});
+
+export const updateTryoutFreeSchema = z.object({
+  params: idParam.shape.params,
+  body: z.object({
+    isFree: z.coerce.boolean(),
+  }),
 });
 
 export const createPracticeCategorySchema = z.object({ body: practiceCategoryBase });
@@ -262,24 +271,33 @@ export const createPracticeSetSchema = z.object({
     totalQuestions: z.coerce.number().int().positive().optional(),
     openAt: z.string().optional(),
     closeAt: z.string().optional(),
+    isFree: z.coerce.boolean().optional(),
   }),
 });
 
 export const updatePracticeSetSchema = z.object({
   params: idParam.shape.params,
-  body: z
-    .object({
-      title: z.string().min(3).optional(),
-      slug: z.string().min(3).optional(),
-      description: z.string().optional(),
-      level: z.string().optional(),
-      subSubCategoryId: z.string().min(1).optional(),
-      durationMinutes: z.coerce.number().int().positive().optional(),
-      totalQuestions: z.coerce.number().int().positive().optional(),
-      openAt: z.string().optional(),
-      closeAt: z.string().optional(),
-    })
+    body: z
+      .object({
+        title: z.string().min(3).optional(),
+        slug: z.string().min(3).optional(),
+        description: z.string().optional(),
+        level: z.string().optional(),
+        subSubCategoryId: z.string().min(1).optional(),
+        durationMinutes: z.coerce.number().int().positive().optional(),
+        totalQuestions: z.coerce.number().int().positive().optional(),
+        openAt: z.string().optional(),
+        closeAt: z.string().optional(),
+        isFree: z.coerce.boolean().optional(),
+      })
     .refine((value) => Object.keys(value).length > 0, { message: 'No data provided' }),
+});
+
+export const updatePracticeSetFreeSchema = z.object({
+  params: idParam.shape.params,
+  body: z.object({
+    isFree: z.coerce.boolean(),
+  }),
 });
 
 export const materialMutationSchema = z.object({ body: materialBase });
@@ -351,6 +369,14 @@ export const examControlSchema = z.object({
     examQuota: z.coerce.number().int().nonnegative(),
     startAt: z.string().optional(),
     endAt: z.string().optional(),
+  }),
+});
+
+export const examBlockConfigSchema = z.object({
+  body: z.object({
+    practiceEnabled: z.coerce.boolean(),
+    tryoutEnabled: z.coerce.boolean(),
+    examEnabled: z.coerce.boolean(),
   }),
 });
 

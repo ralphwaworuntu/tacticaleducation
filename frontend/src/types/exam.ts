@@ -7,6 +7,7 @@ export type Tryout = {
   coverImageUrl?: string | null;
   durationMinutes: number;
   totalQuestions: number;
+  isFree?: boolean;
   subCategory: { id: string; name: string; imageUrl?: string | null; category: { id: string; name: string; slug?: string; thumbnail?: string | null } };
   openAt?: string | null;
   closeAt?: string | null;
@@ -66,6 +67,7 @@ export type PracticeCategory = {
         coverImageUrl?: string | null;
         durationMinutes: number;
         totalQuestions: number;
+        isFree?: boolean;
         openAt?: string | null;
         closeAt?: string | null;
       }>;
@@ -82,6 +84,7 @@ export type PracticeSet = {
   level?: string | null;
   durationMinutes: number;
   totalQuestions: number;
+  isFree?: boolean;
   openAt?: string | null;
   closeAt?: string | null;
   subSubCategory: {
@@ -231,6 +234,12 @@ export type ExamBlock = {
   reason?: string | null;
   blockedAt: string;
   violationCount: number;
+};
+
+export type ExamBlockConfig = {
+  practiceEnabled: boolean;
+  tryoutEnabled: boolean;
+  examEnabled: boolean;
 };
 
 export type ExamSectionStatus = {

@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { authenticate } from '../../middlewares/auth';
-import { requireActiveMembership } from '../../middlewares/membership';
 import { validateResource } from '../../middlewares/validateResource';
 import {
   cermatStartController,
   cermatSubmitController,
   cermatHistoryController,
+  examBlockConfigController,
   examBlockCreateController,
   examBlockStatusController,
   examBlockUnlockController,
@@ -50,7 +50,7 @@ import {
 export const examsRouter = Router();
 export const examUjianRouter = Router();
 
-examsRouter.use(authenticate, requireActiveMembership);
+examsRouter.use(authenticate);
 examUjianRouter.use(authenticate);
 
 examsRouter.get('/tryouts', tryoutListController);
@@ -73,6 +73,7 @@ examsRouter.post('/cermat/session/:sessionId/submit', validateResource(submitCer
 examsRouter.get('/cermat/history', cermatHistoryController);
 
 examsRouter.get('/blocks', examBlockStatusController);
+examsRouter.get('/block-config', examBlockConfigController);
 examsRouter.post('/blocks', validateResource(examBlockCreateSchema), examBlockCreateController);
 examsRouter.post('/blocks/unlock', validateResource(examBlockUnlockSchema), examBlockUnlockController);
 
@@ -92,5 +93,6 @@ examUjianRouter.get('/practice-history', examPracticeHistoryController);
 examUjianRouter.get('/practice/results/:resultId/review', validateResource(reviewResultSchema), examPracticeReviewController);
 
 examUjianRouter.get('/blocks', examBlockStatusController);
+examUjianRouter.get('/block-config', examBlockConfigController);
 examUjianRouter.post('/blocks', validateResource(examBlockCreateSchema), examBlockCreateController);
 examUjianRouter.post('/blocks/unlock', validateResource(examBlockUnlockSchema), examBlockUnlockController);

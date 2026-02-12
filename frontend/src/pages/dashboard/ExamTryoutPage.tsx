@@ -14,6 +14,8 @@ import { Input } from '@/components/ui/input';
 import { useExamControlStatus } from '@/hooks/useExamControl';
 import { useFullscreenExam } from '@/hooks/useFullscreenExam';
 import { useExamBlocks } from '@/hooks/useExamBlocks';
+import { useExamBlockConfig } from '@/hooks/useExamBlockConfig';
+import { useMembershipStatus } from '@/hooks/useMembershipStatus';
 import { ExamCountdownModal } from '@/components/dashboard/ExamCountdownModal';
 import { ConfirmFinishModal } from '@/components/dashboard/ConfirmFinishModal';
 import { QuestionNavigator } from '@/components/dashboard/QuestionNavigator';
@@ -35,12 +37,15 @@ export function ExamTryoutPage() {
   const queryClient = useQueryClient();
   const examStatus = useExamControlStatus();
   const examEnabled = Boolean(examStatus.data?.enabled && examStatus.data?.allowed);
+  const membership = useMembershipStatus();
+  const hasActiveMembership = Boolean(membership.data?.isActive);
   const { data: tryouts, isLoading } = useQuery({
     queryKey: ['exam-tryouts'],
     queryFn: () => apiGet<Tryout[]>('/ujian/tryouts'),
     enabled: examEnabled,
   });
   const { data: blocks, refetch: refetchBlocks } = useExamBlocks(examEnabled, '/ujian');
+  const { data: blockConfig } = useExamBlockConfig(examEnabled, '/ujian');
   const [session, setSession] = useState<TryoutSession | null>(null);
   const [answers, setAnswers] = useState<Record<string, string | undefined>>({});
   const [result, setResult] = useState<{ score: number; correct: number; total: number; resultId: string } | null>(null);
@@ -54,6 +59,7 @@ export function ExamTryoutPage() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [finishConfirmOpen, setFinishConfirmOpen] = useState(false);
   const tryoutBlock = blocks?.find((block) => block.type === 'TRYOUT');
+  const examBlockEnabled = blockConfig?.examEnabled ?? true;
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [activeSubCategoryId, setActiveSubCategoryId] = useState<string | null>(null);
   const autoStartRef = useRef(false);
@@ -98,7 +104,7 @@ export function ExamTryoutPage() {
 
   const { request: requestFullscreen, exit: exitFullscreen, setViolationHandler, isSupported: fullscreenSupported } =
     useFullscreenExam({
-      active: Boolean(session),
+      active: Boolean(session) && examBlockEnabled,
     });
 
   const violationMutation = useMutation({
@@ -134,13 +140,17 @@ export function ExamTryoutPage() {
   );
 
   useEffect(() => {
+    if (!examBlockEnabled) {
+      setViolationHandler(null);
+      return undefined;
+    }
     setViolationHandler((reason) => {
       violationMutation.mutate(reason ?? 'Pelanggaran fullscreen');
       handleSessionReset(reason);
       exitFullscreen();
     });
     return () => setViolationHandler(null);
-  }, [exitFullscreen, handleSessionReset, setViolationHandler, violationMutation]);
+  }, [examBlockEnabled, exitFullscreen, handleSessionReset, setViolationHandler, violationMutation]);
 
   useEffect(() => {
     return () => {
@@ -531,6 +541,12 @@ export function ExamTryoutPage() {
                           </p>
                           <h3 className="text-lg font-semibold text-slate-900">{item.name}</h3>
                           <p className="text-sm text-slate-600">{item.summary}</p>
+                          <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                            {item.isFree && <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-700">Gratis</span>}
+                            {!hasActiveMembership && !item.isFree && (
+                              <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700">Butuh Paket</span>
+                            )}
+                          </div>
                           <p className="text-[11px] text-slate-500">Jadwal: {getScheduleText(item)}</p>
                           <p className={`text-[11px] ${status.active ? 'text-emerald-600' : 'text-red-500'}`}>Status: {status.label}</p>
                           <Button
@@ -696,15 +712,19 @@ export function ExamTryoutPage() {
         </section>
       )}
 
-      <ExamCountdownModal
-        open={countdownOpen}
-        resetKey={countdownToken}
-        title="Mulai Tryout"
-        subtitle="Setelah hitung mundur selesai, tryout dimulai dalam mode layar penuh."
-        warning="Ujian Akan Di Blokir Saat Anda Meninggalkan Halaman Ujian - Harap Tetap berada di Halaman Ujian Ini dan Kerjakan seluruh soal sampai selesai"
-        onComplete={handleCountdownComplete}
-        onCancel={handleCountdownCancel}
-      />
+    <ExamCountdownModal
+      open={countdownOpen}
+      resetKey={countdownToken}
+      title="Mulai Tryout"
+      subtitle="Setelah hitung mundur selesai, tryout dimulai dalam mode layar penuh."
+      warning={
+        examBlockEnabled
+          ? 'Ujian Akan Di Blokir Saat Anda Meninggalkan Halaman Ujian - Harap Tetap berada di Halaman Ujian Ini dan Kerjakan seluruh soal sampai selesai'
+          : null
+      }
+      onComplete={handleCountdownComplete}
+      onCancel={handleCountdownCancel}
+    />
       {fullscreenGateOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/70 px-4">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-2xl">

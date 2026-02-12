@@ -13,9 +13,9 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { useMembershipStatus } from '@/hooks/useMembershipStatus';
-import { MembershipRequired } from '@/components/dashboard/MembershipRequired';
 import { useFullscreenExam } from '@/hooks/useFullscreenExam';
 import { useExamBlocks } from '@/hooks/useExamBlocks';
+import { useExamBlockConfig } from '@/hooks/useExamBlockConfig';
 import { ExamCountdownModal } from '@/components/dashboard/ExamCountdownModal';
 import { QuestionNavigator } from '@/components/dashboard/QuestionNavigator';
 import { ConfirmFinishModal } from '@/components/dashboard/ConfirmFinishModal';
@@ -25,12 +25,13 @@ export function PracticePage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const membership = useMembershipStatus();
+  const hasActiveMembership = Boolean(membership.data?.isActive);
   const { data: categories, isLoading } = useQuery({
     queryKey: ['practice-categories'],
     queryFn: () => apiGet<PracticeCategory[]>('/exams/practice/categories'),
-    enabled: Boolean(membership.data?.isActive),
   });
   const { data: blocks, refetch: refetchBlocks } = useExamBlocks(Boolean(membership.data?.isActive));
+  const { data: blockConfig } = useExamBlockConfig(Boolean(membership.data?.isActive));
   const [activeCategorySlug, setActiveCategorySlug] = useState<string | null>(null);
   const [activeSubCategoryId, setActiveSubCategoryId] = useState<string | null>(null);
   const [activeSubSubCategoryId, setActiveSubSubCategoryId] = useState<string | null>(null);
@@ -44,12 +45,18 @@ export function PracticePage() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [finishConfirmOpen, setFinishConfirmOpen] = useState(false);
   const [recentSet, setRecentSet] = useState<{ title: string; category: string } | null>(null);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const autoStartRef = useRef(false);
   const returnToRef = useRef<string | null>(null);
   const pendingStartRef = useRef<string | null>(null);
+  const skipCountdownRef = useRef(false);
+  const endTimeRef = useRef<number | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const autoSubmitRef = useRef(false);
   const practiceBlock = blocks?.find((block) => block.type === 'PRACTICE');
+  const practiceBlockEnabled = blockConfig?.practiceEnabled ?? true;
   const { exit: exitFullscreen, setViolationHandler, isSupported: fullscreenSupported } = useFullscreenExam({
-    active: examActive,
+    active: examActive && practiceBlockEnabled,
   });
 
   const violationMutation = useMutation({
@@ -68,6 +75,10 @@ export function PracticePage() {
   });
 
   useEffect(() => {
+    if (!practiceBlockEnabled) {
+      setViolationHandler(null);
+      return undefined;
+    }
     const handler = (reason: string) => {
       setExamActive(false);
       setDetail(null);
@@ -81,39 +92,75 @@ export function PracticePage() {
     };
     setViolationHandler(handler);
     return () => setViolationHandler(null);
-  }, [exitFullscreen, setViolationHandler, violationMutation]);
+  }, [exitFullscreen, practiceBlockEnabled, setViolationHandler, violationMutation]);
+
 
 
   const loadSet = useMutation<PracticeSet, Error, string>({
     mutationFn: (slug: string) => apiGet<PracticeSet>(`/exams/practice/${slug}`),
   });
 
+  const initializeSession = useCallback((payload: PracticeSet) => {
+    setDetail(payload);
+    setRecentSet({
+      title: payload.title,
+      category: `${payload.subSubCategory.subCategory.category.name} / ${payload.subSubCategory.subCategory.name} / ${payload.subSubCategory.name}`,
+    });
+    setAnswers({});
+    setResult(null);
+    setExamActive(false);
+    setCurrentQuestionIndex(0);
+    setFinishConfirmOpen(false);
+  }, []);
+
+  const startSession = useCallback(
+    (payload: PracticeSet) => {
+      if (fullscreenSupported && !document.fullscreenElement) {
+        toast.error('Mode layar penuh wajib diaktifkan untuk memulai latihan.');
+        setCountdownOpen(false);
+        setDetail(null);
+        const fallback = returnToRef.current ?? `/app/latihan-soal/detail/${payload.slug}`;
+        navigate(fallback);
+        return;
+      }
+      initializeSession(payload);
+      autoSubmitRef.current = false;
+      if (payload.durationMinutes > 0) {
+        endTimeRef.current = Date.now() + payload.durationMinutes * 60 * 1000;
+        setTimeLeft(Math.ceil(payload.durationMinutes * 60));
+      } else {
+        endTimeRef.current = null;
+        setTimeLeft(null);
+      }
+      setExamActive(true);
+      setCountdownOpen(false);
+    },
+    [fullscreenSupported, initializeSession, navigate],
+  );
+
   const beginCountdown = useCallback(
     (payload: PracticeSet) => {
-      setDetail(payload);
-      setRecentSet({
-        title: payload.title,
-        category: `${payload.subSubCategory.subCategory.category.name} / ${payload.subSubCategory.subCategory.name} / ${payload.subSubCategory.name}`,
-      });
-      setAnswers({});
-      setResult(null);
-      setExamActive(false);
-      setCurrentQuestionIndex(0);
-      setFinishConfirmOpen(false);
-
-      const openCountdown = () => {
-        setCountdownToken((prev) => prev + 1);
-        setCountdownOpen(true);
-      };
-      openCountdown();
+      initializeSession(payload);
+      setCountdownToken((prev) => prev + 1);
+      setCountdownOpen(true);
     },
-    [],
+    [initializeSession],
   );
 
   const handleStartFromSlug = useCallback(
-    (slug: string) => {
+    (slug: string, skipCountdown = false) => {
       loadSet.mutate(slug, {
         onSuccess: (payload) => {
+          if (!hasActiveMembership && !payload.isFree) {
+            toast.error('Aktifkan paket untuk mulai latihan.');
+            const fallback = returnToRef.current ?? `/app/latihan-soal/detail/${slug}`;
+            navigate(fallback);
+            return;
+          }
+          if (skipCountdown) {
+            startSession(payload);
+            return;
+          }
           beginCountdown(payload);
         },
         onError: (error) => {
@@ -130,23 +177,32 @@ export function PracticePage() {
         },
       });
     },
-    [beginCountdown, loadSet, refetchBlocks],
+    [beginCountdown, hasActiveMembership, loadSet, navigate, refetchBlocks, startSession],
   );
 
   useEffect(() => {
-    const state = location.state as { startPractice?: { slug: string }; returnTo?: string } | null;
+    const state = location.state as { startPractice?: { slug: string }; returnTo?: string; skipCountdown?: boolean } | null;
     const startFromQuery = searchParams.get('start');
     const startFromStorage = sessionStorage.getItem('practice_start_slug');
+    const skipCountdown = state?.skipCountdown === true || searchParams.get('skipCountdown') === '1';
     const slug = state?.startPractice?.slug ?? startFromQuery ?? startFromStorage ?? null;
     if (!slug) return;
     returnToRef.current = state?.returnTo ?? `/app/latihan-soal/detail/${slug}`;
     pendingStartRef.current = slug;
+    skipCountdownRef.current = skipCountdown;
     if (startFromStorage) {
       sessionStorage.removeItem('practice_start_slug');
     }
     if (startFromQuery) {
       const search = new URLSearchParams(window.location.search);
       search.delete('start');
+      search.delete('skipCountdown');
+      const next = search.toString();
+      window.history.replaceState(null, '', next ? `/app/latihan-soal/mulai?${next}` : '/app/latihan-soal/mulai');
+    }
+    if (skipCountdown && !startFromQuery) {
+      const search = new URLSearchParams(window.location.search);
+      search.delete('skipCountdown');
       const next = search.toString();
       window.history.replaceState(null, '', next ? `/app/latihan-soal/mulai?${next}` : '/app/latihan-soal/mulai');
     }
@@ -155,7 +211,6 @@ export function PracticePage() {
   useEffect(() => {
     const slug = pendingStartRef.current;
     if (!slug || autoStartRef.current) return;
-    if (!membership.data?.isActive) return;
     if (practiceBlock) {
       toast.error('Akses latihan diblokir. Masukkan kode buka blokir dari admin.');
       pendingStartRef.current = null;
@@ -166,8 +221,8 @@ export function PracticePage() {
     autoStartRef.current = true;
     pendingStartRef.current = null;
     navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
-    window.setTimeout(() => handleStartFromSlug(slug), 0);
-  }, [handleStartFromSlug, location.pathname, location.search, membership.data?.isActive, navigate, practiceBlock]);
+    window.setTimeout(() => handleStartFromSlug(slug, skipCountdownRef.current), 0);
+  }, [handleStartFromSlug, location.pathname, location.search, navigate, practiceBlock]);
 
 
   const questions = detail?.questions ?? [];
@@ -196,7 +251,7 @@ export function PracticePage() {
   const antiCheatRules = [
     'Aktifkan mode layar penuh dan jangan menutup tab selama sesi berlangsung.',
     'Dilarang membuka tab atau aplikasi lain selama pengerjaan latihan.',
-    'Sistem akan otomatis memblokir akses jika Anda meninggalkan halaman latihan.',
+    ...(practiceBlockEnabled ? ['Sistem akan otomatis memblokir akses jika Anda meninggalkan halaman latihan.'] : []),
   ];
 
   const submit = useMutation({
@@ -218,12 +273,47 @@ export function PracticePage() {
       exitFullscreen();
       setCurrentQuestionIndex(0);
       setFinishConfirmOpen(false);
+      endTimeRef.current = null;
+      setTimeLeft(null);
       if (payload.resultId) {
         navigate(`/app/latihan-soal/review/${payload.resultId}`);
       }
     },
     onError: () => toast.error('Gagal mengirim jawaban'),
   });
+
+  useEffect(() => {
+    if (!examActive || !detail || !endTimeRef.current) {
+      if (timerRef.current !== null) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return undefined;
+    }
+
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((endTimeRef.current! - Date.now()) / 1000));
+      setTimeLeft(remaining);
+      if (remaining <= 0 && !autoSubmitRef.current) {
+        autoSubmitRef.current = true;
+        if (timerRef.current !== null) {
+          window.clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+        toast.error('Waktu latihan habis. Jawaban otomatis dikumpulkan.');
+        submit.mutate();
+      }
+    };
+
+    tick();
+    timerRef.current = window.setInterval(tick, 1000);
+    return () => {
+      if (timerRef.current !== null) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [detail, examActive, submit]);
 
   const handleForceFinishPractice = useCallback(() => {
     if (!detail) {
@@ -232,50 +322,52 @@ export function PracticePage() {
     setFinishConfirmOpen(true);
   }, [detail]);
 
-  const handleConfirmPracticeFinish = useCallback(() => {
-    submit.mutate(undefined, {
-      onSettled: () => setFinishConfirmOpen(false),
-    });
-  }, [submit]);
+    const handleConfirmPracticeFinish = useCallback(() => {
+      submit.mutate(undefined, {
+        onSettled: () => setFinishConfirmOpen(false),
+      });
+    }, [submit]);
 
   const handleCancelPracticeFinish = useCallback(() => setFinishConfirmOpen(false), []);
 
   const handleStartPractice = useCallback(() => {
     if (!detail) return;
-    if (fullscreenSupported && !document.fullscreenElement) {
-      toast.error('Mode layar penuh wajib diaktifkan untuk memulai latihan.');
-      setCountdownOpen(false);
+    startSession(detail);
+  }, [detail, startSession]);
+
+    const handleCancelPractice = useCallback(() => {
+      setExamActive(false);
       setDetail(null);
-      const fallback = returnToRef.current ?? `/app/latihan-soal/detail/${detail.slug}`;
+      setAnswers({});
+      exitFullscreen();
+      setCurrentQuestionIndex(0);
+      endTimeRef.current = null;
+      setTimeLeft(null);
+      toast.error('Latihan dibatalkan. Mulai ulang untuk meneruskan.');
+      const fallback = returnToRef.current ?? '/app/latihan-soal';
       navigate(fallback);
-      return;
-    }
-    setExamActive(true);
-    setCountdownOpen(false);
-  }, [detail, fullscreenSupported, navigate]);
+    }, [exitFullscreen, navigate]);
 
-  const handleCancelPractice = useCallback(() => {
-    setExamActive(false);
-    setDetail(null);
-    setAnswers({});
-    exitFullscreen();
-    setCurrentQuestionIndex(0);
-    toast.error('Latihan dibatalkan. Mulai ulang untuk meneruskan.');
-    const fallback = returnToRef.current ?? '/app/latihan-soal';
-    navigate(fallback);
-  }, [exitFullscreen, navigate]);
+    const handleCancelCountdown = useCallback(() => {
+      setCountdownOpen(false);
+      exitFullscreen();
+      setDetail(null);
+      endTimeRef.current = null;
+      setTimeLeft(null);
+      const fallback = returnToRef.current ?? '/app/latihan-soal';
+      navigate(fallback);
+    }, [exitFullscreen, navigate]);
 
-  const handleCancelCountdown = useCallback(() => {
-    setCountdownOpen(false);
-    exitFullscreen();
-    setDetail(null);
-    const fallback = returnToRef.current ?? '/app/latihan-soal';
-    navigate(fallback);
-  }, [exitFullscreen, navigate]);
+    const handleJumpToQuestion = useCallback((index: number) => {
+      setCurrentQuestionIndex(index);
+    }, []);
 
-  const handleJumpToQuestion = useCallback((index: number) => {
-    setCurrentQuestionIndex(index);
-  }, []);
+    const formatTimeLeft = (value: number | null) => {
+      if (value === null) return 'Tanpa batas';
+      const minutes = Math.floor(value / 60);
+      const seconds = value % 60;
+      return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    };
 
   const handlePrevQuestion = useCallback(() => {
     setCurrentQuestionIndex((prev) => Math.max(prev - 1, 0));
@@ -289,11 +381,7 @@ export function PracticePage() {
     return <Skeleton className="h-72" />;
   }
 
-  if (!membership.data?.isActive) {
-    return <MembershipRequired status={membership.data} />;
-  }
-
-  if (membership.data?.allowPractice === false) {
+  if (hasActiveMembership && membership.data?.allowPractice === false) {
     return (
       <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
         Paket membership kamu tidak mencakup akses latihan soal. Hubungi admin untuk upgrade paket.
@@ -332,6 +420,11 @@ export function PracticePage() {
 
   return (
     <div className="space-y-8">
+      {!hasActiveMembership && (
+        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          Kamu belum memiliki paket aktif. Kamu tetap bisa melihat daftar latihan, tetapi hanya latihan gratis yang bisa dikerjakan.
+        </section>
+      )}
       <section className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Latihan Soal</h1>
@@ -389,7 +482,9 @@ export function PracticePage() {
       <Card>
         <CardContent className="space-y-3 p-6">
           <p className="text-xs uppercase tracking-[0.3em] text-rose-500">Aturan Anti-Cheat</p>
-          <h2 className="text-2xl font-bold text-slate-900">Patuhi aturan ini agar akun tidak diblokir.</h2>
+          <h2 className="text-2xl font-bold text-slate-900">
+            {practiceBlockEnabled ? 'Patuhi aturan ini agar akun tidak diblokir.' : 'Tips fokus saat latihan.'}
+          </h2>
           <ul className="mt-2 space-y-2 text-sm text-slate-600">
             {antiCheatRules.map((rule) => (
               <li key={rule} className="flex items-start gap-2">
@@ -474,15 +569,15 @@ export function PracticePage() {
           </div>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {availableSets.map((set) => {
-              const activeSet = detail?.id === set.id && (examActive || countdownOpen);
-              const buttonLabel = activeSet ? 'Sedang Berjalan' : 'Lihat Detail';
-              return (
-                <Card
-                  key={set.id}
-                  className={activeSet ? 'border-brand-400 shadow-[0_15px_45px_rgba(63,81,181,0.12)]' : ''}
-                >
-                  <CardContent className="space-y-3 p-5">
+              {availableSets.map((set) => {
+                const activeSet = detail?.id === set.id && (examActive || countdownOpen);
+                const buttonLabel = activeSet ? 'Sedang Berjalan' : 'Lihat Detail';
+                return (
+                  <Card
+                    key={set.id}
+                    className={activeSet ? 'border-brand-400 shadow-[0_15px_45px_rgba(63,81,181,0.12)]' : ''}
+                  >
+                    <CardContent className="space-y-3 p-5">
                     {getAssetUrl(set.coverImageUrl) && (
                       <img
                         src={getAssetUrl(set.coverImageUrl)}
@@ -495,13 +590,19 @@ export function PracticePage() {
                       <span className="uppercase tracking-widest">{set.level ?? 'Umum'}</span>
                       <Badge variant="outline">Siap dikerjakan</Badge>
                     </div>
-                    <h3 className="text-lg font-semibold text-slate-900">{set.title}</h3>
-                    <p className="text-sm text-slate-600 line-clamp-3">{set.description}</p>
-                    <Button
-                      className="w-full"
-                      variant={activeSet ? 'primary' : 'outline'}
-                      onClick={() => navigate(`/app/latihan-soal/detail/${set.slug}`)}
-                      disabled={activeSet}
+                      <h3 className="text-lg font-semibold text-slate-900">{set.title}</h3>
+                      <p className="text-sm text-slate-600 line-clamp-3">{set.description}</p>
+                      <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        {set.isFree && <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-700">Gratis</span>}
+                        {!hasActiveMembership && !set.isFree && (
+                          <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700">Butuh Paket</span>
+                        )}
+                      </div>
+                      <Button
+                        className="w-full"
+                        variant={activeSet ? 'primary' : 'outline'}
+                        onClick={() => navigate(`/app/latihan-soal/detail/${set.slug}`)}
+                        disabled={activeSet}
                     >
                       {buttonLabel}
                     </Button>
@@ -542,19 +643,22 @@ export function PracticePage() {
               <h2 className="text-2xl font-semibold">{detail.title}</h2>
               <p className="text-sm text-white/70">Kategori {detail.subSubCategory.subCategory.category.name} / {detail.subSubCategory.subCategory.name} / {detail.subSubCategory.name} - Tetap berada di layar ini.</p>
             </div>
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              className="border-white/40 text-white hover:bg-white/10"
-              onClick={handleForceFinishPractice}
-              disabled={submit.isPending}
-            >
-              Akhiri Latihan
-            </Button>
-            <Button variant="ghost" className="text-white hover:bg-white/10" onClick={handleCancelPractice}>
-              Batalkan
-            </Button>
-          </div>
+            <div className="flex items-center gap-3">
+              <div className="rounded-full bg-brand-500 px-3 py-1 text-xs font-semibold text-white shadow">
+                Sisa waktu {formatTimeLeft(timeLeft)}
+              </div>
+              <Button
+                variant="outline"
+                className="border-white/40 text-white hover:bg-white/10"
+                onClick={handleForceFinishPractice}
+                disabled={submit.isPending}
+              >
+                Akhiri Latihan
+              </Button>
+              <Button variant="ghost" className="text-white hover:bg-white/10" onClick={handleCancelPractice}>
+                Batalkan
+              </Button>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto px-4 pb-10">
             <div className="mx-auto mt-4 flex max-w-6xl flex-col gap-6 lg:flex-row">
@@ -624,16 +728,14 @@ export function PracticePage() {
                     </div>
                   </div>
 
-                  <div className="flex justify-end">
-                    <Button size="lg" className="min-w-[180px]" onClick={() => submit.mutate()} disabled={submit.isPending}>
-                      {submit.isPending ? 'Mengirim...' : 'Kumpulkan Jawaban'}
-                    </Button>
-                  </div>
-                </form>
-              </div>
-              <div className="w-full shrink-0 lg:w-64">
-                <QuestionNavigator questions={questions} answers={answers} activeIndex={currentQuestionIndex} onJump={handleJumpToQuestion} />
-              </div>
+                  </form>
+                </div>
+                <div className="w-full shrink-0 space-y-4 lg:w-64">
+                  <QuestionNavigator questions={questions} answers={answers} activeIndex={currentQuestionIndex} onJump={handleJumpToQuestion} />
+                  <Button size="lg" className="w-full" onClick={() => submit.mutate()} disabled={submit.isPending}>
+                    {submit.isPending ? 'Mengirim...' : 'Kumpulkan Jawaban'}
+                  </Button>
+                </div>
             </div>
           </div>
         </div>,
@@ -644,7 +746,11 @@ export function PracticePage() {
         resetKey={countdownToken}
         title="Mulai Latihan"
         subtitle="Tetap berada di halaman ini hingga selesai."
-        warning="Ujian Akan Di Blokir Saat Anda Meninggalkan Halaman Ujian - Harap Tetap berada di Halaman Ujian Ini dan Kerjakan seluruh soal sampai selesai"
+        warning={
+          practiceBlockEnabled
+            ? 'Ujian Akan Di Blokir Saat Anda Meninggalkan Halaman Ujian - Harap Tetap berada di Halaman Ujian Ini dan Kerjakan seluruh soal sampai selesai'
+            : null
+        }
         onComplete={handleStartPractice}
         onCancel={handleCancelCountdown}
       />

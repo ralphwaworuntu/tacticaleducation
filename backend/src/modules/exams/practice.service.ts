@@ -3,6 +3,7 @@ import { prisma } from '../../config/prisma';
 import { HttpError } from '../../middlewares/errorHandler';
 import { ensureExamAccess as ensureExamBlockAccess } from './exam-block.service';
 import { assertExamAccess } from './exam-control.service';
+import { assertMembershipFeature, getActiveMembership } from '../../utils/membership';
 
 export function listPracticeCategories() {
   return prisma.practiceCategory.findMany({
@@ -71,7 +72,8 @@ export async function getPracticeSet(slug: string, userId: string) {
     throw new HttpError('Latihan soal tidak ditemukan', 404);
   }
 
-  await ensureExamBlockAccess(userId, ExamBlockType.PRACTICE);
+  await ensurePracticeAccess(userId, set);
+  await ensureExamBlockAccess(userId, ExamBlockType.PRACTICE, 'STANDARD');
   ensurePracticeSchedule(set);
   const shuffle = <T,>(arr: T[]) => {
     for (let i = arr.length - 1; i > 0; i -= 1) {
@@ -115,7 +117,8 @@ export async function getExamPracticeSet(slug: string, userId: string) {
     throw new HttpError('Latihan soal tidak ditemukan', 404);
   }
 
-  await ensureExamBlockAccess(userId, ExamBlockType.PRACTICE);
+  await ensurePracticeAccess(userId, set);
+  await ensureExamBlockAccess(userId, ExamBlockType.PRACTICE, 'UJIAN');
   await assertExamAccess(userId, 'EXAM');
   ensurePracticeSchedule(set);
   const shuffle = <T,>(arr: T[]) => {
@@ -152,6 +155,8 @@ export async function submitPractice(
     throw new HttpError('Latihan soal tidak ditemukan', 404);
   }
 
+  await ensurePracticeAccess(userId, set);
+
   const result = await prisma.practiceResult.create({ data: { userId, setId: set.id } });
 
   const correctnessMap = new Map(
@@ -186,6 +191,18 @@ export async function submitPractice(
   ]);
 
   return { resultId: result.id, score, correct, total: set.questions.length };
+}
+
+async function ensurePracticeAccess(userId: string, set: { isFree: boolean }) {
+  const membership = await getActiveMembership(userId);
+  if (!membership) {
+    if (!set.isFree) {
+      throw new HttpError('Membership tidak aktif atau belum divalidasi admin.', 403, { code: 'MEMBERSHIP_REQUIRED' });
+    }
+    return null;
+  }
+  assertMembershipFeature(membership, 'PRACTICE');
+  return membership;
 }
 
 export function getPracticeHistory(userId: string) {

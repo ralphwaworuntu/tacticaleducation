@@ -12,6 +12,7 @@ import { hashPassword } from '../../utils/password';
 import { createImpersonationSession } from '../auth/auth.service';
 import type { Express } from 'express';
 import { getExamControlConfig, updateExamControlConfig } from '../exams/exam-control.service';
+import { getExamBlockConfig, updateExamBlockConfig } from '../exams/exam-block.service';
 
 function ensurePayload(body: Record<string, unknown>) {
   if (!body || Object.keys(body).length === 0) {
@@ -647,18 +648,19 @@ function getFile(req: Request, fieldName: string) {
 
 export async function createTryoutController(req: Request, res: Response, next: NextFunction) {
   try {
-    const payload = req.body as {
-      name: string;
-      slug: string;
-      summary?: string;
-      description?: string;
-      durationMinutes: number;
-      totalQuestions?: number;
-      subCategoryId: string;
-      isPublished?: boolean;
-      openAt?: string;
-      closeAt?: string;
-    };
+      const payload = req.body as {
+        name: string;
+        slug: string;
+        summary?: string;
+        description?: string;
+        durationMinutes: number;
+        totalQuestions?: number;
+        subCategoryId: string;
+        isPublished?: boolean;
+        isFree?: boolean;
+        openAt?: string;
+        closeAt?: string;
+      };
 
     const questionsFile = getFile(req, 'questionsCsv');
     if (!questionsFile) {
@@ -691,12 +693,13 @@ export async function createTryoutController(req: Request, res: Response, next: 
         summary: safeSummary,
         description: safeDescription,
         coverImageUrl,
-        durationMinutes: payload.durationMinutes,
-        totalQuestions,
-        isPublished: payload.isPublished ?? true,
-        openAt: payload.openAt ? new Date(payload.openAt) : null,
-        closeAt: payload.closeAt ? new Date(payload.closeAt) : null,
-        subCategoryId: payload.subCategoryId,
+          durationMinutes: payload.durationMinutes,
+          totalQuestions,
+          isPublished: payload.isPublished ?? true,
+          isFree: payload.isFree ?? false,
+          openAt: payload.openAt ? new Date(payload.openAt) : null,
+          closeAt: payload.closeAt ? new Date(payload.closeAt) : null,
+          subCategoryId: payload.subCategoryId,
         questions: {
             create: questions.map((question, index) => ({
               prompt: question.prompt,
@@ -726,17 +729,18 @@ export async function createTryoutController(req: Request, res: Response, next: 
 export async function updateTryoutController(req: Request, res: Response, next: NextFunction) {
   try {
     const id = getIdParam(req);
-    const payload = req.body as {
-      name?: string;
-      summary?: string;
-      description?: string;
-      durationMinutes?: number;
-      totalQuestions?: number;
-      isPublished?: boolean;
-      subCategoryId?: string;
-      openAt?: string | null;
-      closeAt?: string | null;
-    };
+      const payload = req.body as {
+        name?: string;
+        summary?: string;
+        description?: string;
+        durationMinutes?: number;
+        totalQuestions?: number;
+        isPublished?: boolean;
+        isFree?: boolean;
+        subCategoryId?: string;
+        openAt?: string | null;
+        closeAt?: string | null;
+      };
 
     const coverFile = getFile(req, 'coverImage');
     const questionsFile = getFile(req, 'questionsCsv');
@@ -757,7 +761,8 @@ export async function updateTryoutController(req: Request, res: Response, next: 
     }
     if (payload.durationMinutes !== undefined) updateData.durationMinutes = payload.durationMinutes;
     if (payload.totalQuestions !== undefined) updateData.totalQuestions = payload.totalQuestions;
-    if (payload.isPublished !== undefined) updateData.isPublished = payload.isPublished;
+      if (payload.isPublished !== undefined) updateData.isPublished = payload.isPublished;
+      if (payload.isFree !== undefined) updateData.isFree = payload.isFree;
     if (payload.subCategoryId !== undefined) updateData.subCategoryId = payload.subCategoryId;
     if (payload.openAt !== undefined) {
       updateData.openAt = payload.openAt ? new Date(payload.openAt) : null;
@@ -818,6 +823,21 @@ export async function updateTryoutController(req: Request, res: Response, next: 
       where: { id },
       data: updateData,
       include: { subCategory: { include: { category: true } }, questions: { include: { options: true }, orderBy: { order: 'asc' } } },
+    });
+    res.json({ status: 'success', data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateTryoutFreeAdminController(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = getIdParam(req);
+    const payload = req.body as { isFree: boolean };
+    const data = await prisma.tryout.update({
+      where: { id },
+      data: { isFree: payload.isFree },
+      include: { subCategory: { include: { category: true } } },
     });
     res.json({ status: 'success', data });
   } catch (error) {
@@ -1049,17 +1069,18 @@ export async function listPracticeSetsController(_req: Request, res: Response, n
 
 export async function createPracticeSetController(req: Request, res: Response, next: NextFunction) {
   try {
-    const payload = req.body as {
-      title: string;
-      slug: string;
-      description?: string;
-      level?: string;
-      subSubCategoryId: string;
-      durationMinutes?: number;
-      totalQuestions?: number;
-      openAt?: string;
-      closeAt?: string;
-    };
+      const payload = req.body as {
+        title: string;
+        slug: string;
+        description?: string;
+        level?: string;
+        subSubCategoryId: string;
+        durationMinutes?: number;
+        totalQuestions?: number;
+        openAt?: string;
+        closeAt?: string;
+        isFree?: boolean;
+      };
     const levelValue = payload.level && payload.level.trim() ? payload.level.trim() : null;
     const questionsFile = getFile(req, 'questionsCsv');
     if (!questionsFile) {
@@ -1085,17 +1106,18 @@ export async function createPracticeSetController(req: Request, res: Response, n
         : `${payload.title} - Latihan Soal dengan ${questions.length} soal`;
     const totalQuestions = payload.totalQuestions ?? questions.length;
     const data = await prisma.practiceSet.create({
-      data: {
-        title: payload.title,
-        slug: payload.slug,
-        description: safeDescription,
-        coverImageUrl,
-        level: levelValue,
-        durationMinutes: payload.durationMinutes ?? 30,
-        totalQuestions,
-        openAt: payload.openAt ? new Date(payload.openAt) : null,
-        closeAt: payload.closeAt ? new Date(payload.closeAt) : null,
-        subSubCategoryId: payload.subSubCategoryId,
+        data: {
+          title: payload.title,
+          slug: payload.slug,
+          description: safeDescription,
+          coverImageUrl,
+          level: levelValue,
+          durationMinutes: payload.durationMinutes ?? 30,
+          totalQuestions,
+          isFree: payload.isFree ?? false,
+          openAt: payload.openAt ? new Date(payload.openAt) : null,
+          closeAt: payload.closeAt ? new Date(payload.closeAt) : null,
+          subSubCategoryId: payload.subSubCategoryId,
         questions: {
             create: questions.map((question, index) => ({
               prompt: question.prompt,
@@ -1125,17 +1147,18 @@ export async function createPracticeSetController(req: Request, res: Response, n
 export async function updatePracticeSetController(req: Request, res: Response, next: NextFunction) {
   try {
     const id = getIdParam(req);
-    const payload = req.body as {
-      title?: string;
-      slug?: string;
-      description?: string;
-      level?: string | null;
-      subSubCategoryId?: string;
-      durationMinutes?: number;
-      totalQuestions?: number;
-      openAt?: string | null;
-      closeAt?: string | null;
-    };
+      const payload = req.body as {
+        title?: string;
+        slug?: string;
+        description?: string;
+        level?: string | null;
+        subSubCategoryId?: string;
+        durationMinutes?: number;
+        totalQuestions?: number;
+        openAt?: string | null;
+        closeAt?: string | null;
+        isFree?: boolean;
+      };
 
     const coverFile = getFile(req, 'coverImage');
     const questionsFile = getFile(req, 'questionsCsv');
@@ -1152,9 +1175,10 @@ export async function updatePracticeSetController(req: Request, res: Response, n
     if (payload.level !== undefined) {
       updateData.level = payload.level && payload.level.trim() ? payload.level.trim() : null;
     }
-    if (payload.durationMinutes !== undefined) updateData.durationMinutes = payload.durationMinutes;
-    if (payload.totalQuestions !== undefined) updateData.totalQuestions = payload.totalQuestions;
-    if (payload.subSubCategoryId !== undefined) updateData.subSubCategoryId = payload.subSubCategoryId;
+      if (payload.durationMinutes !== undefined) updateData.durationMinutes = payload.durationMinutes;
+      if (payload.totalQuestions !== undefined) updateData.totalQuestions = payload.totalQuestions;
+      if (payload.isFree !== undefined) updateData.isFree = payload.isFree;
+      if (payload.subSubCategoryId !== undefined) updateData.subSubCategoryId = payload.subSubCategoryId;
     if (payload.openAt !== undefined) {
       updateData.openAt = payload.openAt ? new Date(payload.openAt) : null;
     }
@@ -1214,6 +1238,21 @@ export async function updatePracticeSetController(req: Request, res: Response, n
       where: { id },
       data: updateData,
       include: { subSubCategory: { include: { subCategory: { include: { category: true } } } }, questions: { include: { options: true }, orderBy: { order: 'asc' } } },
+    });
+    res.json({ status: 'success', data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updatePracticeSetFreeAdminController(req: Request, res: Response, next: NextFunction) {
+  try {
+    const id = getIdParam(req);
+    const payload = req.body as { isFree: boolean };
+    const data = await prisma.practiceSet.update({
+      where: { id },
+      data: { isFree: payload.isFree },
+      include: { subSubCategory: { include: { subCategory: { include: { category: true } } } } },
     });
     res.json({ status: 'success', data });
   } catch (error) {
@@ -1757,10 +1796,19 @@ export async function getExamControlAdminController(_req: Request, res: Response
   }
 }
 
+export async function getExamBlockConfigAdminController(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const config = await getExamBlockConfig();
+    res.json({ status: 'success', data: config });
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function updateExamControlAdminController(req: Request, res: Response, next: NextFunction) {
   try {
-      const payload = req.body as {
-        enabled: boolean;
+    const payload = req.body as {
+      enabled: boolean;
         targetAll: boolean;
         targetPackageIds?: string[];
         tryoutQuota: number;
@@ -1789,6 +1837,352 @@ export async function updateExamControlAdminController(req: Request, res: Respon
           endAt: config.endAt ? config.endAt.toISOString() : null,
         },
       });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updateExamBlockConfigAdminController(req: Request, res: Response, next: NextFunction) {
+  try {
+    const payload = req.body as {
+      practiceEnabled: boolean;
+      tryoutEnabled: boolean;
+      examEnabled: boolean;
+    };
+    const config = await updateExamBlockConfig({
+      practiceEnabled: payload.practiceEnabled,
+      tryoutEnabled: payload.tryoutEnabled,
+      examEnabled: payload.examEnabled,
+    });
+    res.json({ status: 'success', data: config });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getRankingAdminController(req: Request, res: Response, next: NextFunction) {
+  try {
+    const dateFilter = buildDateFilter(req.query);
+    const [tryouts, practices, cermatAttempts] = await Promise.all([
+      prisma.tryoutResult.findMany({
+        where: {
+          ...(dateFilter ? { createdAt: dateFilter } : {}),
+          score: { not: null },
+        },
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+          tryout: { select: { name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.practiceResult.findMany({
+        where: {
+          ...(dateFilter ? { createdAt: dateFilter } : {}),
+          score: { not: null },
+        },
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+          set: { select: { title: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.cermatAttempt.findMany({
+        where: {
+          ...(dateFilter ? { startedAt: dateFilter } : {}),
+          averageScore: { not: null },
+        },
+        include: {
+          user: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: { startedAt: 'desc' },
+      }),
+    ]);
+
+    const summaryMap = new Map<
+      string,
+      {
+        user: { id: string; name: string; email: string };
+        tryoutCount: number;
+        tryoutTotal: number;
+        practiceCount: number;
+        practiceTotal: number;
+        cermatCount: number;
+        cermatTotal: number;
+      }
+    >();
+
+    tryouts.forEach((result) => {
+      if (typeof result.score !== 'number') return;
+      const current =
+        summaryMap.get(result.userId) ??
+        ({
+          user: result.user,
+          tryoutCount: 0,
+          tryoutTotal: 0,
+          practiceCount: 0,
+          practiceTotal: 0,
+          cermatCount: 0,
+          cermatTotal: 0,
+        } as const);
+      summaryMap.set(result.userId, {
+        ...current,
+        tryoutCount: current.tryoutCount + 1,
+        tryoutTotal: current.tryoutTotal + result.score,
+      });
+    });
+
+    practices.forEach((result) => {
+      if (typeof result.score !== 'number') return;
+      const current =
+        summaryMap.get(result.userId) ??
+        ({
+          user: result.user,
+          tryoutCount: 0,
+          tryoutTotal: 0,
+          practiceCount: 0,
+          practiceTotal: 0,
+          cermatCount: 0,
+          cermatTotal: 0,
+        } as const);
+      summaryMap.set(result.userId, {
+        ...current,
+        practiceCount: current.practiceCount + 1,
+        practiceTotal: current.practiceTotal + result.score,
+      });
+    });
+
+    cermatAttempts.forEach((attempt) => {
+      if (typeof attempt.averageScore !== 'number') return;
+      const current =
+        summaryMap.get(attempt.userId) ??
+        ({
+          user: attempt.user,
+          tryoutCount: 0,
+          tryoutTotal: 0,
+          practiceCount: 0,
+          practiceTotal: 0,
+          cermatCount: 0,
+          cermatTotal: 0,
+        } as const);
+      summaryMap.set(attempt.userId, {
+        ...current,
+        cermatCount: current.cermatCount + 1,
+        cermatTotal: current.cermatTotal + attempt.averageScore,
+      });
+    });
+
+    const summary = Array.from(summaryMap.values())
+      .map((item) => {
+        const totalCount = item.tryoutCount + item.practiceCount + item.cermatCount;
+        const totalScore = item.tryoutTotal + item.practiceTotal + item.cermatTotal;
+        return {
+          user: item.user,
+          tryoutCount: item.tryoutCount,
+          tryoutAvg: item.tryoutCount ? item.tryoutTotal / item.tryoutCount : 0,
+          practiceCount: item.practiceCount,
+          practiceAvg: item.practiceCount ? item.practiceTotal / item.practiceCount : 0,
+          cermatCount: item.cermatCount,
+          cermatAvg: item.cermatCount ? item.cermatTotal / item.cermatCount : 0,
+          overallAvg: totalCount ? totalScore / totalCount : 0,
+        };
+      })
+      .sort((a, b) => {
+        if (b.overallAvg !== a.overallAvg) return b.overallAvg - a.overallAvg;
+        const countA = a.tryoutCount + a.practiceCount + a.cermatCount;
+        const countB = b.tryoutCount + b.practiceCount + b.cermatCount;
+        if (countB !== countA) return countB - countA;
+        return a.user.name.localeCompare(b.user.name);
+      });
+
+    res.json({
+      status: 'success',
+      data: {
+        summary,
+        tryouts,
+        practices,
+        cermat: cermatAttempts,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function exportRankingAdminController(req: Request, res: Response, next: NextFunction) {
+  try {
+    const dateFilter = buildDateFilter(req.query);
+    const [tryouts, practices, cermatAttempts] = await Promise.all([
+      prisma.tryoutResult.findMany({
+        where: {
+          ...(dateFilter ? { createdAt: dateFilter } : {}),
+          score: { not: null },
+        },
+        select: {
+          userId: true,
+          score: true,
+          startedAt: true,
+          completedAt: true,
+          user: { select: { id: true, name: true, email: true } },
+          tryout: { select: { name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.practiceResult.findMany({
+        where: {
+          ...(dateFilter ? { createdAt: dateFilter } : {}),
+          score: { not: null },
+        },
+        select: {
+          userId: true,
+          score: true,
+          createdAt: true,
+          completedAt: true,
+          user: { select: { id: true, name: true, email: true } },
+          set: { select: { title: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.cermatAttempt.findMany({
+        where: {
+          ...(dateFilter ? { startedAt: dateFilter } : {}),
+          averageScore: { not: null },
+        },
+        select: {
+          userId: true,
+          averageScore: true,
+          startedAt: true,
+          finishedAt: true,
+          mode: true,
+          user: { select: { id: true, name: true, email: true } },
+        },
+        orderBy: { startedAt: 'desc' },
+      }),
+    ]);
+
+    const summaryMap = new Map<
+      string,
+      {
+        user: { id: string; name: string; email: string };
+        tryoutCount: number;
+        tryoutTotal: number;
+        practiceCount: number;
+        practiceTotal: number;
+        tryoutDetails: string[];
+        practiceDetails: string[];
+        cermatCount: number;
+        cermatTotal: number;
+        cermatDetails: string[];
+      }
+    >();
+
+    const formatTime = (value?: Date | null) => (value ? value.toISOString() : '-');
+
+    tryouts.forEach((result) => {
+      if (typeof result.score !== 'number') return;
+      const current =
+        summaryMap.get(result.userId) ??
+        ({
+          user: result.user,
+          tryoutCount: 0,
+          tryoutTotal: 0,
+          practiceCount: 0,
+          practiceTotal: 0,
+          tryoutDetails: [],
+          practiceDetails: [],
+          cermatCount: 0,
+          cermatTotal: 0,
+          cermatDetails: [],
+        } as const);
+      const detail = `${result.tryout.name} (${result.score.toFixed(1)}%) [${formatTime(result.startedAt)} - ${formatTime(result.completedAt)}]`;
+      summaryMap.set(result.userId, {
+        ...current,
+        tryoutCount: current.tryoutCount + 1,
+        tryoutTotal: current.tryoutTotal + result.score,
+        tryoutDetails: [...current.tryoutDetails, detail],
+      });
+    });
+
+    practices.forEach((result) => {
+      if (typeof result.score !== 'number') return;
+      const current =
+        summaryMap.get(result.userId) ??
+        ({
+          user: result.user,
+          tryoutCount: 0,
+          tryoutTotal: 0,
+          practiceCount: 0,
+          practiceTotal: 0,
+          tryoutDetails: [],
+          practiceDetails: [],
+          cermatCount: 0,
+          cermatTotal: 0,
+          cermatDetails: [],
+        } as const);
+      const detail = `${result.set.title} (${result.score.toFixed(1)}%) [${formatTime(result.createdAt)} - ${formatTime(result.completedAt)}]`;
+      summaryMap.set(result.userId, {
+        ...current,
+        practiceCount: current.practiceCount + 1,
+        practiceTotal: current.practiceTotal + result.score,
+        practiceDetails: [...current.practiceDetails, detail],
+      });
+    });
+
+    cermatAttempts.forEach((attempt) => {
+      if (typeof attempt.averageScore !== 'number') return;
+      const current =
+        summaryMap.get(attempt.userId) ??
+        ({
+          user: attempt.user,
+          tryoutCount: 0,
+          tryoutTotal: 0,
+          practiceCount: 0,
+          practiceTotal: 0,
+          tryoutDetails: [],
+          practiceDetails: [],
+          cermatCount: 0,
+          cermatTotal: 0,
+          cermatDetails: [],
+        } as const);
+      const detail = `${attempt.mode} (${attempt.averageScore.toFixed(1)}%) [${formatTime(attempt.startedAt)} - ${formatTime(attempt.finishedAt)}]`;
+      summaryMap.set(attempt.userId, {
+        ...current,
+        cermatCount: current.cermatCount + 1,
+        cermatTotal: current.cermatTotal + attempt.averageScore,
+        cermatDetails: [...current.cermatDetails, detail],
+      });
+    });
+
+    const rows = Array.from(summaryMap.values())
+      .map((item) => {
+        const totalCount = item.tryoutCount + item.practiceCount + item.cermatCount;
+        const totalScore = item.tryoutTotal + item.practiceTotal + item.cermatTotal;
+        return {
+          memberName: item.user.name,
+          email: item.user.email,
+          tryoutCount: item.tryoutCount,
+          tryoutAvg: Number((item.tryoutCount ? item.tryoutTotal / item.tryoutCount : 0).toFixed(1)),
+          practiceCount: item.practiceCount,
+          practiceAvg: Number((item.practiceCount ? item.practiceTotal / item.practiceCount : 0).toFixed(1)),
+          cermatCount: item.cermatCount,
+          cermatAvg: Number((item.cermatCount ? item.cermatTotal / item.cermatCount : 0).toFixed(1)),
+          overallAvg: Number((totalCount ? totalScore / totalCount : 0).toFixed(1)),
+          tryoutDetails: item.tryoutDetails.join(' | '),
+          practiceDetails: item.practiceDetails.join(' | '),
+          cermatDetails: item.cermatDetails.join(' | '),
+        };
+      })
+      .sort((a, b) => {
+        if (b.overallAvg !== a.overallAvg) return b.overallAvg - a.overallAvg;
+        const countA = a.tryoutCount + a.practiceCount + a.cermatCount;
+        const countB = b.tryoutCount + b.practiceCount + b.cermatCount;
+        if (countB !== countA) return countB - countA;
+        return a.memberName.localeCompare(b.memberName);
+      });
+
+    const csv = toCsv(rows);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="ranking-summary.csv"');
+    res.send(csv);
   } catch (error) {
     next(error);
   }

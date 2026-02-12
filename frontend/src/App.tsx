@@ -71,6 +71,7 @@ import { AdminContactsPage } from '@/pages/admin/AdminContactsPage';
 import { AdminCalculatorsPage } from '@/pages/admin/AdminCalculatorsPage';
 import { AdminReportingPage } from '@/pages/admin/AdminReportingPage';
 import { AdminExamControlPage } from '@/pages/admin/AdminExamControlPage';
+import { AdminRankingPage } from '@/pages/admin/AdminRankingPage';
 
 export default function App() {
   return (
@@ -152,6 +153,7 @@ export default function App() {
           <Route path="monitoring" element={<AdminMemberProgressPage />} />
           <Route path="system-monitoring" element={<AdminMonitoringPage />} />
           <Route path="reporting" element={<AdminReportingPage />} />
+          <Route path="ranking" element={<AdminRankingPage />} />
           <Route path="contacts" element={<AdminContactsPage />} />
           <Route path="calculators" element={<AdminCalculatorsPage />} />
           <Route path="users" element={<AdminUsersPage />} />

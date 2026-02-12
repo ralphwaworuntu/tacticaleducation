@@ -15,6 +15,8 @@ import { Input } from '@/components/ui/input';
 import { useExamControlStatus } from '@/hooks/useExamControl';
 import { useFullscreenExam } from '@/hooks/useFullscreenExam';
 import { useExamBlocks } from '@/hooks/useExamBlocks';
+import { useExamBlockConfig } from '@/hooks/useExamBlockConfig';
+import { useMembershipStatus } from '@/hooks/useMembershipStatus';
 import { ExamCountdownModal } from '@/components/dashboard/ExamCountdownModal';
 import { QuestionNavigator } from '@/components/dashboard/QuestionNavigator';
 import { ConfirmFinishModal } from '@/components/dashboard/ConfirmFinishModal';
@@ -25,12 +27,15 @@ export function ExamPracticePage() {
   const [searchParams] = useSearchParams();
   const examStatus = useExamControlStatus();
   const examEnabled = Boolean(examStatus.data?.enabled && examStatus.data?.allowed);
+  const membership = useMembershipStatus();
+  const hasActiveMembership = Boolean(membership.data?.isActive);
   const { data: categories, isLoading } = useQuery({
     queryKey: ['exam-practice-categories'],
     queryFn: () => apiGet<PracticeCategory[]>('/ujian/practice/categories'),
     enabled: examEnabled,
   });
   const { data: blocks, refetch: refetchBlocks } = useExamBlocks(examEnabled, '/ujian');
+  const { data: blockConfig } = useExamBlockConfig(examEnabled, '/ujian');
   const [activeCategorySlug, setActiveCategorySlug] = useState<string | null>(null);
   const [activeSubCategoryId, setActiveSubCategoryId] = useState<string | null>(null);
   const [activeSubSubCategoryId, setActiveSubSubCategoryId] = useState<string | null>(null);
@@ -48,8 +53,9 @@ export function ExamPracticePage() {
   const returnToRef = useRef<string | null>(null);
   const pendingStartRef = useRef<string | null>(null);
   const practiceBlock = blocks?.find((block) => block.type === 'PRACTICE');
+  const examBlockEnabled = blockConfig?.examEnabled ?? true;
   const { exit: exitFullscreen, setViolationHandler, isSupported: fullscreenSupported } = useFullscreenExam({
-    active: examActive,
+    active: examActive && examBlockEnabled,
   });
 
   const violationMutation = useMutation({
@@ -68,6 +74,10 @@ export function ExamPracticePage() {
   });
 
   useEffect(() => {
+    if (!examBlockEnabled) {
+      setViolationHandler(null);
+      return undefined;
+    }
     const handler = (reason: string) => {
       setExamActive(false);
       setDetail(null);
@@ -81,7 +91,7 @@ export function ExamPracticePage() {
     };
     setViolationHandler(handler);
     return () => setViolationHandler(null);
-  }, [exitFullscreen, setViolationHandler, violationMutation]);
+  }, [examBlockEnabled, exitFullscreen, setViolationHandler, violationMutation]);
 
 
   const loadSet = useMutation<PracticeSet, Error, string>({
@@ -492,6 +502,12 @@ export function ExamPracticePage() {
                     </div>
                     <h3 className="text-lg font-semibold text-slate-900">{set.title}</h3>
                     <p className="text-sm text-slate-600 line-clamp-3">{set.description}</p>
+                    <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      {set.isFree && <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-700">Gratis</span>}
+                      {!hasActiveMembership && !set.isFree && (
+                        <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700">Butuh Paket</span>
+                      )}
+                    </div>
                     <Button
                       className="w-full"
                       variant={activeSet ? 'primary' : 'outline'}
@@ -639,7 +655,11 @@ export function ExamPracticePage() {
         resetKey={countdownToken}
         title="Mulai Ujian"
         subtitle="Tetap berada di halaman ini hingga selesai."
-        warning="Ujian Akan Di Blokir Saat Anda Meninggalkan Halaman Ujian - Harap Tetap berada di Halaman Ujian Ini dan Kerjakan seluruh soal sampai selesai"
+        warning={
+          examBlockEnabled
+            ? 'Ujian Akan Di Blokir Saat Anda Meninggalkan Halaman Ujian - Harap Tetap berada di Halaman Ujian Ini dan Kerjakan seluruh soal sampai selesai'
+            : null
+        }
         onComplete={handleStartPractice}
         onCancel={handleCancelCountdown}
       />

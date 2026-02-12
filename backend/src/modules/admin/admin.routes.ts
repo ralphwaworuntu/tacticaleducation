@@ -39,6 +39,7 @@ import {
   listTryoutsController,
   createTryoutController,
   updateTryoutController,
+  updateTryoutFreeAdminController,
   deleteTryoutController,
   listPracticeCategoriesController,
   createPracticeCategoryController,
@@ -55,6 +56,7 @@ import {
   listPracticeSetsController,
   createPracticeSetController,
   updatePracticeSetController,
+  updatePracticeSetFreeAdminController,
   deletePracticeSetController,
   listMaterialsAdminController,
   createMaterialAdminController,
@@ -80,6 +82,8 @@ import {
   adminReportingMembersController,
   adminReportingUsersController,
   adminReportingExportController,
+  getRankingAdminController,
+  exportRankingAdminController,
   getPaymentSettingAdminController,
   updatePaymentSettingAdminController,
   getHeroImageController,
@@ -87,7 +91,9 @@ import {
   getMemberBackgroundAdminController,
   listWelcomeModalAdminController,
   getExamControlAdminController,
+  getExamBlockConfigAdminController,
   updateExamControlAdminController,
+  updateExamBlockConfigAdminController,
   createWelcomeModalAdminController,
   getCermatConfigAdminController,
   listExamBlocksAdminController,
@@ -131,6 +137,7 @@ import {
   updateTryoutSubCategorySchema,
   createTryoutSchema,
   updateTryoutSchema,
+  updateTryoutFreeSchema,
   createPracticeCategorySchema,
   updatePracticeCategorySchema,
   createPracticeSubCategorySchema,
@@ -139,6 +146,7 @@ import {
   updatePracticeSubSubCategorySchema,
   createPracticeSetSchema,
   updatePracticeSetSchema,
+  updatePracticeSetFreeSchema,
   materialMutationSchema,
   materialUpdateSchema,
   membershipPackageSchema,
@@ -153,6 +161,7 @@ import {
   paymentSettingSchema,
   contactConfigSchema,
   examControlSchema,
+  examBlockConfigSchema,
   cermatConfigSchema,
   createMemberSlideSchema,
   updateMemberSlideSchema,
@@ -166,6 +175,8 @@ adminRouter.get('/reporting/summary', adminReportingSummaryController);
 adminRouter.get('/reporting/members', adminReportingMembersController);
 adminRouter.get('/reporting/users', adminReportingUsersController);
 adminRouter.get('/reporting/export', adminReportingExportController);
+adminRouter.get('/ranking', getRankingAdminController);
+adminRouter.get('/ranking/export', exportRankingAdminController);
 adminRouter.get('/landing', adminLandingOverviewController);
 
 adminRouter.post('/landing/stats', validateResource(createLandingStatSchema), createLandingStatController);
@@ -275,6 +286,7 @@ adminRouter.put(
   validateResource(updateTryoutSchema),
   updateTryoutController,
 );
+adminRouter.patch('/tryouts/:id/free', validateResource(updateTryoutFreeSchema), updateTryoutFreeAdminController);
 adminRouter.delete('/tryouts/:id', deleteTryoutController);
 
 adminRouter.get('/practice/categories', listPracticeCategoriesController);
@@ -349,6 +361,7 @@ adminRouter.put(
   validateResource(updatePracticeSetSchema),
   updatePracticeSetController,
 );
+adminRouter.patch('/practice/sets/:id/free', validateResource(updatePracticeSetFreeSchema), updatePracticeSetFreeAdminController);
 adminRouter.delete('/practice/sets/:id', deletePracticeSetController);
 
 adminRouter.get('/materials', listMaterialsAdminController);
@@ -379,6 +392,8 @@ adminRouter.put(
 );
 adminRouter.get('/site/exam-control', getExamControlAdminController);
 adminRouter.put('/site/exam-control', validateResource(examControlSchema), updateExamControlAdminController);
+adminRouter.get('/site/exam-block-config', getExamBlockConfigAdminController);
+adminRouter.put('/site/exam-block-config', validateResource(examBlockConfigSchema), updateExamBlockConfigAdminController);
 adminRouter.get('/site/welcome-modal', listWelcomeModalAdminController);
 adminRouter.post('/site/welcome-modal', contentImageUpload.single('image'),
   optimizeUploadedImages, createWelcomeModalAdminController);

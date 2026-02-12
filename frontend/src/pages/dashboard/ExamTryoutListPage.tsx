@@ -8,12 +8,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useExamControlStatus } from '@/hooks/useExamControl';
+import { useMembershipStatus } from '@/hooks/useMembershipStatus';
 
 export function ExamTryoutListPage() {
   const navigate = useNavigate();
   const { categoryId, subCategoryId } = useParams<{ categoryId: string; subCategoryId: string }>();
   const examStatus = useExamControlStatus();
   const examEnabled = Boolean(examStatus.data?.enabled && examStatus.data?.allowed);
+  const membership = useMembershipStatus();
+  const hasActiveMembership = Boolean(membership.data?.isActive);
   const { data: tryouts, isLoading } = useQuery({
     queryKey: ['exam-tryouts'],
     queryFn: () => apiGet<Tryout[]>('/ujian/tryouts'),
@@ -112,6 +115,12 @@ export function ExamTryoutListPage() {
                     </p>
                     <h3 className="text-lg font-semibold text-slate-900">{item.name}</h3>
                     <p className="text-sm text-slate-600">{item.summary}</p>
+                    <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      {item.isFree && <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-700">Gratis</span>}
+                      {!hasActiveMembership && !item.isFree && (
+                        <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700">Butuh Paket</span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-slate-500">Jadwal: {getScheduleText(item)}</p>
                     <p className={`text-[11px] ${status.active ? 'text-emerald-600' : 'text-red-500'}`}>
                       Status: {status.label}

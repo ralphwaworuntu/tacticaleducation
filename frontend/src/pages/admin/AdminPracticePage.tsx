@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { apiDelete, apiGet, apiPost, apiPut } from '@/lib/api';
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
 import { getAssetUrl } from '@/lib/media';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -47,6 +47,7 @@ type PracticeSet = {
   coverImageUrl?: string | null;
   durationMinutes: number;
   totalQuestions: number;
+  isFree?: boolean;
   openAt?: string | null;
   closeAt?: string | null;
   subSubCategory: { id: string; name: string; subCategory: { id: string; name: string; category: { id: string; name: string } } };
@@ -72,6 +73,7 @@ const defaultSetValues = {
   totalQuestions: 5,
   openAt: '',
   closeAt: '',
+  isFree: false,
 };
 
 export function AdminPracticePage() {
@@ -122,6 +124,7 @@ export function AdminPracticePage() {
   const [questionsFile, setQuestionsFile] = useState<File | null>(null);
   const [editingSet, setEditingSet] = useState<PracticeSet | null>(null);
   const isEditing = Boolean(editingSet);
+  const [togglingSetId, setTogglingSetId] = useState<string | null>(null);
 
   const toInputDateTime = (value?: string | null) => {
     if (!value) return '';
@@ -277,6 +280,19 @@ export function AdminPracticePage() {
     onError: () => toast.error('Gagal menghapus latihan'),
   });
 
+  const toggleSetFree = useMutation({
+    mutationFn: ({ id, isFree }: { id: string; isFree: boolean }) => apiPatch(`/admin/practice/sets/${id}/free`, { isFree }),
+    onMutate: ({ id }) => {
+      setTogglingSetId(id);
+    },
+    onSuccess: () => {
+      toast.success('Status gratis diperbarui');
+      queryClient.invalidateQueries({ queryKey: ['admin-practice-sets'] });
+    },
+    onError: () => toast.error('Gagal memperbarui status gratis'),
+    onSettled: () => setTogglingSetId(null),
+  });
+
   const saveCermatConfig = useMutation({
     mutationFn: (values: CermatConfig) => apiPut('/admin/exams/cermat-config', values),
     onSuccess: () => {
@@ -326,6 +342,7 @@ export function AdminPracticePage() {
     if (values.totalQuestions) {
       formData.append('totalQuestions', String(values.totalQuestions));
     }
+    formData.append('isFree', String(values.isFree ?? false));
     if (values.openAt) {
       formData.append('openAt', values.openAt);
     }
@@ -370,6 +387,7 @@ export function AdminPracticePage() {
       totalQuestions: set.totalQuestions,
       openAt: toInputDateTime(set.openAt),
       closeAt: toInputDateTime(set.closeAt),
+      isFree: set.isFree ?? false,
     });
     setCoverPreview(set.coverImageUrl ?? null);
     setCoverFile(null);
@@ -776,6 +794,10 @@ export function AdminPracticePage() {
             <Input type="number" placeholder="Total Soal" {...setForm.register('totalQuestions', { valueAsNumber: true })} />
             <Input type="datetime-local" placeholder="Buka pada" {...setForm.register('openAt')} />
             <Input type="datetime-local" placeholder="Tutup pada" {...setForm.register('closeAt')} />
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-600 md:col-span-2">
+              <input type="checkbox" {...setForm.register('isFree')} />
+              Latihan gratis untuk member baru
+            </label>
             <div className="md:col-span-2 space-y-2">
               <p className="text-xs font-semibold text-slate-500">
                 Upload Soal (CSV) {isEditing && <span className="font-normal">(opsional saat edit)</span>}
@@ -820,8 +842,23 @@ export function AdminPracticePage() {
                     <p className="text-xs text-slate-500">
                       {set.subSubCategory.subCategory.category.name} / {set.subSubCategory.subCategory.name} / {set.subSubCategory.name} - {set.totalQuestions} soal
                     </p>
+                    {set.isFree && <p className="text-[11px] font-semibold text-emerald-600">Gratis untuk member baru</p>}
                   </div>
                   <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={set.isFree ? 'border-emerald-300 text-emerald-700' : undefined}
+                      onClick={() => toggleSetFree.mutate({ id: set.id, isFree: !set.isFree })}
+                      disabled={togglingSetId === set.id && toggleSetFree.isPending}
+                    >
+                      <span className="flex items-center gap-2">
+                        {togglingSetId === set.id && toggleSetFree.isPending && (
+                          <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        )}
+                        Gratis: {set.isFree ? 'ON' : 'OFF'}
+                      </span>
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => handleEditSet(set)}>
                       Edit
                     </Button>

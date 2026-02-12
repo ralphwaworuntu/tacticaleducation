@@ -22,12 +22,17 @@ import {
 } from './practice.service';
 import { ensureExamAccessAllowed } from './exam-control.service';
 import { getCermatHistory, startCermatSession, submitCermatSession } from './cermat.service';
-import { listUserExamBlocks, recordExamViolation, unlockExamBlock } from './exam-block.service';
+import {
+  getExamBlockConfig,
+  listUserExamBlocks,
+  recordExamViolation,
+  unlockExamBlock,
+  type ExamBlockContext,
+} from './exam-block.service';
 import { assertMembershipFeatureByUser } from '../../utils/membership';
 
 export async function tryoutListController(_req: Request, res: Response, next: NextFunction) {
   try {
-    await assertMembershipFeatureByUser(_req.user!.id, 'TRYOUT');
     const data = await listTryouts();
     res.json({ status: 'success', data });
   } catch (error) {
@@ -41,8 +46,7 @@ export async function tryoutDetailController(req: Request, res: Response, next: 
     if (!slug) {
       throw new HttpError('Tryout slug is required', 400);
     }
-    await assertMembershipFeatureByUser(req.user!.id, 'TRYOUT');
-    const data = await getTryoutDetail(slug);
+    const data = await getTryoutDetail(slug, req.user!.id);
     res.json({ status: 'success', data });
   } catch (error) {
     next(error);
@@ -55,7 +59,6 @@ export async function tryoutInfoController(req: Request, res: Response, next: Ne
     if (!slug) {
       throw new HttpError('Tryout slug is required', 400);
     }
-    await assertMembershipFeatureByUser(req.user!.id, 'TRYOUT');
     const data = await getTryoutInfo(slug);
     res.json({ status: 'success', data });
   } catch (error) {
@@ -130,7 +133,7 @@ export async function examTryoutDetailController(req: Request, res: Response, ne
       throw new HttpError('Tryout slug is required', 400);
     }
     await ensureExamAccessAllowed(req.user!.id);
-    const data = await getTryoutDetail(slug);
+    const data = await getTryoutDetail(slug, req.user!.id);
     res.json({ status: 'success', data });
   } catch (error) {
     next(error);
@@ -204,7 +207,6 @@ export async function examTryoutReviewController(req: Request, res: Response, ne
 
 export async function practiceCategoriesController(_req: Request, res: Response, next: NextFunction) {
   try {
-    await assertMembershipFeatureByUser(_req.user!.id, 'PRACTICE');
     const data = await listPracticeCategories();
     res.json({ status: 'success', data });
   } catch (error) {
@@ -218,7 +220,6 @@ export async function practiceSetController(req: Request, res: Response, next: N
     if (!slug) {
       throw new HttpError('Practice slug is required', 400);
     }
-    await assertMembershipFeatureByUser(req.user!.id, 'PRACTICE');
     const data = await getPracticeSet(slug, req.user!.id);
     res.json({ status: 'success', data });
   } catch (error) {
@@ -232,7 +233,6 @@ export async function practiceInfoController(req: Request, res: Response, next: 
     if (!slug) {
       throw new HttpError('Practice slug is required', 400);
     }
-    await assertMembershipFeatureByUser(req.user!.id, 'PRACTICE');
     const data = await getPracticeInfo(slug);
     res.json({ status: 'success', data });
   } catch (error) {
@@ -392,7 +392,8 @@ export async function cermatHistoryController(req: Request, res: Response, next:
 
 export async function examBlockStatusController(req: Request, res: Response, next: NextFunction) {
   try {
-    const blocks = await listUserExamBlocks(req.user!.id);
+    const context: ExamBlockContext = req.baseUrl?.includes('/ujian') ? 'UJIAN' : 'STANDARD';
+    const blocks = await listUserExamBlocks(req.user!.id, context);
     res.json({ status: 'success', data: blocks });
   } catch (error) {
     next(error);
@@ -402,7 +403,12 @@ export async function examBlockStatusController(req: Request, res: Response, nex
 export async function examBlockCreateController(req: Request, res: Response, next: NextFunction) {
   try {
     const { type, reason } = req.body as { type: ExamBlockType; reason?: string };
-    const block = await recordExamViolation(req.user!.id, type, reason);
+    const context: ExamBlockContext = req.baseUrl?.includes('/ujian') ? 'UJIAN' : 'STANDARD';
+    const block = await recordExamViolation(req.user!.id, type, reason, context);
+    if (!block) {
+      res.json({ status: 'success', data: { skipped: true, type } });
+      return;
+    }
     res.status(201).json({ status: 'success', data: { id: block.id, type: block.type, blockedAt: block.blockedAt } });
   } catch (error) {
     next(error);
@@ -414,6 +420,15 @@ export async function examBlockUnlockController(req: Request, res: Response, nex
     const { type, code } = req.body as { type: ExamBlockType; code: string };
     await unlockExamBlock(req.user!.id, type, code);
     res.json({ status: 'success', data: { type } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function examBlockConfigController(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const config = await getExamBlockConfig();
+    res.json({ status: 'success', data: config });
   } catch (error) {
     next(error);
   }

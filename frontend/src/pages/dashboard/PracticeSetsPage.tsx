@@ -8,7 +8,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMembershipStatus } from '@/hooks/useMembershipStatus';
-import { MembershipRequired } from '@/components/dashboard/MembershipRequired';
 
 export function PracticeSetsPage() {
   const navigate = useNavigate();
@@ -18,10 +17,10 @@ export function PracticeSetsPage() {
     subSubId: string;
   }>();
   const membership = useMembershipStatus();
+  const hasActiveMembership = Boolean(membership.data?.isActive);
   const { data: categories, isLoading } = useQuery({
     queryKey: ['practice-categories'],
     queryFn: () => apiGet<PracticeCategory[]>('/exams/practice/categories'),
-    enabled: Boolean(membership.data?.isActive),
   });
 
   const selection = useMemo(() => {
@@ -35,11 +34,7 @@ export function PracticeSetsPage() {
     return <Skeleton className="h-72" />;
   }
 
-  if (!membership.data?.isActive) {
-    return <MembershipRequired status={membership.data} />;
-  }
-
-  if (membership.data?.allowPractice === false) {
+  if (hasActiveMembership && membership.data?.allowPractice === false) {
     return (
       <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
         Paket membership kamu tidak mencakup akses latihan soal. Hubungi admin untuk upgrade paket.
@@ -64,6 +59,11 @@ export function PracticeSetsPage() {
 
   return (
     <section className="space-y-6">
+      {!hasActiveMembership && (
+        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          Kamu belum memiliki paket aktif. Kamu tetap bisa melihat daftar latihan, tetapi hanya latihan gratis yang bisa dikerjakan.
+        </section>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Paket Latihan Soal</p>
@@ -94,6 +94,12 @@ export function PracticeSetsPage() {
                   <div className="space-y-2 p-4">
                     <h3 className="text-lg font-semibold text-slate-900">{set.title}</h3>
                     <p className="text-sm text-slate-600">{set.description}</p>
+                    <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      {set.isFree && <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-700">Gratis</span>}
+                      {!hasActiveMembership && !set.isFree && (
+                        <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700">Butuh Paket</span>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-2 text-xs text-slate-500">
                       <span>{set.totalQuestions} soal</span>
                       <span>-</span>

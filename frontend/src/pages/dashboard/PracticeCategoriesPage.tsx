@@ -7,26 +7,21 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMembershipStatus } from '@/hooks/useMembershipStatus';
-import { MembershipRequired } from '@/components/dashboard/MembershipRequired';
 
 export function PracticeCategoriesPage() {
   const navigate = useNavigate();
   const membership = useMembershipStatus();
+  const hasActiveMembership = Boolean(membership.data?.isActive);
   const { data: categories, isLoading } = useQuery({
     queryKey: ['practice-categories'],
     queryFn: () => apiGet<PracticeCategory[]>('/exams/practice/categories'),
-    enabled: Boolean(membership.data?.isActive),
   });
 
   if (membership.isLoading) {
     return <Skeleton className="h-72" />;
   }
 
-  if (!membership.data?.isActive) {
-    return <MembershipRequired status={membership.data} />;
-  }
-
-  if (membership.data?.allowPractice === false) {
+  if (hasActiveMembership && membership.data?.allowPractice === false) {
     return (
       <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
         Paket membership kamu tidak mencakup akses latihan soal. Hubungi admin untuk upgrade paket.
@@ -40,6 +35,11 @@ export function PracticeCategoriesPage() {
 
   return (
     <section className="space-y-6">
+      {!hasActiveMembership && (
+        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          Kamu belum memiliki paket aktif. Kamu tetap bisa melihat kategori latihan, tetapi hanya latihan gratis yang bisa dikerjakan.
+        </section>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Kategori Latihan Soal</p>

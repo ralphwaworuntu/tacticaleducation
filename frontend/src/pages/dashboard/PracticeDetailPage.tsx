@@ -9,9 +9,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useMembershipStatus } from '@/hooks/useMembershipStatus';
-import { MembershipRequired } from '@/components/dashboard/MembershipRequired';
 import { useFullscreenExam } from '@/hooks/useFullscreenExam';
 import { toast } from 'sonner';
+import { ExamCountdownModal } from '@/components/dashboard/ExamCountdownModal';
 
 function formatDateTime(value?: string | null) {
   return value ? new Date(value).toLocaleString('id-ID') : '-';
@@ -32,11 +32,14 @@ export function PracticeDetailPage() {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug: string }>();
   const membership = useMembershipStatus();
+  const hasActiveMembership = Boolean(membership.data?.isActive);
   const [fullscreenGateOpen, setFullscreenGateOpen] = useState(false);
+  const [countdownOpen, setCountdownOpen] = useState(false);
+  const [countdownToken, setCountdownToken] = useState(0);
   const { data, isLoading } = useQuery({
     queryKey: ['practice-detail', slug],
     queryFn: () => apiGet<PracticeSetInfo>(`/exams/practice/${slug}/info`),
-    enabled: Boolean(slug) && Boolean(membership.data?.isActive),
+    enabled: Boolean(slug),
   });
   const { request: requestFullscreen, isSupported: fullscreenSupported } = useFullscreenExam({ active: false });
   const returnTo = slug ? `/app/latihan-soal/detail/${slug}` : '/app/latihan-soal';
@@ -47,11 +50,7 @@ export function PracticeDetailPage() {
     return <Skeleton className="h-72" />;
   }
 
-  if (!membership.data?.isActive) {
-    return <MembershipRequired status={membership.data} />;
-  }
-
-  if (membership.data?.allowPractice === false) {
+  if (hasActiveMembership && membership.data?.allowPractice === false) {
     return (
       <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
         Paket membership kamu tidak mencakup akses latihan soal. Hubungi admin untuk upgrade paket.
@@ -70,12 +69,18 @@ export function PracticeDetailPage() {
     { label: 'Judul Latihan Soal', value: data.title },
     { label: 'Jumlah Soal', value: String(data.totalQuestions) },
     { label: 'Durasi', value: `${data.durationMinutes} menit` },
+    { label: 'Akses Gratis', value: data.isFree ? 'Ya' : 'Tidak' },
     { label: 'Waktu Akses Mulai Latihan', value: formatDateTime(data.openAt) },
     { label: 'Waktu Akses Berakhir Latihan', value: formatDateTime(data.closeAt) },
   ];
 
   return (
     <div className="space-y-6">
+      {!hasActiveMembership && (
+        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          Kamu belum memiliki paket aktif. Hanya latihan gratis yang bisa dikerjakan.
+        </section>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Detail Latihan Soal</p>
@@ -88,9 +93,13 @@ export function PracticeDetailPage() {
           </Button>
           <Button
             onClick={() => {
+              if (!hasActiveMembership && !data.isFree) {
+                toast.error('Aktifkan paket untuk mulai latihan.');
+                return;
+              }
               if (!fullscreenSupported) {
-                sessionStorage.setItem('practice_start_slug', data.slug);
-                navigate('/app/latihan-soal/mulai', { state: { startPractice: { slug: data.slug }, returnTo } });
+                setCountdownToken((prev) => prev + 1);
+                setCountdownOpen(true);
                 return;
               }
               setFullscreenGateOpen(true);
@@ -144,9 +153,9 @@ export function PracticeDetailPage() {
                     toast.error('Mode layar penuh wajib diizinkan untuk memulai latihan.');
                     return;
                   }
-                  sessionStorage.setItem('practice_start_slug', data.slug);
                   setFullscreenGateOpen(false);
-                  navigate('/app/latihan-soal/mulai', { state: { startPractice: { slug: data.slug }, returnTo } });
+                  setCountdownToken((prev) => prev + 1);
+                  setCountdownOpen(true);
                 }}
               >
                 Aktifkan & Mulai
@@ -155,6 +164,21 @@ export function PracticeDetailPage() {
           </div>
         </div>
       )}
+      <ExamCountdownModal
+        open={countdownOpen}
+        resetKey={countdownToken}
+        title="Mulai Latihan"
+        subtitle="Tetap berada di halaman ini hingga selesai."
+        onComplete={() => {
+          if (!data) return;
+          sessionStorage.setItem('practice_start_slug', data.slug);
+          setCountdownOpen(false);
+          navigate('/app/latihan-soal/mulai?skipCountdown=1', {
+            state: { startPractice: { slug: data.slug }, returnTo, skipCountdown: true },
+          });
+        }}
+        onCancel={() => setCountdownOpen(false)}
+      />
     </div>
   );
 }

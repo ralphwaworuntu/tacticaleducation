@@ -2,7 +2,7 @@ import { useMemo, useState, type ChangeEvent } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { apiDelete, apiGet, apiPost, apiPut } from '@/lib/api';
+import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
 import { getAssetUrl } from '@/lib/media';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,6 +39,7 @@ type AdminTryout = {
   durationMinutes: number;
   totalQuestions: number;
   isPublished: boolean;
+  isFree?: boolean;
   openAt?: string | null;
   closeAt?: string | null;
   subCategory: { id: string; name: string; category: { id: string; name: string } };
@@ -56,6 +57,7 @@ const defaultTryoutValues = {
   subCategoryId: '',
   openAt: '',
   closeAt: '',
+  isFree: false,
 };
 
 export function AdminTryoutsPage() {
@@ -94,6 +96,7 @@ export function AdminTryoutsPage() {
   const [questionsFile, setQuestionsFile] = useState<File | null>(null);
   const [editingTryout, setEditingTryout] = useState<AdminTryout | null>(null);
   const isEditing = Boolean(editingTryout);
+  const [togglingTryoutId, setTogglingTryoutId] = useState<string | null>(null);
 
   const toInputDateTime = (value?: string | null) => {
     if (!value) return '';
@@ -216,6 +219,19 @@ export function AdminTryoutsPage() {
     onError: () => toast.error('Gagal menghapus tryout'),
   });
 
+  const toggleTryoutFree = useMutation({
+    mutationFn: ({ id, isFree }: { id: string; isFree: boolean }) => apiPatch(`/admin/tryouts/${id}/free`, { isFree }),
+    onMutate: ({ id }) => {
+      setTogglingTryoutId(id);
+    },
+    onSuccess: () => {
+      toast.success('Status gratis diperbarui');
+      queryClient.invalidateQueries({ queryKey: ['admin-tryouts'] });
+    },
+    onError: () => toast.error('Gagal memperbarui status gratis'),
+    onSettled: () => setTogglingTryoutId(null),
+  });
+
   const onSubmitCategory = categoryForm.handleSubmit((values) => saveCategory.mutate(values));
   const onSubmitSubCategory = subCategoryForm.handleSubmit((values) => {
     if (!values.categoryId) {
@@ -244,6 +260,7 @@ export function AdminTryoutsPage() {
       formData.append('totalQuestions', String(values.totalQuestions));
     }
     formData.append('subCategoryId', values.subCategoryId);
+    formData.append('isFree', String(values.isFree ?? false));
     if (isEditing) {
       formData.append('openAt', values.openAt ?? '');
       formData.append('closeAt', values.closeAt ?? '');
@@ -293,6 +310,7 @@ export function AdminTryoutsPage() {
       subCategoryId: tryout.subCategory.id,
       openAt: toInputDateTime(tryout.openAt),
       closeAt: toInputDateTime(tryout.closeAt),
+      isFree: tryout.isFree ?? false,
     });
     setCoverPreview(tryout.coverImageUrl ?? null);
     setCoverFile(null);
@@ -554,6 +572,10 @@ export function AdminTryoutsPage() {
             </select>
             <Input type="datetime-local" placeholder="Buka pada" {...tryoutForm.register('openAt')} />
             <Input type="datetime-local" placeholder="Tutup pada" {...tryoutForm.register('closeAt')} />
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+              <input type="checkbox" {...tryoutForm.register('isFree')} />
+              Tryout gratis untuk member baru
+            </label>
             <div className="md:col-span-2 space-y-2">
               <p className="text-xs font-semibold text-slate-500">
                 Upload Soal (CSV) {isEditing && <span className="font-normal">(opsional saat edit)</span>}
@@ -594,19 +616,34 @@ export function AdminTryoutsPage() {
                     loading="lazy"
                   />
                 )}
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="font-semibold text-slate-900">{tryout.name}</p>
-                    <p className="text-xs text-slate-500">
-                      {tryout.subCategory.category.name} / {tryout.subCategory.name} - {tryout.totalQuestions} soal - {tryout.durationMinutes} menit
-                    </p>
-                    {(tryout.openAt || tryout.closeAt) && (
-                      <p className="text-[11px] text-slate-500">
-                        Jadwal: {formatDateTime(tryout.openAt)} s/d {formatDateTime(tryout.closeAt)}
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-slate-900">{tryout.name}</p>
+                      <p className="text-xs text-slate-500">
+                        {tryout.subCategory.category.name} / {tryout.subCategory.name} - {tryout.totalQuestions} soal - {tryout.durationMinutes} menit
                       </p>
-                    )}
+                      {tryout.isFree && <p className="text-[11px] font-semibold text-emerald-600">Gratis untuk member baru</p>}
+                      {(tryout.openAt || tryout.closeAt) && (
+                        <p className="text-[11px] text-slate-500">
+                          Jadwal: {formatDateTime(tryout.openAt)} s/d {formatDateTime(tryout.closeAt)}
+                        </p>
+                      )}
                   </div>
                   <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={tryout.isFree ? 'border-emerald-300 text-emerald-700' : undefined}
+                      onClick={() => toggleTryoutFree.mutate({ id: tryout.id, isFree: !tryout.isFree })}
+                      disabled={togglingTryoutId === tryout.id && toggleTryoutFree.isPending}
+                    >
+                      <span className="flex items-center gap-2">
+                        {togglingTryoutId === tryout.id && toggleTryoutFree.isPending && (
+                          <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        )}
+                        Gratis: {tryout.isFree ? 'ON' : 'OFF'}
+                      </span>
+                    </Button>
                     <Button size="sm" variant="outline" onClick={() => handleEditTryout(tryout)}>
                       Edit
                     </Button>

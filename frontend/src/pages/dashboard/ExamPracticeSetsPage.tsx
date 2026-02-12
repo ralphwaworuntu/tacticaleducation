@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useExamControlStatus } from '@/hooks/useExamControl';
+import { useMembershipStatus } from '@/hooks/useMembershipStatus';
 
 export function ExamPracticeSetsPage() {
   const navigate = useNavigate();
@@ -18,6 +19,8 @@ export function ExamPracticeSetsPage() {
   }>();
   const examStatus = useExamControlStatus();
   const examEnabled = Boolean(examStatus.data?.enabled && examStatus.data?.allowed);
+  const membership = useMembershipStatus();
+  const hasActiveMembership = Boolean(membership.data?.isActive);
   const { data: categories, isLoading } = useQuery({
     queryKey: ['exam-practice-categories'],
     queryFn: () => apiGet<PracticeCategory[]>('/ujian/practice/categories'),
@@ -90,6 +93,12 @@ export function ExamPracticeSetsPage() {
                   <div className="space-y-2 p-4">
                     <h3 className="text-lg font-semibold text-slate-900">{set.title}</h3>
                     <p className="text-sm text-slate-600">{set.description}</p>
+                    <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      {set.isFree && <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-700">Gratis</span>}
+                      {!hasActiveMembership && !set.isFree && (
+                        <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700">Butuh Paket</span>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-2 text-xs text-slate-500">
                       <span>{set.totalQuestions} soal</span>
                       <span>-</span>

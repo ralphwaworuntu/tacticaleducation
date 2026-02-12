@@ -75,6 +75,7 @@ export const adminMenu: NavSection[] = [
       { label: 'Landing Content', to: '/admin/landing' },
       { label: 'Pengumuman', to: '/admin/announcements' },
       { label: 'Reporting', to: '/admin/reporting' },
+      { label: 'Ranking', to: '/admin/ranking' },
       { label: 'Pesan Kontak', to: '/admin/contacts' },
     ],
   },

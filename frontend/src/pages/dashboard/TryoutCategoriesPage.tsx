@@ -8,15 +8,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMembershipStatus } from '@/hooks/useMembershipStatus';
-import { MembershipRequired } from '@/components/dashboard/MembershipRequired';
 
 export function TryoutCategoriesPage() {
   const navigate = useNavigate();
   const membership = useMembershipStatus();
+  const hasActiveMembership = Boolean(membership.data?.isActive);
   const { data: tryouts, isLoading } = useQuery({
     queryKey: ['tryouts'],
     queryFn: () => apiGet<Tryout[]>('/exams/tryouts'),
-    enabled: Boolean(membership.data?.isActive),
   });
 
   const categoryGroups = useMemo(() => {
@@ -50,11 +49,7 @@ export function TryoutCategoriesPage() {
     return <Skeleton className="h-72" />;
   }
 
-  if (!membership.data?.isActive) {
-    return <MembershipRequired status={membership.data} />;
-  }
-
-  if (membership.data?.allowTryout === false) {
+  if (hasActiveMembership && membership.data?.allowTryout === false) {
     return (
       <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
         Paket membership kamu tidak mencakup akses latihan tryout. Hubungi admin untuk upgrade paket.
@@ -68,6 +63,11 @@ export function TryoutCategoriesPage() {
 
   return (
     <section className="space-y-6">
+      {!hasActiveMembership && (
+        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          Kamu belum memiliki paket aktif. Kamu tetap bisa melihat daftar tryout, tetapi hanya tryout gratis yang bisa dikerjakan.
+        </section>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Kategori Tryout</p>

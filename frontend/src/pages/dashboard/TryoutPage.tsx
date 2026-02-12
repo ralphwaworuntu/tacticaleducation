@@ -12,9 +12,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { useMembershipStatus } from '@/hooks/useMembershipStatus';
-import { MembershipRequired } from '@/components/dashboard/MembershipRequired';
 import { useFullscreenExam } from '@/hooks/useFullscreenExam';
 import { useExamBlocks } from '@/hooks/useExamBlocks';
+import { useExamBlockConfig } from '@/hooks/useExamBlockConfig';
 import { ExamCountdownModal } from '@/components/dashboard/ExamCountdownModal';
 import { ConfirmFinishModal } from '@/components/dashboard/ConfirmFinishModal';
 import { QuestionNavigator } from '@/components/dashboard/QuestionNavigator';
@@ -35,12 +35,13 @@ export function TryoutPage() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const membership = useMembershipStatus();
+  const hasActiveMembership = Boolean(membership.data?.isActive);
   const { data: tryouts, isLoading } = useQuery({
     queryKey: ['tryouts'],
     queryFn: () => apiGet<Tryout[]>('/exams/tryouts'),
-    enabled: Boolean(membership.data?.isActive),
   });
   const { data: blocks, refetch: refetchBlocks } = useExamBlocks(Boolean(membership.data?.isActive));
+  const { data: blockConfig } = useExamBlockConfig(Boolean(membership.data?.isActive));
   const [session, setSession] = useState<TryoutSession | null>(null);
   const [answers, setAnswers] = useState<Record<string, string | undefined>>({});
   const [result, setResult] = useState<{ score: number; correct: number; total: number; resultId: string } | null>(null);
@@ -53,11 +54,17 @@ export function TryoutPage() {
   const [nowTs, setNowTs] = useState(() => Date.now());
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [finishConfirmOpen, setFinishConfirmOpen] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const tryoutBlock = blocks?.find((block) => block.type === 'TRYOUT');
+  const tryoutBlockEnabled = blockConfig?.tryoutEnabled ?? true;
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [activeSubCategoryId, setActiveSubCategoryId] = useState<string | null>(null);
   const autoStartRef = useRef(false);
   const countdownStartRef = useRef(false);
+  const skipCountdownRef = useRef(false);
+  const endTimeRef = useRef<number | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const autoSubmitRef = useRef(false);
 
   const categoryGroups = useMemo(() => {
     if (!tryouts) return [];
@@ -98,7 +105,7 @@ export function TryoutPage() {
 
   const { request: requestFullscreen, exit: exitFullscreen, setViolationHandler, isSupported: fullscreenSupported } =
     useFullscreenExam({
-    active: Boolean(session),
+    active: Boolean(session) && tryoutBlockEnabled,
   });
 
   const violationMutation = useMutation({
@@ -127,6 +134,9 @@ export function TryoutPage() {
         setResult(null);
         setCurrentQuestionIndex(0);
         setFinishConfirmOpen(false);
+        endTimeRef.current = null;
+        setTimeLeft(null);
+        autoSubmitRef.current = false;
         return null;
       });
     },
@@ -134,13 +144,18 @@ export function TryoutPage() {
   );
 
   useEffect(() => {
+    if (!tryoutBlockEnabled) {
+      setViolationHandler(null);
+      return undefined;
+    }
     setViolationHandler((reason) => {
       violationMutation.mutate(reason ?? 'Pelanggaran fullscreen');
       handleSessionReset(reason);
       exitFullscreen();
     });
     return () => setViolationHandler(null);
-  }, [exitFullscreen, handleSessionReset, setViolationHandler, violationMutation]);
+  }, [exitFullscreen, handleSessionReset, setViolationHandler, tryoutBlockEnabled, violationMutation]);
+
 
   useEffect(() => {
     return () => {
@@ -165,6 +180,14 @@ export function TryoutPage() {
       setAnswers({});
       setResult(null);
       setCurrentQuestionIndex(0);
+      autoSubmitRef.current = false;
+      if (payload.durationMinutes > 0) {
+        endTimeRef.current = Date.now() + payload.durationMinutes * 60 * 1000;
+        setTimeLeft(Math.ceil(payload.durationMinutes * 60));
+      } else {
+        endTimeRef.current = null;
+        setTimeLeft(null);
+      }
       toast.success('Tryout dimulai, selamat mengerjakan!');
     },
     onError: (error) => {
@@ -200,6 +223,8 @@ export function TryoutPage() {
       setCurrentQuestionIndex(0);
       toast.success(`Tryout selesai. Skor kamu ${Math.round(payload.score)}`);
       exitFullscreen();
+      endTimeRef.current = null;
+      setTimeLeft(null);
       queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
       queryClient.invalidateQueries({ queryKey: ['tryout-history'] });
       if (payload.resultId) {
@@ -208,6 +233,39 @@ export function TryoutPage() {
     },
     onError: () => toast.error('Gagal mengirim jawaban'),
   });
+
+  useEffect(() => {
+    if (!session || !endTimeRef.current) {
+      if (timerRef.current !== null) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return undefined;
+    }
+
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((endTimeRef.current! - Date.now()) / 1000));
+      setTimeLeft(remaining);
+      if (remaining <= 0 && !autoSubmitRef.current) {
+        autoSubmitRef.current = true;
+        if (timerRef.current !== null) {
+          window.clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+        toast.error('Waktu tryout habis. Jawaban otomatis dikumpulkan.');
+        submitMutation.mutate();
+      }
+    };
+
+    tick();
+    timerRef.current = window.setInterval(tick, 1000);
+    return () => {
+      if (timerRef.current !== null) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [session, submitMutation]);
 
   const handleForceFinish = useCallback(() => {
     if (!session) {
@@ -221,6 +279,13 @@ export function TryoutPage() {
       onSettled: () => setFinishConfirmOpen(false),
     });
   }, [submitMutation]);
+
+  const formatTimeLeft = (value: number | null) => {
+    if (value === null) return 'Tanpa batas';
+    const minutes = Math.floor(value / 60);
+    const seconds = value % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
 
   const handleCancelFinish = useCallback(() => setFinishConfirmOpen(false), []);
 
@@ -256,27 +321,41 @@ export function TryoutPage() {
   }, [exitFullscreen, handleSessionReset, navigate]);
 
   const handleCountdownRequest = useCallback(
-    async (item: Tryout) => {
+    async (item: Tryout, skipCountdown = false) => {
+      if (!hasActiveMembership && !item.isFree) {
+        toast.error('Aktifkan paket untuk mulai tryout.');
+        return;
+      }
       if (tryoutBlock) {
         toast.error('Akses tryout diblokir, masukkan kode buka blokir dari admin.');
         return;
       }
       countdownStartRef.current = false;
       setPendingTryout(item);
+      skipCountdownRef.current = skipCountdown;
       if (fullscreenSupported && !document.fullscreenElement) {
         setFullscreenGateOpen(true);
+        return;
+      }
+      if (skipCountdown) {
+        startMutation.mutate(item, {
+          onSettled: () => {
+            countdownStartRef.current = false;
+            setPendingTryout(null);
+          },
+        });
         return;
       }
       setCountdownToken((prev) => prev + 1);
       setCountdownOpen(true);
     },
-    [fullscreenSupported, tryoutBlock],
+    [fullscreenSupported, hasActiveMembership, startMutation, tryoutBlock],
   );
 
   useEffect(() => {
-    const state = location.state as { startTryoutSlug?: string; returnTo?: string } | null;
+    const state = location.state as { startTryoutSlug?: string; returnTo?: string; skipCountdown?: boolean } | null;
     const startFromStorage = sessionStorage.getItem('tryout_start_slug');
-    if (!membership.data?.isActive) return;
+    const skipCountdown = state?.skipCountdown === true || new URLSearchParams(location.search).get('skipCountdown') === '1';
     const startSlug = state?.startTryoutSlug ?? startFromStorage ?? null;
     if (!startSlug || autoStartRef.current || !tryouts?.length) return;
     const target = tryouts.find((item) => item.slug === startSlug);
@@ -286,12 +365,18 @@ export function TryoutPage() {
     if (startFromStorage) {
       sessionStorage.removeItem('tryout_start_slug');
     }
+    if (skipCountdown) {
+      const search = new URLSearchParams(location.search);
+      search.delete('skipCountdown');
+      const next = search.toString();
+      window.history.replaceState(null, '', next ? `${location.pathname}?${next}` : location.pathname);
+    }
     if (!target) {
       toast.error('Tryout tidak ditemukan.');
       return;
     }
-    window.setTimeout(() => handleCountdownRequest(target), 0);
-  }, [handleCountdownRequest, location.pathname, location.search, location.state, membership.data?.isActive, navigate, tryouts]);
+    window.setTimeout(() => handleCountdownRequest(target, skipCountdown), 0);
+  }, [handleCountdownRequest, location.pathname, location.search, location.state, navigate, tryouts]);
 
   const handleCountdownCancel = useCallback(() => {
     countdownStartRef.current = false;
@@ -342,9 +427,19 @@ export function TryoutPage() {
       }
     }
     setFullscreenGateOpen(false);
+    if (skipCountdownRef.current) {
+      skipCountdownRef.current = false;
+      startMutation.mutate(pendingTryout, {
+        onSettled: () => {
+          countdownStartRef.current = false;
+          setPendingTryout(null);
+        },
+      });
+      return;
+    }
     setCountdownToken((prev) => prev + 1);
     setCountdownOpen(true);
-  }, [fullscreenSupported, navigate, pendingTryout, requestFullscreen]);
+  }, [fullscreenSupported, navigate, pendingTryout, requestFullscreen, startMutation]);
 
   const handleJumpToQuestion = useCallback((index: number) => {
     setCurrentQuestionIndex(index);
@@ -362,11 +457,7 @@ export function TryoutPage() {
     return <Skeleton className="h-96" />;
   }
 
-  if (!membership.data?.isActive) {
-    return <MembershipRequired status={membership.data} />;
-  }
-
-  if (membership.data?.allowTryout === false) {
+  if (hasActiveMembership && membership.data?.allowTryout === false) {
     return (
       <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
         Paket membership kamu tidak mencakup akses latihan tryout. Hubungi admin untuk upgrade paket.
@@ -405,18 +496,29 @@ export function TryoutPage() {
 
   return (
     <div className="space-y-6">
+      {!hasActiveMembership && (
+        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          Kamu belum memiliki paket aktif. Kamu tetap bisa melihat daftar tryout, tetapi hanya tryout gratis yang bisa dikerjakan.
+        </section>
+      )}
       <section className="grid gap-4 md:grid-cols-2">
         <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
           <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Kuota Tryout</p>
-          <h3 className="mt-2 text-3xl font-bold text-slate-900">
-            {membership.data?.tryoutRemaining === null || membership.data?.tryoutRemaining === undefined
-              ? 'Tidak terbatas'
-              : `${membership.data.tryoutRemaining} kali tersisa`}
-          </h3>
-          {typeof membership.data?.tryoutQuota === 'number' && (
-            <p className="text-sm text-slate-500">
-              Total {membership.data.tryoutQuota} - Terpakai {membership.data.tryoutUsed ?? 0}
-            </p>
+          {hasActiveMembership ? (
+            <>
+              <h3 className="mt-2 text-3xl font-bold text-slate-900">
+                {membership.data?.tryoutRemaining === null || membership.data?.tryoutRemaining === undefined
+                  ? 'Tidak terbatas'
+                  : `${membership.data.tryoutRemaining} kali tersisa`}
+              </h3>
+              {typeof membership.data?.tryoutQuota === 'number' && (
+                <p className="text-sm text-slate-500">
+                  Total {membership.data.tryoutQuota} - Terpakai {membership.data.tryoutUsed ?? 0}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="mt-2 text-sm text-slate-500">Aktifkan paket untuk mendapatkan kuota tryout.</p>
           )}
         </div>
         <div className="rounded-3xl border border-slate-100 bg-slate-50 p-5 text-sm text-slate-600">
@@ -534,14 +636,20 @@ export function TryoutPage() {
                             {item.subCategory.category.name} / {item.subCategory.name}
                           </p>
                           <h3 className="text-lg font-semibold text-slate-900">{item.name}</h3>
-                          <p className="text-sm text-slate-600">{item.summary}</p>
-                          <p className="text-[11px] text-slate-500">Jadwal: {getScheduleText(item)}</p>
-                          <p className={`text-[11px] ${status.active ? 'text-emerald-600' : 'text-red-500'}`}>Status: {status.label}</p>
-                          <Button
-                            className="w-full"
-                            variant={session?.detail.id === item.id ? 'outline' : 'primary'}
-                            onClick={() => navigate(`/app/latihan/tryout/detail/${item.slug}`)}
-                          >
+                            <p className="text-sm text-slate-600">{item.summary}</p>
+                            <p className="text-[11px] text-slate-500">Jadwal: {getScheduleText(item)}</p>
+                            <p className={`text-[11px] ${status.active ? 'text-emerald-600' : 'text-red-500'}`}>Status: {status.label}</p>
+                            <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                              {item.isFree && <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-700">Gratis</span>}
+                              {!hasActiveMembership && !item.isFree && (
+                                <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700">Butuh Paket</span>
+                              )}
+                            </div>
+                            <Button
+                              className="w-full"
+                              variant={session?.detail.id === item.id ? 'outline' : 'primary'}
+                              onClick={() => navigate(`/app/latihan/tryout/detail/${item.slug}`)}
+                            >
                             Lihat Detail
                           </Button>
                         </CardContent>
@@ -567,6 +675,9 @@ export function TryoutPage() {
               <p className="text-xs uppercase tracking-[0.5em] text-white/60">Tryout Berlangsung</p>
               <h2 className="text-2xl font-semibold">{session.detail.name}</h2>
               <p className="text-sm text-white/70">Durasi {session.durationMinutes} menit - Tetap fokus di layar ini.</p>
+              <div className="mt-3 inline-flex rounded-full bg-brand-500 px-3 py-1 text-xs font-semibold text-white shadow">
+                Sisa waktu {formatTimeLeft(timeLeft)}
+              </div>
             </div>
             <div className="flex items-center gap-3">
               <div className="rounded-2xl border border-white/30 px-4 py-2 text-center">
@@ -661,21 +772,19 @@ export function TryoutPage() {
                   </div>
                 </div>
 
-                <div className="flex justify-end">
-                  <Button size="lg" className="min-w-[180px]" onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending}>
+                </form>
+                </div>
+                <div className="w-full shrink-0 space-y-4 lg:w-64">
+                  <QuestionNavigator
+                    questions={questionList}
+                    answers={answers}
+                    activeIndex={currentQuestionIndex}
+                    onJump={handleJumpToQuestion}
+                  />
+                  <Button size="lg" className="w-full" onClick={() => submitMutation.mutate()} disabled={submitMutation.isPending}>
                     {submitMutation.isPending ? 'Mengirim jawaban...' : 'Kumpulkan Jawaban'}
                   </Button>
                 </div>
-              </form>
-              </div>
-              <div className="w-full shrink-0 lg:w-64">
-                <QuestionNavigator
-                  questions={questionList}
-                  answers={answers}
-                activeIndex={currentQuestionIndex}
-                onJump={handleJumpToQuestion}
-                />
-              </div>
             </div>
           </div>
         </div>,
@@ -700,15 +809,19 @@ export function TryoutPage() {
         </section>
       )}
 
-      <ExamCountdownModal
-        open={countdownOpen}
-        resetKey={countdownToken}
-        title="Mulai Tryout"
-        subtitle="Setelah hitung mundur selesai, tryout dimulai dalam mode layar penuh."
-        warning="Ujian Akan Di Blokir Saat Anda Meninggalkan Halaman Ujian - Harap Tetap berada di Halaman Ujian Ini dan Kerjakan seluruh soal sampai selesai"
-        onComplete={handleCountdownComplete}
-        onCancel={handleCountdownCancel}
-      />
+    <ExamCountdownModal
+      open={countdownOpen}
+      resetKey={countdownToken}
+      title="Mulai Tryout"
+      subtitle="Setelah hitung mundur selesai, tryout dimulai dalam mode layar penuh."
+      warning={
+        tryoutBlockEnabled
+          ? 'Ujian Akan Di Blokir Saat Anda Meninggalkan Halaman Ujian - Harap Tetap berada di Halaman Ujian Ini dan Kerjakan seluruh soal sampai selesai'
+          : null
+      }
+      onComplete={handleCountdownComplete}
+      onCancel={handleCountdownCancel}
+    />
       {fullscreenGateOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/70 px-4">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-2xl">

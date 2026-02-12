@@ -233,6 +233,7 @@ model Tryout {
   durationMinutes Int              @default(90)
   totalQuestions  Int              @default(100)
   isPublished     Boolean          @default(true)
+  isFree          Boolean          @default(false)
   openAt          DateTime?
   closeAt         DateTime?
   subCategoryId   String
@@ -339,6 +340,7 @@ model PracticeSet {
   level         String?
   durationMinutes Int              @default(30)
   totalQuestions  Int              @default(0)
+  isFree          Boolean           @default(false)
   openAt          DateTime?
   closeAt         DateTime?
   subSubCategoryId String

@@ -110,15 +110,15 @@ export function PracticeReviewPage() {
           <article key={question.id} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Soal #{question.order}</p>
-                <h2 className="mt-1 text-lg font-semibold text-slate-900">{question.prompt}</h2>
+                <p className="text-base font-semibold uppercase tracking-[0.2em] text-slate-400">Soal #{question.order}</p>
+                <h2 className="mt-1 text-base font-semibold text-slate-900">{question.prompt}</h2>
                 {question.imageUrl && (
                   <img src={getAssetUrl(question.imageUrl)} alt="Soal" className="mt-3 w-full rounded-2xl border border-slate-100 object-cover" loading="lazy" />
                 )}
               </div>
               <Badge
                 variant="outline"
-                className={question.isCorrect ? 'border-emerald-200 bg-emerald-50 text-emerald-600' : 'border-rose-200 bg-rose-50 text-rose-600'}
+                className={`text-base ${question.isCorrect ? 'border-emerald-200 bg-emerald-50 text-emerald-600' : 'border-rose-200 bg-rose-50 text-rose-600'}`}
               >
                 {question.isCorrect ? 'Jawaban Kamu Benar' : 'Jawaban Kamu Salah'}
               </Badge>
@@ -127,7 +127,7 @@ export function PracticeReviewPage() {
               {question.options.map((option) => {
                 const isUserChoice = question.userOptionId === option.id;
                 const isCorrect = Boolean(option.isCorrect);
-                const className = `rounded-2xl border p-4 text-sm transition ${
+                const className = `rounded-2xl border p-4 text-base transition ${
                   isCorrect
                     ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
                     : isUserChoice
@@ -136,24 +136,24 @@ export function PracticeReviewPage() {
                 }`;
                 return (
                   <div key={option.id} className={className}>
-                    <p className="font-semibold">{option.label}</p>
+                    <p className="text-base font-semibold">{option.label}</p>
                     {option.imageUrl && (
                       <img src={getAssetUrl(option.imageUrl)} alt="Opsi" className="mt-2 h-20 w-20 rounded-xl object-cover" loading="lazy" />
                     )}
-                    <p className="text-xs text-slate-500">
+                    <p className="text-base text-slate-500">
                       {isCorrect ? 'Jawaban benar' : isUserChoice ? 'Jawaban kamu' : 'Pilihan lain'}
                     </p>
                   </div>
                 );
               })}
             </div>
-            <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+            <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-xl text-slate-600">
               <p className="font-semibold text-slate-900">Pembahasan</p>
-              <div className="mt-2 space-y-1 text-xs text-slate-500">
+              <div className="mt-2 space-y-1 text-xl text-slate-500">
                 <p>Jawaban kamu: {question.options.find((opt) => opt.id === question.userOptionId)?.label ?? '-'}</p>
                 <p>Kunci jawaban: {question.options.find((opt) => opt.isCorrect)?.label ?? '-'}</p>
               </div>
-              <p className="mt-3 whitespace-pre-line">{question.explanation ?? 'Pembahasan belum tersedia.'}</p>
+              <p className="mt-3 whitespace-pre-line text-xl">{question.explanation ?? 'Pembahasan belum tersedia.'}</p>
               {question.explanationImageUrl && (
                 <img
                   src={getAssetUrl(question.explanationImageUrl)}

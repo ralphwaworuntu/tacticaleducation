@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useExamControlStatus } from '@/hooks/useExamControl';
+import type { ExamBlockConfig } from '@/types/exam';
 import type { PackageOption } from '@/types/landing';
 
 type ExamControlForm = {
@@ -30,11 +31,21 @@ type ExamControlPayload = {
   endAt?: string | null;
 };
 
+type ExamBlockForm = {
+  practiceEnabled: boolean;
+  tryoutEnabled: boolean;
+  examEnabled: boolean;
+};
+
 export function AdminExamControlPage() {
   const queryClient = useQueryClient();
   const { data: control, isLoading } = useQuery({
     queryKey: ['admin-exam-control'],
     queryFn: () => apiGet<ExamControlPayload>('/admin/site/exam-control'),
+  });
+  const { data: blockConfig, isLoading: blockConfigLoading } = useQuery({
+    queryKey: ['admin-exam-block-config'],
+    queryFn: () => apiGet<ExamBlockConfig>('/admin/site/exam-block-config'),
   });
   const { data: packages } = useQuery({
     queryKey: ['admin-packages'],
@@ -50,6 +61,13 @@ export function AdminExamControlPage() {
       examQuota: 0,
       startAt: '',
       endAt: '',
+    },
+  });
+  const blockForm = useForm<ExamBlockForm>({
+    defaultValues: {
+      practiceEnabled: true,
+      tryoutEnabled: true,
+      examEnabled: true,
     },
   });
 
@@ -76,6 +94,16 @@ export function AdminExamControlPage() {
     }
   }, [control, form]);
 
+  useEffect(() => {
+    if (blockConfig) {
+      blockForm.reset({
+        practiceEnabled: blockConfig.practiceEnabled,
+        tryoutEnabled: blockConfig.tryoutEnabled,
+        examEnabled: blockConfig.examEnabled,
+      });
+    }
+  }, [blockConfig, blockForm]);
+
   const saveControl = useMutation({
     mutationFn: (values: ExamControlForm) => apiPut('/admin/site/exam-control', values),
     onSuccess: () => {
@@ -86,7 +114,19 @@ export function AdminExamControlPage() {
     onError: () => toast.error('Gagal menyimpan kontrol ujian'),
   });
 
+  const saveBlockConfig = useMutation({
+    mutationFn: (values: ExamBlockForm) => apiPut('/admin/site/exam-block-config', values),
+    onSuccess: () => {
+      toast.success('Pengaturan blokir ujian diperbarui');
+      queryClient.invalidateQueries({ queryKey: ['admin-exam-block-config'] });
+      queryClient.invalidateQueries({ queryKey: ['exam-block-config', '/exams'] });
+      queryClient.invalidateQueries({ queryKey: ['exam-block-config', '/ujian'] });
+    },
+    onError: () => toast.error('Gagal menyimpan pengaturan blokir'),
+  });
+
   const onSubmit = form.handleSubmit((values) => saveControl.mutate(values));
+  const onSubmitBlockConfig = blockForm.handleSubmit((values) => saveBlockConfig.mutate(values));
   const targetAll = Boolean(useWatch({ control: form.control, name: 'targetAll', defaultValue: true }));
   const targetPackageIds = (useWatch({
     control: form.control,
@@ -94,12 +134,42 @@ export function AdminExamControlPage() {
     defaultValue: [],
   }) ?? []) as string[];
 
-  if (isLoading) {
+  if (isLoading || blockConfigLoading) {
     return <Skeleton className="h-72" />;
   }
 
   return (
     <section className="space-y-6">
+      <Card>
+        <CardContent className="space-y-4 p-6">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-slate-500">Blokir Ujian</p>
+            <h3 className="text-2xl font-semibold text-slate-900">Aktifkan / nonaktifkan fitur blokir</h3>
+            <p className="text-xs text-slate-500">
+              Jika dimatikan, member tidak akan terblokir saat keluar dari fullscreen.
+            </p>
+          </div>
+          <form className="grid gap-4 md:grid-cols-2" onSubmit={onSubmitBlockConfig}>
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+              <input type="checkbox" {...blockForm.register('practiceEnabled')} />
+              Blokir Latihan Soal
+            </label>
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+              <input type="checkbox" {...blockForm.register('tryoutEnabled')} />
+              Blokir Tryout
+            </label>
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+              <input type="checkbox" {...blockForm.register('examEnabled')} />
+              Blokir Ujian
+            </label>
+            <div className="md:col-span-2">
+              <Button type="submit" disabled={saveBlockConfig.isPending}>
+                {saveBlockConfig.isPending ? 'Menyimpan...' : 'Simpan Pengaturan Blokir'}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
       <Card>
         <CardContent className="space-y-4 p-6">
           <div>

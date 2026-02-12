@@ -1,4 +1,6 @@
 import fs from 'fs';
+import chardet from 'chardet';
+import iconv from 'iconv-lite';
 import { parse } from 'csv-parse/sync';
 
 type ParsedQuestion = {
@@ -135,7 +137,11 @@ function parseLegacyCsv(content: string, delimiter: string, headers: string[]): 
 }
 
 function readCsvRows(filePath: string): CsvRow[] {
-  const content = fs.readFileSync(filePath, 'utf8');
+  const buffer = fs.readFileSync(filePath);
+  const detected = chardet.detect(buffer) ?? 'UTF-8';
+  const normalized = String(detected).toUpperCase();
+  const encoding = normalized === 'UTF8' || normalized === 'UTF-8' ? 'utf8' : normalized;
+  const content = iconv.decode(buffer, encoding);
   const delimiter = detectDelimiter(content);
   try {
     return parse(content, {
