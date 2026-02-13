@@ -241,6 +241,7 @@ export async function getTryoutReview(resultId: string, userId: string) {
           id: true,
           name: true,
           slug: true,
+          isFree: true,
           totalQuestions: true,
           durationMinutes: true,
           questions: {
@@ -258,6 +259,8 @@ export async function getTryoutReview(resultId: string, userId: string) {
   if (!result) {
     throw new HttpError('Hasil tryout tidak ditemukan.', 404);
   }
+
+  await ensureTryoutAccess(userId, { isFree: result.tryout.isFree });
 
   const answerMap = new Map<string, { optionId: string | null; isCorrect: boolean }>();
   result.answers.forEach((answer) => {
@@ -284,6 +287,7 @@ export async function getTryoutReview(resultId: string, userId: string) {
       id: result.tryout.id,
       name: result.tryout.name,
       slug: result.tryout.slug,
+      isFree: result.tryout.isFree,
       totalQuestions: result.tryout.totalQuestions,
       durationMinutes: result.tryout.durationMinutes,
     },

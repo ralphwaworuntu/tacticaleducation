@@ -225,6 +225,7 @@ export async function getPracticeReview(resultId: string, userId: string) {
           title: true,
           slug: true,
           level: true,
+          isFree: true,
           questions: {
             orderBy: { order: 'asc' },
             include: { options: { select: { id: true, label: true, imageUrl: true, isCorrect: true } } },
@@ -240,6 +241,8 @@ export async function getPracticeReview(resultId: string, userId: string) {
   if (!result) {
     throw new HttpError('Hasil latihan tidak ditemukan.', 404);
   }
+
+  await ensurePracticeAccess(userId, { isFree: result.set.isFree });
 
   const answerMap = new Map<string, { optionId: string | null; isCorrect: boolean }>();
   result.answers.forEach((answer) => {
@@ -267,6 +270,7 @@ export async function getPracticeReview(resultId: string, userId: string) {
       title: result.set.title,
       slug: result.set.slug,
       level: result.set.level,
+      isFree: result.set.isFree,
     },
     score: result.score ?? 0,
     completedAt: result.completedAt ?? result.createdAt,

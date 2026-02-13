@@ -104,7 +104,7 @@ export function TryoutDetailPage() {
               }
               setFullscreenGateOpen(true);
             }}
-            disabled={!status.canStart}
+            disabled={!status.canStart || (!hasActiveMembership && !data.isFree)}
           >
             {status.canStart ? 'Mulai Tryout' : status.label}
           </Button>

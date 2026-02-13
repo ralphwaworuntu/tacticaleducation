@@ -45,6 +45,13 @@ export function PracticeDetailPage() {
   const returnTo = slug ? `/app/latihan-soal/detail/${slug}` : '/app/latihan-soal';
 
   const status = useMemo(() => getScheduleStatus(data?.openAt, data?.closeAt), [data?.closeAt, data?.openAt]);
+  const backToList = useMemo(() => {
+    const categorySlug = data?.subSubCategory?.subCategory?.category?.slug;
+    const subCategoryId = data?.subSubCategory?.subCategory?.id;
+    const subSubId = data?.subSubCategory?.id;
+    if (!categorySlug || !subCategoryId || !subSubId) return null;
+    return `/app/latihan-soal/kategori/${categorySlug}/sub/${subCategoryId}/subsub/${subSubId}`;
+  }, [data?.subSubCategory]);
 
   if (membership.isLoading) {
     return <Skeleton className="h-72" />;
@@ -88,7 +95,7 @@ export function PracticeDetailPage() {
           <p className="mt-2 text-sm text-slate-600">{data.description}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Button variant="outline" onClick={() => navigate(-1)}>
+          <Button variant="outline" onClick={() => (backToList ? navigate(backToList) : navigate(-1))}>
             Kembali
           </Button>
           <Button
@@ -104,7 +111,7 @@ export function PracticeDetailPage() {
               }
               setFullscreenGateOpen(true);
             }}
-            disabled={!status.canStart}
+            disabled={!status.canStart || (!hasActiveMembership && !data.isFree)}
           >
             {status.canStart ? 'Mulai Latihan Soal' : status.label}
           </Button>

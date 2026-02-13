@@ -21,12 +21,12 @@ export function DashboardTopbar() {
   const allowTryout = membership.data?.allowTryout !== false;
   const allowPractice = membership.data?.allowPractice !== false;
   const allowCermat = membership.data?.allowCermat !== false;
+  const showCermatOnly = restrictFeatures && allowCermat && !allowTryout && !allowPractice;
   const examSection = [
     { label: 'Tryout', to: '/app/ujian/tryout' },
     { label: 'Riwayat Tryout', to: '/app/ujian/tryout/riwayat' },
     { label: 'Ujian Soal', to: '/app/ujian/soal' },
     { label: 'Riwayat Ujian', to: '/app/ujian/soal/riwayat' },
-    { label: 'Tes Kecermatan', to: '/app/tes-kecermatan' },
   ];
 
   return (
@@ -67,6 +67,9 @@ export function DashboardTopbar() {
         <div className="border-t border-slate-200 bg-white px-4 py-4 lg:hidden">
           {dashboardMenu.map((section) => {
             let items = section.items;
+            if (section.title === 'Latihan' && showCermatOnly) {
+              return null;
+            }
             if (restrictFeatures && section.title === 'Latihan') {
               items = items.filter((item) => {
                 if (item.label.includes('Tryout')) return allowTryout;
@@ -101,7 +104,7 @@ export function DashboardTopbar() {
                   </Link>
                 ))}
               </div>
-              {section.title === 'Latihan' && examEnabled && (
+              {section.title === 'Latihan' && examEnabled && (allowTryout || allowPractice) && (
                 <div className="mt-4">
                   <p className="text-xs font-bold uppercase text-slate-500">UJIAN</p>
                   <div className="mt-2 flex flex-col gap-2">
@@ -121,6 +124,27 @@ export function DashboardTopbar() {
             </div>
             );
           })}
+          {showCermatOnly && (
+            <div className="mb-4">
+              <p className="text-xs font-bold uppercase text-slate-500">Tes Kecermatan</p>
+              <div className="mt-2 flex flex-col gap-2">
+                <Link
+                  to="/app/tes-kecermatan"
+                  onClick={() => setOpen(false)}
+                  className="rounded-2xl border border-slate-100 px-3 py-2 text-sm font-semibold text-slate-700"
+                >
+                  Tes Kecermatan
+                </Link>
+                <Link
+                  to="/app/tes-kecermatan/riwayat"
+                  onClick={() => setOpen(false)}
+                  className="rounded-2xl border border-slate-100 px-3 py-2 text-sm font-semibold text-slate-700"
+                >
+                  Riwayat Kecermatan
+                </Link>
+              </div>
+            </div>
+          )}
           <Button variant="outline" className="w-full" onClick={logout}>
             <LogOut className="mr-2 h-4 w-4" /> Keluar
           </Button>

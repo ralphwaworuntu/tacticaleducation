@@ -108,7 +108,6 @@ export async function tryoutReviewController(req: Request, res: Response, next: 
     if (!resultId) {
       throw new HttpError('Result id is required', 400);
     }
-    await assertMembershipFeatureByUser(req.user!.id, 'TRYOUT');
     const data = await getTryoutReview(resultId, req.user!.id);
     res.json({ status: 'success', data });
   } catch (error) {
@@ -246,7 +245,6 @@ export async function practiceSubmitController(req: Request, res: Response, next
     if (!slug) {
       throw new HttpError('Practice slug is required', 400);
     }
-    await assertMembershipFeatureByUser(req.user!.id, 'PRACTICE');
     const data = await submitPractice(slug, req.user!.id, req.body);
     res.json({ status: 'success', data });
   } catch (error) {
@@ -270,7 +268,6 @@ export async function practiceReviewController(req: Request, res: Response, next
     if (!resultId) {
       throw new HttpError('Result id is required', 400);
     }
-    await assertMembershipFeatureByUser(req.user!.id, 'PRACTICE');
     const data = await getPracticeReview(resultId, req.user!.id);
     res.json({ status: 'success', data });
   } catch (error) {

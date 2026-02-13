@@ -89,10 +89,12 @@ export function PracticePage() {
       setResult(null);
       setFinishConfirmOpen(false);
       violationMutation.mutate(reason);
+      const fallback = returnToRef.current ?? '/app/latihan-soal';
+      navigate(fallback);
     };
     setViolationHandler(handler);
     return () => setViolationHandler(null);
-  }, [exitFullscreen, practiceBlockEnabled, setViolationHandler, violationMutation]);
+  }, [exitFullscreen, navigate, practiceBlockEnabled, setViolationHandler, violationMutation]);
 
 
 

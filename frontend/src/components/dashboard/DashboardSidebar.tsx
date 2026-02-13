@@ -14,13 +14,13 @@ export function DashboardSidebar() {
   const allowTryout = membership.data?.allowTryout !== false;
   const allowPractice = membership.data?.allowPractice !== false;
   const allowCermat = membership.data?.allowCermat !== false;
+  const showCermatOnly = restrictFeatures && allowCermat && !allowTryout && !allowPractice;
 
   const examSection = [
     { label: 'Tryout', to: '/app/ujian/tryout' },
     { label: 'Riwayat Tryout', to: '/app/ujian/tryout/riwayat' },
     { label: 'Ujian Soal', to: '/app/ujian/soal' },
     { label: 'Riwayat Ujian', to: '/app/ujian/soal/riwayat' },
-    { label: 'Tes Kecermatan', to: '/app/tes-kecermatan' },
   ];
 
   return (
@@ -36,6 +36,9 @@ export function DashboardSidebar() {
       <div className="mt-6 space-y-6">
         {dashboardMenu.map((section) => {
           let items = section.items;
+          if (section.title === 'Latihan' && showCermatOnly) {
+            return null;
+          }
           if (restrictFeatures && section.title === 'Latihan') {
             items = items.filter((item) => {
               if (item.label.includes('Tryout')) return allowTryout;
@@ -75,7 +78,7 @@ export function DashboardSidebar() {
                 </NavLink>
               ))}
             </div>
-            {section.title === 'Latihan' && examEnabled && (
+            {section.title === 'Latihan' && examEnabled && (allowTryout || allowPractice) && (
               <div className="mt-6">
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-500">UJIAN</p>
                 <div className="mt-3 space-y-1">
@@ -99,6 +102,35 @@ export function DashboardSidebar() {
           </div>
           );
         })}
+        {showCermatOnly && (
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Tes Kecermatan</p>
+            <div className="mt-3 space-y-1">
+              <NavLink
+                to="/app/tes-kecermatan"
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center justify-between rounded-2xl px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50',
+                    isActive && 'bg-brand-50 text-brand-600',
+                  )
+                }
+              >
+                Tes Kecermatan
+              </NavLink>
+              <NavLink
+                to="/app/tes-kecermatan/riwayat"
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center justify-between rounded-2xl px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50',
+                    isActive && 'bg-brand-50 text-brand-600',
+                  )
+                }
+              >
+                Riwayat Kecermatan
+              </NavLink>
+            </div>
+          </div>
+        )}
       </div>
     </aside>
   );

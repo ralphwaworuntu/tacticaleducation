@@ -35,6 +35,7 @@ export type TryoutReview = {
     id: string;
     name: string;
     slug: string;
+    isFree?: boolean;
     totalQuestions: number;
     durationMinutes: number;
   };
@@ -90,7 +91,7 @@ export type PracticeSet = {
   subSubCategory: {
     id: string;
     name: string;
-    subCategory: { id: string; name: string; category: { id: string; name: string } };
+    subCategory: { id: string; name: string; category: { id: string; name: string; slug?: string } };
   };
   questions: Array<{
     id: string;
@@ -117,6 +118,7 @@ export type PracticeReview = {
     title: string;
     slug: string;
     level?: string | null;
+    isFree?: boolean;
   };
   score: number;
   completedAt?: string | null;

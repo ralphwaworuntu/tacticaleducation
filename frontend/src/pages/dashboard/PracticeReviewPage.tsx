@@ -9,16 +9,17 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useMembershipStatus } from '@/hooks/useMembershipStatus';
 import { MembershipRequired } from '@/components/dashboard/MembershipRequired';
+import { isAxiosError } from 'axios';
 
 export function PracticeReviewPage() {
   const { resultId } = useParams<{ resultId: string }>();
   const navigate = useNavigate();
   const membership = useMembershipStatus();
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['practice-review', resultId],
     queryFn: () => apiGet<PracticeReview>(`/exams/practice/results/${resultId}/review`),
-    enabled: Boolean(resultId && membership.data?.isActive),
+    enabled: Boolean(resultId),
   });
 
   const completedAtLabel = data?.completedAt ? new Date(data.completedAt).toLocaleString('id-ID') : '-';
@@ -29,10 +30,6 @@ export function PracticeReviewPage() {
 
   if (membership.isLoading) {
     return <Skeleton className="h-96" />;
-  }
-
-  if (!membership.data?.isActive) {
-    return <MembershipRequired status={membership.data} />;
   }
 
   if (membership.data?.allowPractice === false) {
@@ -48,6 +45,9 @@ export function PracticeReviewPage() {
   }
 
   if (isError) {
+    if (isAxiosError(error) && error.response?.status === 403) {
+      return <MembershipRequired status={membership.data} />;
+    }
     return (
       <section className="space-y-4">
         <p className="text-sm text-red-600">Gagal memuat pembahasan latihan. Coba kembali.</p>
