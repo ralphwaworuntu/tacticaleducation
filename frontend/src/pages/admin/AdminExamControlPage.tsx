@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { apiGet, apiPut } from '@/lib/api';
+import { apiGet, apiPut, apiPatch } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useExamControlStatus } from '@/hooks/useExamControl';
 import type { ExamBlockConfig } from '@/types/exam';
 import type { PackageOption } from '@/types/landing';
+import type { PracticeSet, Tryout } from '@/types/exam';
 
 type ExamControlForm = {
   enabled: boolean;
@@ -50,6 +51,14 @@ export function AdminExamControlPage() {
   const { data: packages } = useQuery({
     queryKey: ['admin-packages'],
     queryFn: () => apiGet<PackageOption[]>('/admin/packages'),
+  });
+  const { data: practiceSets } = useQuery({
+    queryKey: ['admin-practice-sets-free'],
+    queryFn: () => apiGet<PracticeSet[]>('/admin/practice/sets'),
+  });
+  const { data: tryouts } = useQuery({
+    queryKey: ['admin-tryouts-free'],
+    queryFn: () => apiGet<Tryout[]>('/admin/tryouts'),
   });
   const examStatus = useExamControlStatus();
   const form = useForm<ExamControlForm>({
@@ -137,6 +146,39 @@ export function AdminExamControlPage() {
   if (isLoading || blockConfigLoading) {
     return <Skeleton className="h-72" />;
   }
+
+  const togglePracticeFree = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: { isFree: boolean; freeForNewMembers?: boolean; freePackageIds?: string[] } }) =>
+      apiPatch(`/admin/practice/sets/${id}/free`, payload),
+    onSuccess: () => {
+      toast.success('Pengaturan gratis latihan diperbarui');
+      queryClient.invalidateQueries({ queryKey: ['admin-practice-sets-free'] });
+    },
+    onError: () => toast.error('Gagal memperbarui gratis latihan'),
+  });
+
+  const toggleTryoutFree = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: { isFree: boolean; freeForNewMembers?: boolean; freePackageIds?: string[] } }) =>
+      apiPatch(`/admin/tryouts/${id}/free`, payload),
+    onSuccess: () => {
+      toast.success('Pengaturan gratis tryout diperbarui');
+      queryClient.invalidateQueries({ queryKey: ['admin-tryouts-free'] });
+    },
+    onError: () => toast.error('Gagal memperbarui gratis tryout'),
+  });
+
+  const buildPracticeLocation = (set?: PracticeSet) => {
+    const category = set?.subSubCategory?.subCategory?.category?.name ?? '-';
+    const sub = set?.subSubCategory?.subCategory?.name ?? '-';
+    const subSub = set?.subSubCategory?.name ?? '-';
+    return `${category} / ${sub} / ${subSub}`;
+  };
+
+  const buildTryoutLocation = (item?: Tryout) => {
+    const category = item?.subCategory?.category?.name ?? '-';
+    const sub = item?.subCategory?.name ?? '-';
+    return `${category} / ${sub}`;
+  };
 
   return (
     <section className="space-y-6">
@@ -277,10 +319,199 @@ export function AdminExamControlPage() {
           <div>
             <p className="text-xs uppercase tracking-widest text-slate-500">Kelola Kelas Gratis</p>
             <h3 className="text-2xl font-semibold text-slate-900">Atur kelas/soal yang diberikan gratis</h3>
-            <p className="text-sm text-slate-500">Konten dan aksi akan ditambahkan di tahap berikutnya.</p>
+            <p className="text-sm text-slate-500">
+              Aktifkan soal gratis, tentukan apakah hanya untuk member baru atau juga untuk pemilik paket tertentu.
+            </p>
           </div>
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-            Tempat kosong untuk konfigurasi kelas gratis.
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-lg font-semibold text-slate-900">Latihan Soal</h4>
+                <span className="text-xs text-slate-500">{practiceSets?.length ?? 0} paket</span>
+              </div>
+              <div className="space-y-3">
+                {(practiceSets ?? []).map((set) => {
+                  const isFree = Boolean(set.isFree);
+                  const freeForNewMembers = set.freeForNewMembers ?? true;
+                  const selectedPackages = (set.freePackageIds as string[] | null) ?? [];
+                  return (
+                    <div key={set.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{set.title}</p>
+                          <p className="text-[11px] text-slate-500">{buildPracticeLocation(set)}</p>
+                        </div>
+                        <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={isFree}
+                            onChange={(e) =>
+                              togglePracticeFree.mutate({
+                                id: set.id,
+                                payload: {
+                                  isFree: e.target.checked,
+                                  freeForNewMembers,
+                                  freePackageIds: selectedPackages,
+                                },
+                              })
+                            }
+                          />
+                          Gratis
+                        </label>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={freeForNewMembers}
+                            disabled={!isFree}
+                            onChange={(e) =>
+                              togglePracticeFree.mutate({
+                                id: set.id,
+                                payload: {
+                                  isFree,
+                                  freeForNewMembers: e.target.checked,
+                                  freePackageIds: selectedPackages,
+                                },
+                              })
+                            }
+                          />
+                          Gratis untuk member baru
+                        </label>
+                        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Paket yang mendapat gratis</p>
+                          <div className="mt-2 grid gap-2 md:grid-cols-2">
+                            {(packages ?? []).map((pkg) => (
+                              <label
+                                key={pkg.id}
+                                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                              >
+                                <input
+                                  type="checkbox"
+                                  disabled={!isFree || freeForNewMembers}
+                                  checked={selectedPackages.includes(pkg.id)}
+                                  onChange={(event) => {
+                                    const next = event.target.checked
+                                      ? [...selectedPackages, pkg.id]
+                                      : selectedPackages.filter((id) => id !== pkg.id);
+                                    togglePracticeFree.mutate({
+                                      id: set.id,
+                                      payload: {
+                                        isFree,
+                                        freeForNewMembers,
+                                        freePackageIds: next,
+                                      },
+                                    });
+                                  }}
+                                />
+                                {pkg.name}
+                              </label>
+                            ))}
+                            {packages?.length === 0 && <p className="text-xs text-slate-500">Belum ada paket.</p>}
+                          </div>
+                          <p className="mt-1 text-[11px] text-slate-500">Nonaktifkan “Gratis untuk member baru” untuk memberi ke paket tertentu.</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {practiceSets?.length === 0 && <p className="text-sm text-slate-500">Belum ada data latihan.</p>}
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-lg font-semibold text-slate-900">Tryout</h4>
+                <span className="text-xs text-slate-500">{tryouts?.length ?? 0} paket</span>
+              </div>
+              <div className="space-y-3">
+                {(tryouts ?? []).map((item) => {
+                  const isFree = Boolean(item.isFree);
+                  const freeForNewMembers = item.freeForNewMembers ?? true;
+                  const selectedPackages = (item.freePackageIds as string[] | null) ?? [];
+                  return (
+                    <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{item.name}</p>
+                          <p className="text-[11px] text-slate-500">{buildTryoutLocation(item)}</p>
+                        </div>
+                        <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={isFree}
+                            onChange={(e) =>
+                              toggleTryoutFree.mutate({
+                                id: item.id,
+                                payload: {
+                                  isFree: e.target.checked,
+                                  freeForNewMembers,
+                                  freePackageIds: selectedPackages,
+                                },
+                              })
+                            }
+                          />
+                          Gratis
+                        </label>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                          <input
+                            type="checkbox"
+                            checked={freeForNewMembers}
+                            disabled={!isFree}
+                            onChange={(e) =>
+                              toggleTryoutFree.mutate({
+                                id: item.id,
+                                payload: {
+                                  isFree,
+                                  freeForNewMembers: e.target.checked,
+                                  freePackageIds: selectedPackages,
+                                },
+                              })
+                            }
+                          />
+                          Gratis untuk member baru
+                        </label>
+                        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Paket yang mendapat gratis</p>
+                          <div className="mt-2 grid gap-2 md:grid-cols-2">
+                            {(packages ?? []).map((pkg) => (
+                              <label
+                                key={pkg.id}
+                                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"
+                              >
+                                <input
+                                  type="checkbox"
+                                  disabled={!isFree || freeForNewMembers}
+                                  checked={selectedPackages.includes(pkg.id)}
+                                  onChange={(event) => {
+                                    const next = event.target.checked
+                                      ? [...selectedPackages, pkg.id]
+                                      : selectedPackages.filter((id) => id !== pkg.id);
+                                    toggleTryoutFree.mutate({
+                                      id: item.id,
+                                      payload: {
+                                        isFree,
+                                        freeForNewMembers,
+                                        freePackageIds: next,
+                                      },
+                                    });
+                                  }}
+                                />
+                                {pkg.name}
+                              </label>
+                            ))}
+                            {packages?.length === 0 && <p className="text-xs text-slate-500">Belum ada paket.</p>}
+                          </div>
+                          <p className="mt-1 text-[11px] text-slate-500">Nonaktifkan “Gratis untuk member baru” untuk memberi ke paket tertentu.</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {tryouts?.length === 0 && <p className="text-sm text-slate-500">Belum ada data tryout.</p>}
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>

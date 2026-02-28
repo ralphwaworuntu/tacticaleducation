@@ -77,14 +77,24 @@ export async function getTryoutDetail(slug: string, userId: string) {
   };
 }
 
-async function ensureTryoutAccess(userId: string, tryout: { isFree: boolean }) {
+async function ensureTryoutAccess(userId: string, tryout: { isFree: boolean; freeForNewMembers?: boolean; freePackageIds?: unknown }) {
   const membership = await getActiveMembership(userId);
+  const freePackages: string[] =
+    Array.isArray(tryout.freePackageIds) || typeof tryout.freePackageIds === 'object'
+      ? (tryout.freePackageIds as string[])
+      : [];
+
   if (!membership) {
-    if (!tryout.isFree) {
+    if (!tryout.isFree || tryout.freeForNewMembers === false) {
       throw new HttpError('Membership tidak aktif atau belum divalidasi admin.', 403, { code: 'MEMBERSHIP_REQUIRED' });
     }
     return null;
   }
+
+  if (tryout.isFree && (tryout.freeForNewMembers || freePackages.includes(membership.packageId))) {
+    return membership;
+  }
+
   assertMembershipFeature(membership, 'TRYOUT');
   return membership;
 }

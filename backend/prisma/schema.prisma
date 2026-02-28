@@ -234,6 +234,8 @@ model Tryout {
   totalQuestions  Int              @default(100)
   isPublished     Boolean          @default(true)
   isFree          Boolean          @default(false)
+  freeForNewMembers Boolean        @default(true)
+  freePackageIds   Json            @default("[]")
   openAt          DateTime?
   closeAt         DateTime?
   subCategoryId   String
@@ -341,6 +343,8 @@ model PracticeSet {
   durationMinutes Int              @default(30)
   totalQuestions  Int              @default(0)
   isFree          Boolean           @default(false)
+  freeForNewMembers Boolean         @default(true)
+  freePackageIds   Json             @default("[]")
   openAt          DateTime?
   closeAt         DateTime?
   subSubCategoryId String

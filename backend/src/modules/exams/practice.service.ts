@@ -193,14 +193,24 @@ export async function submitPractice(
   return { resultId: result.id, score, correct, total: set.questions.length };
 }
 
-async function ensurePracticeAccess(userId: string, set: { isFree: boolean }) {
+async function ensurePracticeAccess(userId: string, set: { isFree: boolean; freeForNewMembers?: boolean; freePackageIds?: unknown }) {
   const membership = await getActiveMembership(userId);
+  const freePackages: string[] =
+    Array.isArray(set.freePackageIds) || typeof set.freePackageIds === 'object'
+      ? (set.freePackageIds as string[])
+      : [];
+
   if (!membership) {
-    if (!set.isFree) {
+    if (!set.isFree || set.freeForNewMembers === false) {
       throw new HttpError('Membership tidak aktif atau belum divalidasi admin.', 403, { code: 'MEMBERSHIP_REQUIRED' });
     }
     return null;
   }
+
+  if (set.isFree && (set.freeForNewMembers || freePackages.includes(membership.packageId))) {
+    return membership;
+  }
+
   assertMembershipFeature(membership, 'PRACTICE');
   return membership;
 }

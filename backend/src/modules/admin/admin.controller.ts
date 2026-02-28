@@ -833,10 +833,18 @@ export async function updateTryoutController(req: Request, res: Response, next: 
 export async function updateTryoutFreeAdminController(req: Request, res: Response, next: NextFunction) {
   try {
     const id = getIdParam(req);
-    const payload = req.body as { isFree: boolean };
+    const payload = req.body as { isFree: boolean; freeForNewMembers?: boolean; freePackageIds?: string[] };
+    const freePackageIds =
+      Array.isArray(payload.freePackageIds) && payload.freePackageIds.length
+        ? payload.freePackageIds
+        : [];
     const data = await prisma.tryout.update({
       where: { id },
-      data: { isFree: payload.isFree },
+      data: {
+        isFree: payload.isFree,
+        freeForNewMembers: payload.freeForNewMembers ?? true,
+        freePackageIds,
+      },
       include: { subCategory: { include: { category: true } } },
     });
     res.json({ status: 'success', data });
@@ -1248,10 +1256,18 @@ export async function updatePracticeSetController(req: Request, res: Response, n
 export async function updatePracticeSetFreeAdminController(req: Request, res: Response, next: NextFunction) {
   try {
     const id = getIdParam(req);
-    const payload = req.body as { isFree: boolean };
+    const payload = req.body as { isFree: boolean; freeForNewMembers?: boolean; freePackageIds?: string[] };
+    const freePackageIds =
+      Array.isArray(payload.freePackageIds) && payload.freePackageIds.length
+        ? payload.freePackageIds
+        : [];
     const data = await prisma.practiceSet.update({
       where: { id },
-      data: { isFree: payload.isFree },
+      data: {
+        isFree: payload.isFree,
+        freeForNewMembers: payload.freeForNewMembers ?? true,
+        freePackageIds,
+      },
       include: { subSubCategory: { include: { subCategory: { include: { category: true } } } } },
     });
     res.json({ status: 'success', data });

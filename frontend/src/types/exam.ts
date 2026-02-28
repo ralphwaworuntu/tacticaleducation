@@ -8,6 +8,8 @@ export type Tryout = {
   durationMinutes: number;
   totalQuestions: number;
   isFree?: boolean;
+  freeForNewMembers?: boolean;
+  freePackageIds?: string[] | null;
   subCategory: { id: string; name: string; imageUrl?: string | null; category: { id: string; name: string; slug?: string; thumbnail?: string | null } };
   openAt?: string | null;
   closeAt?: string | null;
@@ -86,6 +88,8 @@ export type PracticeSet = {
   durationMinutes: number;
   totalQuestions: number;
   isFree?: boolean;
+  freeForNewMembers?: boolean;
+  freePackageIds?: string[] | null;
   openAt?: string | null;
   closeAt?: string | null;
   subSubCategory: {

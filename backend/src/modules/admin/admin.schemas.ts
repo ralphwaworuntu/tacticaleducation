@@ -247,6 +247,8 @@ export const updateTryoutFreeSchema = z.object({
   params: idParam.shape.params,
   body: z.object({
     isFree: z.coerce.boolean(),
+    freeForNewMembers: z.coerce.boolean().optional(),
+    freePackageIds: z.array(z.string().min(5)).optional(),
   }),
 });
 
@@ -297,6 +299,8 @@ export const updatePracticeSetFreeSchema = z.object({
   params: idParam.shape.params,
   body: z.object({
     isFree: z.coerce.boolean(),
+    freeForNewMembers: z.coerce.boolean().optional(),
+    freePackageIds: z.array(z.string().min(5)).optional(),
   }),
 });
 
