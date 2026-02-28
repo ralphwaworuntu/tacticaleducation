@@ -272,6 +272,18 @@ export function AdminExamControlPage() {
           </div>
         </CardContent>
       </Card>
+      <Card>
+        <CardContent className="space-y-4 p-6">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-slate-500">Kelola Kelas Gratis</p>
+            <h3 className="text-2xl font-semibold text-slate-900">Atur kelas/soal yang diberikan gratis</h3>
+            <p className="text-sm text-slate-500">Konten dan aksi akan ditambahkan di tahap berikutnya.</p>
+          </div>
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+            Tempat kosong untuk konfigurasi kelas gratis.
+          </div>
+        </CardContent>
+      </Card>
     </section>
   );
 }
