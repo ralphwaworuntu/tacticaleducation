@@ -143,10 +143,6 @@ export function AdminExamControlPage() {
     defaultValue: [],
   }) ?? []) as string[];
 
-  if (isLoading || blockConfigLoading) {
-    return <Skeleton className="h-72" />;
-  }
-
   const togglePracticeFree = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: { isFree: boolean; freeForNewMembers?: boolean; freePackageIds?: string[] } }) =>
       apiPatch(`/admin/practice/sets/${id}/free`, payload),
@@ -166,6 +162,10 @@ export function AdminExamControlPage() {
     },
     onError: () => toast.error('Gagal memperbarui gratis tryout'),
   });
+
+  if (isLoading || blockConfigLoading) {
+    return <Skeleton className="h-72" />;
+  }
 
   const buildPracticeLocation = (set?: PracticeSet) => {
     const category = set?.subSubCategory?.subCategory?.category?.name ?? '-';
