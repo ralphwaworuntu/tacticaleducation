@@ -2,13 +2,14 @@ import { useMemo, useState, type ChangeEvent } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
+import { api, apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
 import { getAssetUrl } from '@/lib/media';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/hooks/useAuth';
 
 type TryoutCategory = {
   id: string;
@@ -62,6 +63,7 @@ const defaultTryoutValues = {
 
 export function AdminTryoutsPage() {
   const queryClient = useQueryClient();
+  const { accessToken } = useAuth();
   const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
     queryKey: ['admin-tryout-categories'],
     queryFn: () => apiGet<TryoutCategory[]>('/admin/tryouts/categories'),
@@ -97,6 +99,7 @@ export function AdminTryoutsPage() {
   const [editingTryout, setEditingTryout] = useState<AdminTryout | null>(null);
   const isEditing = Boolean(editingTryout);
   const [togglingTryoutId, setTogglingTryoutId] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const toInputDateTime = (value?: string | null) => {
     if (!value) return '';
@@ -337,12 +340,38 @@ export function AdminTryoutsPage() {
     () => subCategories.filter((item) => item.category.id === selectedCategoryId),
     [selectedCategoryId, subCategories],
   );
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const response = await api.get('/admin/tryouts/export', {
+        responseType: 'blob',
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      });
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = 'manajemen-tryout-tes.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      toast.error('Gagal mengunduh CSV tryout');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <section className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold text-slate-900">Manajemen Tryout & Tes</h2>
-        <p className="mt-2 text-sm text-slate-500">Buat kategori, atur tryout resmi, dan unggah soal melalui template CSV.</p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 className="text-3xl font-bold text-slate-900">Manajemen Tryout & Tes</h2>
+          <p className="mt-2 text-sm text-slate-500">Buat kategori, atur tryout resmi, dan unggah soal melalui template CSV.</p>
+        </div>
+        <Button type="button" variant="outline" onClick={handleExport} disabled={isExporting}>
+          {isExporting ? 'Mengunduh...' : 'Download CSV'}
+        </Button>
       </div>
 
       <Card>

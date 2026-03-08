@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
+import { api, apiDelete, apiGet, apiPatch, apiPost, apiPut } from '@/lib/api';
 import { getAssetUrl } from '@/lib/media';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/hooks/useAuth';
 
 type PracticeCategory = {
   id: string;
@@ -78,6 +79,7 @@ const defaultSetValues = {
 
 export function AdminPracticePage() {
   const queryClient = useQueryClient();
+  const { accessToken } = useAuth();
   const { data: categoriesData, isLoading: categoriesLoading } = useQuery({
     queryKey: ['admin-practice-categories'],
     queryFn: () => apiGet<PracticeCategory[]>('/admin/practice/categories'),
@@ -125,6 +127,7 @@ export function AdminPracticePage() {
   const [editingSet, setEditingSet] = useState<PracticeSet | null>(null);
   const isEditing = Boolean(editingSet);
   const [togglingSetId, setTogglingSetId] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const toInputDateTime = (value?: string | null) => {
     if (!value) return '';
@@ -420,6 +423,28 @@ export function AdminPracticePage() {
     [selectedSubCategoryId, subSubCategories],
   );
 
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const response = await api.get('/admin/practice/export', {
+        responseType: 'blob',
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      });
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = 'latihan-bank-soal.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      toast.error('Gagal mengunduh CSV latihan');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   useEffect(() => {
     if (cermatConfig) {
       cermatForm.reset(cermatConfig);
@@ -428,9 +453,14 @@ export function AdminPracticePage() {
 
   return (
     <section className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold text-slate-900">Latihan & Bank Soal</h2>
-        <p className="mt-2 text-sm text-slate-500">Kelola modul latihan, tugas, dan jenis soal harian.</p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 className="text-3xl font-bold text-slate-900">Latihan & Bank Soal</h2>
+          <p className="mt-2 text-sm text-slate-500">Kelola modul latihan, tugas, dan jenis soal harian.</p>
+        </div>
+        <Button type="button" variant="outline" onClick={handleExport} disabled={isExporting}>
+          {isExporting ? 'Mengunduh...' : 'Download CSV'}
+        </Button>
       </div>
 
       <Card>

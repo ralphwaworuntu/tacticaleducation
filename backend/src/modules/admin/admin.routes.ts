@@ -22,6 +22,7 @@ import {
   createAnnouncementController,
   updateAnnouncementController,
   deleteAnnouncementController,
+  exportAnnouncementsAdminController,
   createFaqController,
   updateFaqController,
   deleteFaqController,
@@ -37,6 +38,7 @@ import {
   updateTryoutSubCategoryController,
   deleteTryoutSubCategoryController,
   listTryoutsController,
+  exportTryoutManagementController,
   createTryoutController,
   updateTryoutController,
   updateTryoutFreeAdminController,
@@ -54,11 +56,13 @@ import {
   updatePracticeSubSubCategoryController,
   deletePracticeSubSubCategoryController,
   listPracticeSetsController,
+  exportPracticeManagementController,
   createPracticeSetController,
   updatePracticeSetController,
   updatePracticeSetFreeAdminController,
   deletePracticeSetController,
   listMaterialsAdminController,
+  exportMaterialsAdminController,
   createMaterialAdminController,
   updateMaterialAdminController,
   deleteMaterialAdminController,
@@ -83,6 +87,7 @@ import {
   adminReportingMembersController,
   adminReportingUsersController,
   adminReportingExportController,
+  exportCalculatorsAdminController,
   getRankingAdminController,
   exportRankingAdminController,
   getPaymentSettingAdminController,
@@ -211,6 +216,7 @@ adminRouter.put(
   updateAnnouncementController,
 );
 adminRouter.delete('/landing/announcements/:id', deleteAnnouncementController);
+adminRouter.get('/announcements/export', exportAnnouncementsAdminController);
 
 adminRouter.post('/landing/faq', validateResource(createFaqSchema), createFaqController);
 adminRouter.put('/landing/faq/:id', validateResource(updateFaqSchema), updateFaqController);
@@ -267,6 +273,7 @@ adminRouter.put(
 adminRouter.delete('/tryouts/sub-categories/:id', deleteTryoutSubCategoryController);
 
 adminRouter.get('/tryouts', listTryoutsController);
+adminRouter.get('/tryouts/export', exportTryoutManagementController);
 adminRouter.post(
   '/tryouts',
   examAssetUpload.fields([
@@ -364,8 +371,10 @@ adminRouter.put(
 );
 adminRouter.patch('/practice/sets/:id/free', validateResource(updatePracticeSetFreeSchema), updatePracticeSetFreeAdminController);
 adminRouter.delete('/practice/sets/:id', deletePracticeSetController);
+adminRouter.get('/practice/export', exportPracticeManagementController);
 
 adminRouter.get('/materials', listMaterialsAdminController);
+adminRouter.get('/materials/export', exportMaterialsAdminController);
 adminRouter.post('/materials', validateResource(materialMutationSchema), createMaterialAdminController);
 adminRouter.put('/materials/:id', validateResource(materialUpdateSchema), updateMaterialAdminController);
 adminRouter.delete('/materials/:id', deleteMaterialAdminController);
@@ -422,6 +431,7 @@ adminRouter.post('/exams/blocks/:id/resolve', resolveExamBlockAdminController);
 adminRouter.post('/membership/grant-tryout', validateResource(grantTryoutQuotaSchema), grantTryoutQuotaAdminController);
 adminRouter.get('/contacts/messages', listContactMessagesAdminController);
 adminRouter.get('/calculators', adminCalculatorListController);
+adminRouter.get('/calculators/export', exportCalculatorsAdminController);
 adminRouter.put('/calculators/:id', validateResource(adminCalculatorUpdateSchema), adminCalculatorUpdateController);
 
 adminRouter.get('/transactions', listTransactionsAdminController);

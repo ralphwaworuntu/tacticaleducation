@@ -1,13 +1,14 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { apiGet, apiPut } from '@/lib/api';
+import { api, apiGet, apiPut } from '@/lib/api';
 import type { CalculatorDetail, CalculatorThresholdConfig } from '@/types/calculator';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/hooks/useAuth';
 
 function cloneCalculator(data: CalculatorDetail): CalculatorDetail {
   return JSON.parse(JSON.stringify(data)) as CalculatorDetail;
@@ -15,12 +16,14 @@ function cloneCalculator(data: CalculatorDetail): CalculatorDetail {
 
 export function AdminCalculatorsPage() {
   const queryClient = useQueryClient();
+  const { accessToken } = useAuth();
   const calculatorsQuery = useQuery({
     queryKey: ['admin-calculators'],
     queryFn: () => apiGet<CalculatorDetail[]>('/admin/calculators'),
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draftMap, setDraftMap] = useState<Record<string, CalculatorDetail>>({});
+  const [isExporting, setIsExporting] = useState(false);
 
   const resolvedActiveId = useMemo(() => selectedId ?? calculatorsQuery.data?.[0]?.id ?? null, [selectedId, calculatorsQuery.data]);
 
@@ -134,11 +137,38 @@ export function AdminCalculatorsPage() {
     });
   }, [activeCalculator]);
 
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const response = await api.get('/admin/calculators/export', {
+        responseType: 'blob',
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      });
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = 'daftar-kalkulator.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      toast.error('Gagal mengunduh CSV kalkulator');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <section className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-bold text-slate-900">Pengaturan Kalkulator</h1>
-        <p className="text-sm text-slate-600">Kelola bobot dan tabel konversi untuk seluruh kalkulator anggota.</p>
+      <header className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold text-slate-900">Pengaturan Kalkulator</h1>
+          <p className="text-sm text-slate-600">Kelola bobot dan tabel konversi untuk seluruh kalkulator anggota.</p>
+        </div>
+        <Button type="button" variant="outline" onClick={handleExport} disabled={isExporting}>
+          {isExporting ? 'Mengunduh...' : 'Download CSV'}
+        </Button>
       </header>
 
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">

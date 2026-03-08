@@ -2,20 +2,23 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { apiDelete, apiGet, apiPost, apiPut } from '@/lib/api';
+import { api, apiDelete, apiGet, apiPost, apiPut } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { Material } from '@/types/exam';
+import { useAuth } from '@/hooks/useAuth';
 
 const materialTypes = ['PDF', 'VIDEO', 'LINK'] as const;
 
 export function AdminMaterialsPage() {
   const queryClient = useQueryClient();
+  const { accessToken } = useAuth();
   const { data, isLoading } = useQuery({ queryKey: ['admin-materials'], queryFn: () => apiGet<Material[]>('/admin/materials') });
   const [editing, setEditing] = useState<Material | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const form = useForm<Omit<Material, 'id' | 'createdAt'>>({
     defaultValues: { title: '', category: '', type: 'PDF', description: '', fileUrl: '' },
@@ -49,12 +52,38 @@ export function AdminMaterialsPage() {
   const onSubmit = form.handleSubmit((values) => mutation.mutate(values));
 
   const materials = data ?? [];
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const response = await api.get('/admin/materials/export', {
+        responseType: 'blob',
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      });
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = 'daftar-materi.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      toast.error('Gagal mengunduh CSV materi');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <section className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold text-slate-900">Materi Belajar</h2>
-        <p className="mt-2 text-sm text-slate-500">Upload atau edit modul PDF, video class, maupun tautan.</p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 className="text-3xl font-bold text-slate-900">Materi Belajar</h2>
+          <p className="mt-2 text-sm text-slate-500">Upload atau edit modul PDF, video class, maupun tautan.</p>
+        </div>
+        <Button type="button" variant="outline" onClick={handleExport} disabled={isExporting}>
+          {isExporting ? 'Mengunduh...' : 'Download CSV'}
+        </Button>
       </div>
 
       <Card>

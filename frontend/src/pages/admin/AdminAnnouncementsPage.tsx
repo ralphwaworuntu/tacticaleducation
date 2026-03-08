@@ -1,8 +1,12 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { apiGet } from '@/lib/api';
+import { api, apiGet } from '@/lib/api';
+import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { PackageOption } from '@/types/landing';
 import { LandingSectionManager, type LandingItem, type LandingResourceConfig } from '@/components/admin/LandingSectionManager';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/useAuth';
 
 type LandingAnnouncement = {
   id: string;
@@ -39,8 +43,32 @@ const announcementSection: LandingResourceConfig = {
 };
 
 export function AdminAnnouncementsPage() {
+  const { accessToken } = useAuth();
+  const [isExporting, setIsExporting] = useState(false);
   const { data, isLoading } = useQuery({ queryKey: ['admin-landing'], queryFn: () => apiGet<LandingOverview>('/admin/landing') });
   const { data: packages } = useQuery({ queryKey: ['admin-packages'], queryFn: () => apiGet<PackageOption[]>('/admin/packages') });
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const response = await api.get('/admin/announcements/export', {
+        responseType: 'blob',
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      });
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = 'pengumuman.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      toast.error('Gagal mengunduh CSV pengumuman');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   if (isLoading || !data) {
     return <Skeleton className="h-80" />;
@@ -48,9 +76,14 @@ export function AdminAnnouncementsPage() {
 
   return (
     <section className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900">Pengumuman</h1>
-        <p className="mt-2 text-sm text-slate-500">Kelola pengumuman yang tampil di area member.</p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Pengumuman</h1>
+          <p className="mt-2 text-sm text-slate-500">Kelola pengumuman yang tampil di area member.</p>
+        </div>
+        <Button type="button" variant="outline" onClick={handleExport} disabled={isExporting}>
+          {isExporting ? 'Mengunduh...' : 'Download CSV'}
+        </Button>
       </div>
       <LandingSectionManager
         config={announcementSection}

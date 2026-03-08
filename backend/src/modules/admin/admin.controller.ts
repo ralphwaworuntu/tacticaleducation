@@ -394,6 +394,42 @@ export async function deleteAnnouncementController(req: Request, res: Response, 
   }
 }
 
+export async function exportAnnouncementsAdminController(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const announcements = await prisma.announcement.findMany({
+      orderBy: [{ publishedAt: 'desc' }, { id: 'desc' }],
+      include: {
+        createdBy: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    const csv = toCsv(
+      announcements.map((item) => ({
+        id: item.id,
+        title: item.title,
+        body: item.body,
+        publishedAt: item.publishedAt.toISOString(),
+        imageUrl: item.imageUrl ?? '',
+        targetAll: item.targetAll ? 'TRUE' : 'FALSE',
+        targetPackageIds: JSON.stringify(item.targetPackageIds ?? []),
+        createdByName: item.createdBy?.name ?? '',
+        createdByEmail: item.createdBy?.email ?? '',
+      })),
+    );
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="pengumuman.csv"');
+    res.send(csv);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function createFaqController(req: Request, res: Response, next: NextFunction) {
   try {
     const data = await prisma.faq.create({ data: req.body });
@@ -626,6 +662,126 @@ export async function listTryoutsController(_req: Request, res: Response, next: 
       },
     });
     res.json({ status: 'success', data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function exportTryoutManagementController(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const categories = await prisma.tryoutCategory.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        subCategories: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            tryouts: {
+              orderBy: { createdAt: 'desc' },
+              select: {
+                id: true,
+                name: true,
+                slug: true,
+                summary: true,
+                durationMinutes: true,
+                totalQuestions: true,
+                isPublished: true,
+                isFree: true,
+                freeForNewMembers: true,
+                freePackageIds: true,
+                openAt: true,
+                closeAt: true,
+                createdAt: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const rows: Array<Record<string, string | number | null | undefined>> = [];
+
+    categories.forEach((category) => {
+      if (category.subCategories.length === 0) {
+        rows.push({
+          categoryId: category.id,
+          categoryName: category.name,
+          categorySlug: category.slug,
+          subCategoryId: '',
+          subCategoryName: '',
+          subCategorySlug: '',
+          tryoutId: '',
+          tryoutName: '',
+          tryoutSlug: '',
+          summary: '',
+          durationMinutes: '',
+          totalQuestions: '',
+          isPublished: '',
+          isFree: '',
+          freeForNewMembers: '',
+          freePackageIds: '',
+          openAt: '',
+          closeAt: '',
+          createdAt: '',
+        });
+        return;
+      }
+
+      category.subCategories.forEach((subCategory) => {
+        if (subCategory.tryouts.length === 0) {
+          rows.push({
+            categoryId: category.id,
+            categoryName: category.name,
+            categorySlug: category.slug,
+            subCategoryId: subCategory.id,
+            subCategoryName: subCategory.name,
+            subCategorySlug: subCategory.slug,
+            tryoutId: '',
+            tryoutName: '',
+            tryoutSlug: '',
+            summary: '',
+            durationMinutes: '',
+            totalQuestions: '',
+            isPublished: '',
+            isFree: '',
+            freeForNewMembers: '',
+            freePackageIds: '',
+            openAt: '',
+            closeAt: '',
+            createdAt: '',
+          });
+          return;
+        }
+
+        subCategory.tryouts.forEach((tryout) => {
+          rows.push({
+            categoryId: category.id,
+            categoryName: category.name,
+            categorySlug: category.slug,
+            subCategoryId: subCategory.id,
+            subCategoryName: subCategory.name,
+            subCategorySlug: subCategory.slug,
+            tryoutId: tryout.id,
+            tryoutName: tryout.name,
+            tryoutSlug: tryout.slug,
+            summary: tryout.summary,
+            durationMinutes: tryout.durationMinutes,
+            totalQuestions: tryout.totalQuestions,
+            isPublished: tryout.isPublished ? 'TRUE' : 'FALSE',
+            isFree: tryout.isFree ? 'TRUE' : 'FALSE',
+            freeForNewMembers: tryout.freeForNewMembers ? 'TRUE' : 'FALSE',
+            freePackageIds: JSON.stringify(tryout.freePackageIds ?? []),
+            openAt: tryout.openAt?.toISOString() ?? '',
+            closeAt: tryout.closeAt?.toISOString() ?? '',
+            createdAt: tryout.createdAt.toISOString(),
+          });
+        });
+      });
+    });
+
+    const csv = toCsv(rows);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="manajemen-tryout-tes.csv"');
+    res.send(csv);
   } catch (error) {
     next(error);
   }
@@ -1076,6 +1232,170 @@ export async function listPracticeSetsController(_req: Request, res: Response, n
   }
 }
 
+export async function exportPracticeManagementController(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const categories = await prisma.practiceCategory.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        subCategories: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            subSubs: {
+              orderBy: { createdAt: 'desc' },
+              include: {
+                sets: {
+                  orderBy: { createdAt: 'desc' },
+                  select: {
+                    id: true,
+                    title: true,
+                    slug: true,
+                    description: true,
+                    level: true,
+                    durationMinutes: true,
+                    totalQuestions: true,
+                    isFree: true,
+                    freeForNewMembers: true,
+                    freePackageIds: true,
+                    openAt: true,
+                    closeAt: true,
+                    createdAt: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const rows: Array<Record<string, string | number | null | undefined>> = [];
+
+    categories.forEach((category) => {
+      if (category.subCategories.length === 0) {
+        rows.push({
+          categoryId: category.id,
+          categoryName: category.name,
+          categorySlug: category.slug,
+          subCategoryId: '',
+          subCategoryName: '',
+          subCategorySlug: '',
+          subSubCategoryId: '',
+          subSubCategoryName: '',
+          subSubCategorySlug: '',
+          setId: '',
+          setTitle: '',
+          setSlug: '',
+          description: '',
+          level: '',
+          durationMinutes: '',
+          totalQuestions: '',
+          isFree: '',
+          freeForNewMembers: '',
+          freePackageIds: '',
+          openAt: '',
+          closeAt: '',
+          createdAt: '',
+        });
+        return;
+      }
+
+      category.subCategories.forEach((subCategory) => {
+        if (subCategory.subSubs.length === 0) {
+          rows.push({
+            categoryId: category.id,
+            categoryName: category.name,
+            categorySlug: category.slug,
+            subCategoryId: subCategory.id,
+            subCategoryName: subCategory.name,
+            subCategorySlug: subCategory.slug,
+            subSubCategoryId: '',
+            subSubCategoryName: '',
+            subSubCategorySlug: '',
+            setId: '',
+            setTitle: '',
+            setSlug: '',
+            description: '',
+            level: '',
+            durationMinutes: '',
+            totalQuestions: '',
+            isFree: '',
+            freeForNewMembers: '',
+            freePackageIds: '',
+            openAt: '',
+            closeAt: '',
+            createdAt: '',
+          });
+          return;
+        }
+
+        subCategory.subSubs.forEach((subSubCategory) => {
+          if (subSubCategory.sets.length === 0) {
+            rows.push({
+              categoryId: category.id,
+              categoryName: category.name,
+              categorySlug: category.slug,
+              subCategoryId: subCategory.id,
+              subCategoryName: subCategory.name,
+              subCategorySlug: subCategory.slug,
+              subSubCategoryId: subSubCategory.id,
+              subSubCategoryName: subSubCategory.name,
+              subSubCategorySlug: subSubCategory.slug,
+              setId: '',
+              setTitle: '',
+              setSlug: '',
+              description: '',
+              level: '',
+              durationMinutes: '',
+              totalQuestions: '',
+              isFree: '',
+              freeForNewMembers: '',
+              freePackageIds: '',
+              openAt: '',
+              closeAt: '',
+              createdAt: '',
+            });
+            return;
+          }
+
+          subSubCategory.sets.forEach((set) => {
+            rows.push({
+              categoryId: category.id,
+              categoryName: category.name,
+              categorySlug: category.slug,
+              subCategoryId: subCategory.id,
+              subCategoryName: subCategory.name,
+              subCategorySlug: subCategory.slug,
+              subSubCategoryId: subSubCategory.id,
+              subSubCategoryName: subSubCategory.name,
+              subSubCategorySlug: subSubCategory.slug,
+              setId: set.id,
+              setTitle: set.title,
+              setSlug: set.slug,
+              description: set.description,
+              level: set.level ?? '',
+              durationMinutes: set.durationMinutes,
+              totalQuestions: set.totalQuestions,
+              isFree: set.isFree ? 'TRUE' : 'FALSE',
+              freeForNewMembers: set.freeForNewMembers ? 'TRUE' : 'FALSE',
+              freePackageIds: JSON.stringify(set.freePackageIds ?? []),
+              openAt: set.openAt?.toISOString() ?? '',
+              closeAt: set.closeAt?.toISOString() ?? '',
+              createdAt: set.createdAt.toISOString(),
+            });
+          });
+        });
+      });
+    });
+
+    const csv = toCsv(rows);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="latihan-bank-soal.csv"');
+    res.send(csv);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function createPracticeSetController(req: Request, res: Response, next: NextFunction) {
   try {
       const payload = req.body as {
@@ -1297,6 +1617,42 @@ export async function listMaterialsAdminController(_req: Request, res: Response,
   try {
     const data = await prisma.material.findMany({ orderBy: { createdAt: 'desc' } });
     res.json({ status: 'success', data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function exportMaterialsAdminController(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const materials = await prisma.material.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        uploadedBy: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    const csv = toCsv(
+      materials.map((item) => ({
+        id: item.id,
+        title: item.title,
+        category: item.category,
+        type: item.type,
+        description: item.description ?? '',
+        fileUrl: item.fileUrl,
+        uploadedByName: item.uploadedBy?.name ?? '',
+        uploadedByEmail: item.uploadedBy?.email ?? '',
+        createdAt: item.createdAt.toISOString(),
+      })),
+    );
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="daftar-materi.csv"');
+    res.send(csv);
   } catch (error) {
     next(error);
   }
@@ -2897,6 +3253,39 @@ export async function adminReportingExportController(req: Request, res: Response
     );
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="report-users.csv"');
+    res.send(csv);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function exportCalculatorsAdminController(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const calculators = await prisma.psychCalculatorTemplate.findMany({
+      where: { type: 'GENERAL' },
+      orderBy: [{ category: 'asc' }, { sectionOrder: 'asc' }, { order: 'asc' }],
+    });
+
+    const csv = toCsv(
+      calculators.map((item) => ({
+        id: item.id,
+        title: item.title,
+        slug: item.slug,
+        description: item.description,
+        category: item.category,
+        categoryLabel: item.categoryLabel,
+        section: item.section ?? '',
+        sectionLabel: item.sectionLabel ?? '',
+        order: item.order,
+        sectionOrder: item.sectionOrder,
+        configInputs: JSON.stringify((item.config as any)?.inputs ?? []),
+        configGroups: JSON.stringify((item.config as any)?.groups ?? []),
+        configThresholds: JSON.stringify((item.config as any)?.thresholds ?? []),
+      })),
+    );
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="daftar-kalkulator.csv"');
     res.send(csv);
   } catch (error) {
     next(error);
