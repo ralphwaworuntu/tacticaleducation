@@ -18,6 +18,7 @@ import { useExamBlockConfig } from '@/hooks/useExamBlockConfig';
 import { ExamCountdownModal } from '@/components/dashboard/ExamCountdownModal';
 import { ConfirmFinishModal } from '@/components/dashboard/ConfirmFinishModal';
 import { QuestionNavigator } from '@/components/dashboard/QuestionNavigator';
+import { buildTryoutDisplayItems, getPsikoSequenceBySubCategory, isPolriPsikoTryout } from '@/utils/tryoutPackage';
 
 type TryoutSession = {
   detail: TryoutDetail;
@@ -116,40 +117,15 @@ export function TryoutPage() {
     return Array.from(map.values());
   }, [tryouts]);
 
-  const normalizeWord = useCallback((value?: string | null) => (value ?? '').trim().toLowerCase(), []);
-  const matchesKeyword = useCallback(
-    (name?: string | null, slug?: string | null, keyword?: string) => {
-      const key = normalizeWord(keyword);
-      return normalizeWord(name) === key || normalizeWord(slug) === key;
-    },
-    [normalizeWord],
-  );
-  const isPolriPsikoTryout = useCallback(
-    (item: Tryout) =>
-      item.sessionOrder !== null &&
-      item.sessionOrder !== undefined &&
-      matchesKeyword(item.subCategory.category.name, item.subCategory.category.slug, 'polri') &&
-      matchesKeyword(item.subCategory.name, item.subCategory.slug, 'psiko'),
-    [matchesKeyword],
-  );
-
-  const getPsikoSequence = useCallback(
-    (subCategoryId: string) =>
-      (tryouts ?? [])
-        .filter((item) => item.subCategory.id === subCategoryId && isPolriPsikoTryout(item))
-        .sort((a, b) => (a.sessionOrder ?? 0) - (b.sessionOrder ?? 0)),
-    [isPolriPsikoTryout, tryouts],
-  );
-
   const resolveInitialPsikoTryout = useCallback(
     (item: Tryout) => {
       if (!isPolriPsikoTryout(item)) {
         return item;
       }
-      const sequence = getPsikoSequence(item.subCategory.id);
+      const sequence = getPsikoSequenceBySubCategory(tryouts ?? [], item.subCategory.id);
       return sequence[0] ?? item;
     },
-    [getPsikoSequence, isPolriPsikoTryout],
+    [tryouts],
   );
 
   const resolvedCategoryId = activeCategoryId ?? categoryGroups[0]?.id ?? null;
@@ -162,6 +138,10 @@ export function TryoutPage() {
   const resolvedSubCategoryId = activeSubCategoryId ?? selectedCategory?.subCategories[0]?.id ?? null;
   const selectedSubCategory =
     selectedCategory?.subCategories.find((subCategory) => subCategory.id === resolvedSubCategoryId) ?? null;
+  const selectedDisplayItems = useMemo(
+    () => (selectedSubCategory ? buildTryoutDisplayItems(selectedSubCategory.tryouts) : []),
+    [selectedSubCategory],
+  );
 
   const { request: requestFullscreen, exit: exitFullscreen, setViolationHandler, isSupported: fullscreenSupported } =
     useFullscreenExam({
@@ -436,7 +416,7 @@ export function TryoutPage() {
   const isFirstQuestion = currentQuestionIndex === 0;
   const isLastQuestion = currentQuestionIndex >= Math.max(questionList.length - 1, 0);
   const formatDateTime = (value?: string | null) => (value ? new Date(value).toLocaleString('id-ID') : null);
-  const getScheduleText = (tryout: Tryout) => {
+  const getScheduleText = (tryout: { openAt?: string | null; closeAt?: string | null }) => {
     const start = formatDateTime(tryout.openAt);
     const end = formatDateTime(tryout.closeAt);
     if (!start && !end) {
@@ -444,7 +424,7 @@ export function TryoutPage() {
     }
     return `${start ?? 'Segera'} - ${end ?? 'Tanpa batas'}`;
   };
-  const getScheduleStatus = (tryout: Tryout) => {
+  const getScheduleStatus = (tryout: { openAt?: string | null; closeAt?: string | null }) => {
     const now = nowTs;
     if (tryout.openAt && new Date(tryout.openAt).getTime() > now) {
       return { active: false, label: `Dibuka ${formatDateTime(tryout.openAt)}` };
@@ -690,7 +670,10 @@ export function TryoutPage() {
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {categoryGroups.map((category) => {
                 const isActive = resolvedCategoryId === category.id;
-                const totalTryouts = category.subCategories.reduce((acc, subCategory) => acc + subCategory.tryouts.length, 0);
+                const totalTryouts = category.subCategories.reduce(
+                  (acc, subCategory) => acc + buildTryoutDisplayItems(subCategory.tryouts).length,
+                  0,
+                );
                 return (
                   <Card
                     key={category.id}
@@ -755,15 +738,16 @@ export function TryoutPage() {
                   <h3 className="text-2xl font-semibold text-slate-900">{selectedSubCategory?.name ?? 'Pilih sub kategori'}</h3>
                   <p className="text-sm text-slate-600">
                     {selectedSubCategory
-                      ? `${selectedSubCategory.tryouts.length} paket tersedia`
+                      ? `${selectedDisplayItems.length} paket tersedia`
                       : 'Belum ada tryout dalam sub kategori ini'}
                   </p>
                 </div>
               </div>
               {selectedSubCategory ? (
                 <div className="mt-4 grid gap-4 md:grid-cols-3">
-                  {selectedSubCategory.tryouts.map((item) => {
+                  {selectedDisplayItems.map((item) => {
                     const status = getScheduleStatus(item);
+                    const startTryout = item.sessions[0] ?? null;
                     return (
                       <Card key={item.id}>
                         <CardContent className="space-y-3 p-4">
@@ -780,9 +764,17 @@ export function TryoutPage() {
                           </p>
                           <h3 className="text-lg font-semibold text-slate-900">{item.name}</h3>
                             <p className="text-sm text-slate-600">{item.summary}</p>
+                            {item.isPackage && (
+                              <p className="text-xs text-slate-500">
+                                Detail sesi: {item.sessions.map((session) => `S${session.sessionOrder}`).join(', ')}
+                              </p>
+                            )}
                             <p className="text-[11px] text-slate-500">Jadwal: {getScheduleText(item)}</p>
                             <p className={`text-[11px] ${status.active ? 'text-emerald-600' : 'text-red-500'}`}>Status: {status.label}</p>
                             <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                              {item.isPackage && (
+                                <span className="rounded-full bg-brand-100 px-2 py-1 text-brand-700">{item.packageLabel}</span>
+                              )}
                               {item.isFree && <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-700">Gratis</span>}
                               {!hasActiveMembership && !item.isFree && (
                                 <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700">Butuh Paket</span>
@@ -790,10 +782,10 @@ export function TryoutPage() {
                             </div>
                             <Button
                               className="w-full"
-                              variant={session?.detail.id === item.id ? 'outline' : 'primary'}
-                              onClick={() => navigate(`/app/latihan/tryout/detail/${item.slug}`)}
+                              variant={session?.detail.slug === (startTryout?.slug ?? item.slug) ? 'outline' : 'primary'}
+                              onClick={() => navigate(`/app/latihan/tryout/detail/${startTryout?.slug ?? item.slug}`)}
                             >
-                            Lihat Detail
+                            {item.isPackage ? 'Lihat Paket Soal' : 'Lihat Detail'}
                           </Button>
                         </CardContent>
                       </Card>

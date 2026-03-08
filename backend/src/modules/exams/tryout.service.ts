@@ -397,7 +397,13 @@ export async function getTryoutHistory(userId: string) {
     where: { userId },
     orderBy: { createdAt: 'desc' },
     include: {
-      tryout: { select: { name: true, subCategory: { select: { name: true, category: { select: { name: true } } } } } },
+      tryout: {
+        select: {
+          name: true,
+          sessionOrder: true,
+          subCategory: { select: { name: true, category: { select: { name: true } } } },
+        },
+      },
     },
   });
 }

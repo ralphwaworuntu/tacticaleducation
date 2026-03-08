@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -47,7 +47,7 @@ type AdminTryout = {
   sessionOrder?: number | null;
   openAt?: string | null;
   closeAt?: string | null;
-  subCategory: { id: string; name: string; category: { id: string; name: string } };
+  subCategory: { id: string; name: string; slug?: string; category: { id: string; name: string; slug?: string } };
   questions: TryoutQuestion[];
 };
 
@@ -390,6 +390,20 @@ export function AdminTryoutsPage() {
   const isSessionOrderRequired =
     matchesKeyword(selectedCategory?.name, selectedCategory?.slug, 'polri') &&
     matchesKeyword(selectedSubCategory?.name, selectedSubCategory?.slug, 'psiko');
+  const isPolriPsikoTryoutItem = useCallback(
+    (item: AdminTryout) =>
+      matchesKeyword(item.subCategory.category.name, item.subCategory.category.slug, 'polri') &&
+      matchesKeyword(item.subCategory.name, item.subCategory.slug, 'psiko'),
+    [matchesKeyword],
+  );
+  const psikoTryouts = useMemo(
+    () =>
+      tryouts
+        .filter((item) => isPolriPsikoTryoutItem(item))
+        .sort((a, b) => (a.sessionOrder ?? 0) - (b.sessionOrder ?? 0)),
+    [isPolriPsikoTryoutItem, tryouts],
+  );
+  const regularTryouts = useMemo(() => tryouts.filter((item) => !isPolriPsikoTryoutItem(item)), [isPolriPsikoTryoutItem, tryouts]);
   const usedSessionOrders = useMemo(() => {
     if (!selectedSubCategoryId) return [] as number[];
     return tryouts
@@ -792,8 +806,73 @@ export function AdminTryoutsPage() {
         <CardContent className="space-y-4 p-6">
           <h3 className="text-xl font-semibold text-slate-900">Daftar Tryout</h3>
           {tryoutsLoading && <Skeleton className="h-40" />}
+          {psikoTryouts.length > 0 && (
+            <div className="rounded-2xl border border-brand-200 bg-brand-50/60 p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-brand-600">Kartu Terpisah</p>
+                  <h4 className="text-lg font-semibold text-slate-900">PAKET SOAL POLRI / PSIKO</h4>
+                  <p className="text-xs text-slate-600">Semua sesi tryout PSIKO dikumpulkan di kartu ini.</p>
+                </div>
+                <span className="rounded-full bg-brand-100 px-3 py-1 text-xs font-semibold text-brand-700">
+                  {psikoTryouts.length} sesi
+                </span>
+              </div>
+              <div className="space-y-3">
+                {psikoTryouts.map((tryout) => (
+                  <div key={tryout.id} className="rounded-xl border border-brand-100 bg-white p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">
+                          Sesi {tryout.sessionOrder ?? '-'} - {tryout.name}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {tryout.totalQuestions} soal - {tryout.durationMinutes} menit
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className={tryout.isFree ? 'border-emerald-300 text-emerald-700' : undefined}
+                          onClick={() => toggleTryoutFree.mutate({ id: tryout.id, isFree: !tryout.isFree })}
+                          disabled={togglingTryoutId === tryout.id && toggleTryoutFree.isPending}
+                        >
+                          <span className="flex items-center gap-2">
+                            {togglingTryoutId === tryout.id && toggleTryoutFree.isPending && (
+                              <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                            )}
+                            Gratis: {tryout.isFree ? 'ON' : 'OFF'}
+                          </span>
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleEditTryout(tryout)}>
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleExportQuestionsCsv({ id: tryout.id, slug: tryout.slug })}
+                          disabled={exportingTryoutQuestionsId === tryout.id}
+                        >
+                          {exportingTryoutQuestionsId === tryout.id ? 'Mengunduh...' : 'CSV Soal'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => deleteTryout.mutate(tryout.id)}
+                          disabled={deleteTryout.isPending}
+                        >
+                          Hapus
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {tryouts.map((tryout) => (
+            {regularTryouts.map((tryout) => (
               <div key={tryout.id} className="rounded-2xl border border-slate-100 p-4">
                 {getAssetUrl(tryout.coverImageUrl) && (
                   <img

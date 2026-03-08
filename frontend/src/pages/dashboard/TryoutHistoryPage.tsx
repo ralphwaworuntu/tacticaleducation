@@ -11,7 +11,7 @@ type TryoutHistoryItem = {
   id: string;
   score: number;
   createdAt: string;
-  tryout: { name: string; subCategory: { name: string; category: { name: string } } };
+  tryout: { name: string; sessionOrder?: number | null; subCategory: { name: string; category: { name: string } } };
 };
 
 export function TryoutHistoryPage() {
@@ -59,7 +59,14 @@ export function TryoutHistoryPage() {
           <tbody className="divide-y divide-slate-50">
             {data.map((item) => (
               <tr key={item.id}>
-                <td className="px-4 py-3 font-semibold text-slate-900">{item.tryout.name}</td>
+                <td className="px-4 py-3 font-semibold text-slate-900">
+                  {item.tryout.name}
+                  {item.tryout.sessionOrder ? (
+                    <span className="ml-2 rounded-full bg-brand-100 px-2 py-1 text-[10px] font-semibold text-brand-700">
+                      Sesi {item.tryout.sessionOrder}
+                    </span>
+                  ) : null}
+                </td>
                 <td className="px-4 py-3 text-slate-600">{item.tryout.subCategory.category.name}</td>
                 <td className="px-4 py-3 text-slate-600">{formatDate(item.createdAt)}</td>
                 <td className="px-4 py-3 font-bold text-brand-500">{Math.round(item.score)}</td>

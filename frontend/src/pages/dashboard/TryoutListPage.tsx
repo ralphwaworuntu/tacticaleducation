@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMembershipStatus } from '@/hooks/useMembershipStatus';
+import { buildTryoutDisplayItems } from '@/utils/tryoutPackage';
 
 export function TryoutListPage() {
   const navigate = useNavigate();
@@ -23,13 +24,14 @@ export function TryoutListPage() {
   const listing = useMemo(() => {
     if (!tryouts || !categoryId || !subCategoryId) return null;
     const items = tryouts.filter((item) => item.subCategory.id === subCategoryId);
+    const displayItems = buildTryoutDisplayItems(items);
     const categoryName = items[0]?.subCategory.category.name ?? '';
     const subCategoryName = items[0]?.subCategory.name ?? '';
-    return { items, categoryName, subCategoryName };
+    return { items: displayItems, categoryName, subCategoryName };
   }, [categoryId, subCategoryId, tryouts]);
 
   const formatDateTime = (value?: string | null) => (value ? new Date(value).toLocaleString('id-ID') : null);
-  const getScheduleText = (tryout: Tryout) => {
+  const getScheduleText = (tryout: { openAt?: string | null; closeAt?: string | null }) => {
     const start = formatDateTime(tryout.openAt);
     const end = formatDateTime(tryout.closeAt);
     if (!start && !end) {
@@ -37,7 +39,7 @@ export function TryoutListPage() {
     }
     return `${start ?? 'Segera'} - ${end ?? 'Tanpa batas'}`;
   };
-  const getScheduleStatus = (tryout: Tryout) => {
+  const getScheduleStatus = (tryout: { openAt?: string | null; closeAt?: string | null }) => {
     const now = nowTs;
     if (tryout.openAt && new Date(tryout.openAt).getTime() > now) {
       return { active: false, label: `Dibuka ${formatDateTime(tryout.openAt)}` };
@@ -116,7 +118,13 @@ export function TryoutListPage() {
                     </p>
                     <h3 className="text-lg font-semibold text-slate-900">{item.name}</h3>
                     <p className="text-sm text-slate-600">{item.summary}</p>
+                    {item.isPackage && (
+                      <p className="text-xs text-slate-500">
+                        Detail sesi: {item.sessions.map((session) => `S${session.sessionOrder}`).join(', ')}
+                      </p>
+                    )}
                     <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      {item.isPackage && <span className="rounded-full bg-brand-100 px-2 py-1 text-brand-700">PAKET SOAL</span>}
                       {item.isFree && <span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-700">Gratis</span>}
                       {!hasActiveMembership && !item.isFree && (
                         <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700">Butuh Paket</span>
@@ -126,8 +134,8 @@ export function TryoutListPage() {
                     <p className={`text-[11px] ${status.active ? 'text-emerald-600' : 'text-red-500'}`}>
                       Status: {status.label}
                     </p>
-                    <Button className="w-full" onClick={() => navigate(`/app/latihan/tryout/detail/${item.slug}`)}>
-                      Lihat Detail
+                    <Button className="w-full" onClick={() => navigate(`/app/latihan/tryout/detail/${item.sessions[0]?.slug ?? item.slug}`)}>
+                      {item.isPackage ? 'Lihat Paket Soal' : 'Lihat Detail'}
                     </Button>
                   </div>
                 </CardContent>
