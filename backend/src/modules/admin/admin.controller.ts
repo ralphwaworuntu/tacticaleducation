@@ -1,7 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { nanoid } from 'nanoid';
-import type { Prisma } from '@prisma/client';
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { HttpError } from '../../middlewares/errorHandler';
 import { buildPublicUploadPath } from '../../config/upload';
@@ -133,6 +132,20 @@ function mapOptionsToCsvFields(options: Array<{ label: string; imageUrl: string 
     fields[`option_${letter}_correct`] = option ? (option.isCorrect ? 'TRUE' : 'FALSE') : '';
   });
   return fields;
+}
+
+function normalizeWord(value: string | null | undefined) {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function isPolriPsikoSubCategory(subCategory: {
+  name: string;
+  slug: string;
+  category: { name: string; slug: string };
+}) {
+  const categoryKey = normalizeWord(subCategory.category.slug || subCategory.category.name);
+  const subCategoryKey = normalizeWord(subCategory.slug || subCategory.name);
+  return categoryKey === 'polri' && subCategoryKey === 'psiko';
 }
 
 function buildContactConfig(settings: Array<{ key: string; value: string }>) {
@@ -927,6 +940,7 @@ export async function createTryoutController(req: Request, res: Response, next: 
         isFree?: boolean;
         openAt?: string;
         closeAt?: string;
+        sessionOrder?: number;
       };
 
     const questionsFile = getFile(req, 'questionsCsv');
@@ -953,6 +967,20 @@ export async function createTryoutController(req: Request, res: Response, next: 
       trimmedDescription && trimmedDescription.length >= 10
         ? trimmedDescription
         : `${payload.name} - Bank Soal Tryout dengan ${questions.length} soal`;
+    const targetSubCategory = await prisma.tryoutSubCategory.findUnique({
+      where: { id: payload.subCategoryId },
+      include: { category: true },
+    });
+    if (!targetSubCategory) {
+      throw new HttpError('Sub kategori tryout tidak ditemukan', 404);
+    }
+    const isPolriPsiko = isPolriPsikoSubCategory(targetSubCategory);
+    if (isPolriPsiko && payload.sessionOrder === undefined) {
+      throw new HttpError('Urutan sesi wajib dipilih untuk kategori POLRI / sub kategori PSIKO.', 400);
+    }
+    if (!isPolriPsiko && payload.sessionOrder !== undefined) {
+      throw new HttpError('Urutan sesi hanya berlaku untuk kategori POLRI / sub kategori PSIKO.', 400);
+    }
     const data = await prisma.tryout.create({
       data: {
         name: payload.name,
@@ -964,6 +992,7 @@ export async function createTryoutController(req: Request, res: Response, next: 
           totalQuestions,
           isPublished: payload.isPublished ?? true,
           isFree: payload.isFree ?? false,
+          sessionOrder: isPolriPsiko ? payload.sessionOrder ?? null : null,
           openAt: payload.openAt ? new Date(payload.openAt) : null,
           closeAt: payload.closeAt ? new Date(payload.closeAt) : null,
           subCategoryId: payload.subCategoryId,
@@ -989,6 +1018,13 @@ export async function createTryoutController(req: Request, res: Response, next: 
 
     res.status(201).json({ status: 'success', data });
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const target = Array.isArray(error.meta?.target) ? error.meta?.target.join(',') : String(error.meta?.target ?? '');
+      if (target.includes('sessionOrder') || target.includes('subCategoryId')) {
+        next(new HttpError('Urutan sesi sudah digunakan. Pilih urutan sesi lain.', 400));
+        return;
+      }
+    }
     next(error);
   }
 }
@@ -996,6 +1032,13 @@ export async function createTryoutController(req: Request, res: Response, next: 
 export async function updateTryoutController(req: Request, res: Response, next: NextFunction) {
   try {
     const id = getIdParam(req);
+    const existingTryout = await prisma.tryout.findUnique({
+      where: { id },
+      include: { subCategory: { include: { category: true } } },
+    });
+    if (!existingTryout) {
+      throw new HttpError('Tryout tidak ditemukan', 404);
+    }
       const payload = req.body as {
         name?: string;
         summary?: string;
@@ -1007,10 +1050,23 @@ export async function updateTryoutController(req: Request, res: Response, next: 
         subCategoryId?: string;
         openAt?: string | null;
         closeAt?: string | null;
+        sessionOrder?: number;
       };
 
     const coverFile = getFile(req, 'coverImage');
     const questionsFile = getFile(req, 'questionsCsv');
+    const targetSubCategory =
+      payload.subCategoryId && payload.subCategoryId !== existingTryout.subCategoryId
+        ? await prisma.tryoutSubCategory.findUnique({
+            where: { id: payload.subCategoryId },
+            include: { category: true },
+          })
+        : existingTryout.subCategory;
+
+    if (!targetSubCategory) {
+      throw new HttpError('Sub kategori tryout tidak ditemukan', 404);
+    }
+    const isPolriPsiko = isPolriPsikoSubCategory(targetSubCategory);
 
     const updateData: Record<string, unknown> = {};
     if (payload.name !== undefined) updateData.name = payload.name;
@@ -1031,6 +1087,17 @@ export async function updateTryoutController(req: Request, res: Response, next: 
       if (payload.isPublished !== undefined) updateData.isPublished = payload.isPublished;
       if (payload.isFree !== undefined) updateData.isFree = payload.isFree;
     if (payload.subCategoryId !== undefined) updateData.subCategoryId = payload.subCategoryId;
+    if (payload.sessionOrder !== undefined) {
+      if (!isPolriPsiko) {
+        throw new HttpError('Urutan sesi hanya berlaku untuk kategori POLRI / sub kategori PSIKO.', 400);
+      }
+      updateData.sessionOrder = payload.sessionOrder;
+    } else if (payload.subCategoryId !== undefined && !isPolriPsiko) {
+      updateData.sessionOrder = null;
+    }
+    if (isPolriPsiko && payload.subCategoryId !== undefined && existingTryout.sessionOrder === null && payload.sessionOrder === undefined) {
+      throw new HttpError('Urutan sesi wajib dipilih untuk kategori POLRI / sub kategori PSIKO.', 400);
+    }
     if (payload.openAt !== undefined) {
       updateData.openAt = payload.openAt ? new Date(payload.openAt) : null;
     }
@@ -1093,6 +1160,13 @@ export async function updateTryoutController(req: Request, res: Response, next: 
     });
     res.json({ status: 'success', data });
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const target = Array.isArray(error.meta?.target) ? error.meta?.target.join(',') : String(error.meta?.target ?? '');
+      if (target.includes('sessionOrder') || target.includes('subCategoryId')) {
+        next(new HttpError('Urutan sesi sudah digunakan. Pilih urutan sesi lain.', 400));
+        return;
+      }
+    }
     next(error);
   }
 }

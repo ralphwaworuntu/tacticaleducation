@@ -217,6 +217,7 @@ export const createTryoutSchema = z.object({
     durationMinutes: z.coerce.number().int().positive(),
     totalQuestions: z.coerce.number().int().positive().optional(),
     subCategoryId: z.string().min(1),
+    sessionOrder: z.coerce.number().int().positive().optional(),
     openAt: z.string().optional(),
     closeAt: z.string().optional(),
     isPublished: z.boolean().optional(),
@@ -237,6 +238,7 @@ export const updateTryoutSchema = z.object({
         isPublished: z.coerce.boolean().optional(),
         isFree: z.coerce.boolean().optional(),
         subCategoryId: z.string().min(1).optional(),
+        sessionOrder: z.coerce.number().int().positive().optional(),
         openAt: z.string().optional(),
         closeAt: z.string().optional(),
       })

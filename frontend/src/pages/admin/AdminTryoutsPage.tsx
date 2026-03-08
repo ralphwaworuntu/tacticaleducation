@@ -1,4 +1,4 @@
-import { useMemo, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -41,6 +41,7 @@ type AdminTryout = {
   totalQuestions: number;
   isPublished: boolean;
   isFree?: boolean;
+  sessionOrder?: number | null;
   openAt?: string | null;
   closeAt?: string | null;
   subCategory: { id: string; name: string; category: { id: string; name: string } };
@@ -56,6 +57,7 @@ const defaultTryoutValues = {
   totalQuestions: 5,
   categoryId: '',
   subCategoryId: '',
+  sessionOrder: '',
   openAt: '',
   closeAt: '',
   isFree: false,
@@ -251,6 +253,10 @@ export function AdminTryoutsPage() {
       toast.error('Pilih sub kategori tryout terlebih dahulu');
       return;
     }
+    if (isSessionOrderRequired && !values.sessionOrder) {
+      toast.error('Pilih Urutan Sesi terlebih dahulu');
+      return;
+    }
     if (!questionsFile && !isEditing) {
       toast.error('Unggah file CSV soal terlebih dahulu');
       return;
@@ -265,6 +271,9 @@ export function AdminTryoutsPage() {
       formData.append('totalQuestions', String(values.totalQuestions));
     }
     formData.append('subCategoryId', values.subCategoryId);
+    if (values.sessionOrder) {
+      formData.append('sessionOrder', values.sessionOrder);
+    }
     formData.append('isFree', String(values.isFree ?? false));
     if (isEditing) {
       formData.append('openAt', values.openAt ?? '');
@@ -313,6 +322,7 @@ export function AdminTryoutsPage() {
       totalQuestions: tryout.totalQuestions,
       categoryId: tryout.subCategory.category.id,
       subCategoryId: tryout.subCategory.id,
+      sessionOrder: tryout.sessionOrder ? String(tryout.sessionOrder) : '',
       openAt: toInputDateTime(tryout.openAt),
       closeAt: toInputDateTime(tryout.closeAt),
       isFree: tryout.isFree ?? false,
@@ -338,10 +348,51 @@ export function AdminTryoutsPage() {
   const sampleQuestionCount = useMemo(() => tryouts.reduce((acc, t) => acc + t.questions.length, 0), [tryouts]);
   const formatDateTime = (value?: string | null) => (value ? new Date(value).toLocaleString('id-ID') : 'Tidak diatur');
   const selectedCategoryId = useWatch({ control: tryoutForm.control, name: 'categoryId' });
+  const selectedSubCategoryId = useWatch({ control: tryoutForm.control, name: 'subCategoryId' });
+  const selectedSessionOrder = useWatch({ control: tryoutForm.control, name: 'sessionOrder' });
   const filteredSubCategories = useMemo(
     () => subCategories.filter((item) => item.category.id === selectedCategoryId),
     [selectedCategoryId, subCategories],
   );
+  const selectedCategory = useMemo(
+    () => categories.find((item) => item.id === selectedCategoryId),
+    [categories, selectedCategoryId],
+  );
+  const selectedSubCategory = useMemo(
+    () => subCategories.find((item) => item.id === selectedSubCategoryId),
+    [selectedSubCategoryId, subCategories],
+  );
+  const normalize = (value?: string | null) => (value ?? '').trim().toLowerCase();
+  const isSessionOrderRequired =
+    normalize(selectedCategory?.name) === 'polri' && normalize(selectedSubCategory?.name) === 'psiko';
+  const usedSessionOrders = useMemo(() => {
+    if (!selectedSubCategoryId) return [] as number[];
+    return tryouts
+      .filter((item) => item.subCategory.id === selectedSubCategoryId && item.id !== editingTryout?.id && item.sessionOrder)
+      .map((item) => item.sessionOrder as number);
+  }, [selectedSubCategoryId, tryouts, editingTryout?.id]);
+  const maxSessionOption = useMemo(() => {
+    const maxUsed = usedSessionOrders.length ? Math.max(...usedSessionOrders) : 0;
+    return Math.max(10, maxUsed + 5);
+  }, [usedSessionOrders]);
+  const availableSessionOrders = useMemo(() => {
+    const keepCurrent = Number(selectedSessionOrder || 0);
+    return Array.from({ length: maxSessionOption }, (_, index) => index + 1).filter(
+      (num) => !usedSessionOrders.includes(num) || num === keepCurrent,
+    );
+  }, [maxSessionOption, usedSessionOrders, selectedSessionOrder]);
+
+  useEffect(() => {
+    if (!isSessionOrderRequired && selectedSessionOrder) {
+      tryoutForm.setValue('sessionOrder', '');
+    }
+    if (isSessionOrderRequired && selectedSessionOrder) {
+      const parsed = Number(selectedSessionOrder);
+      if (!availableSessionOrders.includes(parsed)) {
+        tryoutForm.setValue('sessionOrder', '');
+      }
+    }
+  }, [isSessionOrderRequired, selectedSessionOrder, availableSessionOrders, tryoutForm]);
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -621,6 +672,7 @@ export function AdminTryoutsPage() {
               onChange={(event) => {
                 tryoutForm.setValue('categoryId', event.target.value);
                 tryoutForm.setValue('subCategoryId', '');
+                tryoutForm.setValue('sessionOrder', '');
               }}
             >
               <option value="">Pilih kategori</option>
@@ -630,7 +682,14 @@ export function AdminTryoutsPage() {
                 </option>
               ))}
             </select>
-            <select className="rounded-2xl border border-slate-200 px-4 py-2 text-sm" {...tryoutForm.register('subCategoryId')}>
+            <select
+              className="rounded-2xl border border-slate-200 px-4 py-2 text-sm"
+              {...tryoutForm.register('subCategoryId')}
+              onChange={(event) => {
+                tryoutForm.setValue('subCategoryId', event.target.value);
+                tryoutForm.setValue('sessionOrder', '');
+              }}
+            >
               <option value="">Pilih sub kategori</option>
               {filteredSubCategories.map((subCategory) => (
                 <option key={subCategory.id} value={subCategory.id}>
@@ -638,6 +697,16 @@ export function AdminTryoutsPage() {
                 </option>
               ))}
             </select>
+            {isSessionOrderRequired && (
+              <select className="rounded-2xl border border-slate-200 px-4 py-2 text-sm" {...tryoutForm.register('sessionOrder')}>
+                <option value="">Urutan Sesi (1/2/3/dst)</option>
+                {availableSessionOrders.map((num) => (
+                  <option key={num} value={String(num)}>
+                    {num}
+                  </option>
+                ))}
+              </select>
+            )}
             <Input type="datetime-local" placeholder="Buka pada" {...tryoutForm.register('openAt')} />
             <Input type="datetime-local" placeholder="Tutup pada" {...tryoutForm.register('closeAt')} />
             <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
@@ -690,6 +759,7 @@ export function AdminTryoutsPage() {
                       <p className="text-xs text-slate-500">
                         {tryout.subCategory.category.name} / {tryout.subCategory.name} - {tryout.totalQuestions} soal - {tryout.durationMinutes} menit
                       </p>
+                      {tryout.sessionOrder ? <p className="text-[11px] text-slate-500">Urutan sesi: {tryout.sessionOrder}</p> : null}
                       {tryout.isFree && <p className="text-[11px] font-semibold text-emerald-600">Gratis untuk member baru</p>}
                       {(tryout.openAt || tryout.closeAt) && (
                         <p className="text-[11px] text-slate-500">
