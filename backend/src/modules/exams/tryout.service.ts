@@ -5,6 +5,125 @@ import { assertMembershipFeature, consumeTryoutQuota, getActiveMembership } from
 import { ensureExamAccess as ensureExamBlockAccess } from './exam-block.service';
 import { assertExamAccess } from './exam-control.service';
 
+const DEFAULT_PSIKO_BREAK_SECONDS = 5;
+const PSIKO_BREAK_SETTING_KEY = 'psiko_tryout_break_seconds';
+
+function normalizeWord(value: string | null | undefined) {
+  return (value ?? '').trim().toLowerCase();
+}
+
+function matchesKeyword(name: string | null | undefined, slug: string | null | undefined, keyword: string) {
+  const key = normalizeWord(keyword);
+  return normalizeWord(name) === key || normalizeWord(slug) === key;
+}
+
+function isPolriPsikoTryout(tryout: {
+  sessionOrder: number | null;
+  subCategory: { name: string; slug: string; category: { name: string; slug: string } };
+}) {
+  return (
+    tryout.sessionOrder !== null &&
+    matchesKeyword(tryout.subCategory.category.name, tryout.subCategory.category.slug, 'polri') &&
+    matchesKeyword(tryout.subCategory.name, tryout.subCategory.slug, 'psiko')
+  );
+}
+
+async function getPsikoBreakSeconds() {
+  const setting = await prisma.siteSetting.findUnique({ where: { key: PSIKO_BREAK_SETTING_KEY } });
+  const parsed = Number(setting?.value ?? DEFAULT_PSIKO_BREAK_SECONDS);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return DEFAULT_PSIKO_BREAK_SECONDS;
+  }
+  return Math.floor(parsed);
+}
+
+async function getPsikoSequenceTryouts(subCategoryId: string) {
+  return prisma.tryout.findMany({
+    where: {
+      subCategoryId,
+      isPublished: true,
+      sessionOrder: { not: null },
+    },
+    orderBy: [{ sessionOrder: 'asc' }, { createdAt: 'asc' }],
+  });
+}
+
+async function resolveTryoutStartTarget(
+  userId: string,
+  tryout: {
+    id: string;
+    name: string;
+    slug: string;
+    isFree: boolean;
+    freeForNewMembers: boolean;
+    freePackageIds: unknown;
+    durationMinutes: number;
+    openAt: Date | null;
+    closeAt: Date | null;
+    sessionOrder: number | null;
+    subCategoryId: string;
+    subCategory: { name: string; slug: string; category: { name: string; slug: string } };
+  },
+) {
+  if (!isPolriPsikoTryout(tryout)) {
+    return tryout;
+  }
+
+  const sequence = await getPsikoSequenceTryouts(tryout.subCategoryId);
+  if (!sequence.length) {
+    return tryout;
+  }
+
+  const latestCompleted = await prisma.tryoutResult.findFirst({
+    where: {
+      userId,
+      completedAt: { not: null },
+      tryout: {
+        subCategoryId: tryout.subCategoryId,
+        isPublished: true,
+        sessionOrder: { not: null },
+      },
+    },
+    orderBy: { completedAt: 'desc' },
+    include: {
+      tryout: {
+        select: {
+          id: true,
+        },
+      },
+    },
+  });
+
+  const firstTryout = sequence[0];
+  if (!firstTryout) {
+    return tryout;
+  }
+
+  if (!latestCompleted) {
+    if (firstTryout.id === tryout.id) {
+      return tryout;
+    }
+    const target = await prisma.tryout.findUnique({ where: { id: firstTryout.id } });
+    return target ?? tryout;
+  }
+
+  const latestIndex = sequence.findIndex((item) => item.id === latestCompleted.tryout.id);
+  if (latestIndex === -1) {
+    if (firstTryout.id === tryout.id) {
+      return tryout;
+    }
+    const target = await prisma.tryout.findUnique({ where: { id: firstTryout.id } });
+    return target ?? tryout;
+  }
+
+  const targetSequence = sequence[latestIndex + 1] ?? firstTryout;
+  if (targetSequence.id === tryout.id) {
+    return tryout;
+  }
+  const target = await prisma.tryout.findUnique({ where: { id: targetSequence.id } });
+  return target ?? tryout;
+}
+
 export async function listTryouts() {
   return prisma.tryout.findMany({
     where: { isPublished: true },
@@ -100,20 +219,25 @@ async function ensureTryoutAccess(userId: string, tryout: { isFree: boolean; fre
 }
 
 export async function startTryout(slug: string, userId: string) {
-  const tryout = await prisma.tryout.findUnique({ where: { slug } });
+  const tryout = await prisma.tryout.findUnique({
+    where: { slug },
+    include: { subCategory: { include: { category: true } } },
+  });
   if (!tryout || !tryout.isPublished) {
     throw new HttpError('Tryout tidak ditemukan', 404);
   }
 
+  const targetTryout = await resolveTryoutStartTarget(userId, tryout);
+
   await ensureExamBlockAccess(userId, ExamBlockType.TRYOUT, 'STANDARD');
-  const membership = await ensureTryoutAccess(userId, tryout);
+  const membership = await ensureTryoutAccess(userId, targetTryout);
 
   const recentWindowMs = 2 * 60 * 1000;
   const recentThreshold = new Date(Date.now() - recentWindowMs);
   const recentActive = await prisma.tryoutResult.findFirst({
     where: {
       userId,
-      tryoutId: tryout.id,
+      tryoutId: targetTryout.id,
       completedAt: null,
       startedAt: { gte: recentThreshold },
     },
@@ -121,14 +245,19 @@ export async function startTryout(slug: string, userId: string) {
   });
 
   if (recentActive) {
-    return { resultId: recentActive.id, durationMinutes: tryout.durationMinutes };
+    return {
+      resultId: recentActive.id,
+      durationMinutes: targetTryout.durationMinutes,
+      startedSlug: targetTryout.slug,
+      sessionOrder: targetTryout.sessionOrder ?? null,
+    };
   }
 
   const now = new Date();
-  if (tryout.openAt && now < tryout.openAt) {
+  if (targetTryout.openAt && now < targetTryout.openAt) {
     throw new HttpError('Tryout belum dibuka sesuai jadwal.', 403);
   }
-  if (tryout.closeAt && now > tryout.closeAt) {
+  if (targetTryout.closeAt && now > targetTryout.closeAt) {
     throw new HttpError('Tryout telah ditutup.', 403);
   }
 
@@ -139,11 +268,16 @@ export async function startTryout(slug: string, userId: string) {
   const result = await prisma.tryoutResult.create({
     data: {
       userId,
-      tryoutId: tryout.id,
+      tryoutId: targetTryout.id,
     },
   });
 
-  return { resultId: result.id, durationMinutes: tryout.durationMinutes };
+  return {
+    resultId: result.id,
+    durationMinutes: targetTryout.durationMinutes,
+    startedSlug: targetTryout.slug,
+    sessionOrder: targetTryout.sessionOrder ?? null,
+  };
 }
 
 export async function startExamTryout(slug: string, userId: string) {
@@ -180,7 +314,10 @@ export async function submitTryout(
 ) {
   const tryout = await prisma.tryout.findUnique({
     where: { slug },
-    include: { questions: { include: { options: true } } },
+    include: {
+      subCategory: { include: { category: true } },
+      questions: { include: { options: true } },
+    },
   });
   if (!tryout || !tryout.isPublished) {
     throw new HttpError('Tryout tidak ditemukan', 404);
@@ -229,7 +366,30 @@ export async function submitTryout(
     }),
   ]);
 
-  return { resultId: result.id, score, correct, total: tryout.questions.length };
+  if (!isPolriPsikoTryout(tryout)) {
+    return { resultId: result.id, score, correct, total: tryout.questions.length };
+  }
+
+  const sequence = await getPsikoSequenceTryouts(tryout.subCategoryId);
+  const currentIndex = sequence.findIndex((item) => item.id === tryout.id);
+  const nextTryout = currentIndex >= 0 ? sequence[currentIndex + 1] : null;
+  if (!nextTryout) {
+    return { resultId: result.id, score, correct, total: tryout.questions.length };
+  }
+
+  const breakSeconds = await getPsikoBreakSeconds();
+  return {
+    resultId: result.id,
+    score,
+    correct,
+    total: tryout.questions.length,
+    nextSession: {
+      slug: nextTryout.slug,
+      name: nextTryout.name,
+      sessionOrder: nextTryout.sessionOrder,
+      breakSeconds,
+    },
+  };
 }
 
 export async function getTryoutHistory(userId: string) {

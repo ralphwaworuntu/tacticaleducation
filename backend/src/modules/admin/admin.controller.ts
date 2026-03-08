@@ -90,6 +90,7 @@ function withOrigin(req: Request, path: string | null) {
 const siteContactKeys = ['company_email', 'whatsapp_primary', 'whatsapp_consult', 'company_address'] as const;
 const memberBackgroundKeys = ['member_area_background_enabled', 'member_area_background_image'] as const;
 const cermatConfigKeys = ['cermat_question_count', 'cermat_duration_seconds', 'cermat_total_sessions', 'cermat_break_seconds'] as const;
+const psikoTryoutConfigKeys = ['psiko_tryout_break_seconds'] as const;
 const hiddenAdminEmails = ['developer@tacticaleducation.id'];
 const optionLetters = ['a', 'b', 'c', 'd', 'e'] as const;
 const questionExportHeaders = [
@@ -225,6 +226,16 @@ function buildCermatConfig(settings: Array<{ key: string; value: string }>) {
     durationSeconds: Number(map.cermat_duration_seconds || 60),
     totalSessions: Number(map.cermat_total_sessions || 10),
     breakSeconds: Number(map.cermat_break_seconds || 5),
+  };
+}
+
+function buildPsikoTryoutConfig(settings: Array<{ key: string; value: string }>) {
+  const map = settings.reduce<Record<string, string>>((acc, setting) => {
+    acc[setting.key] = setting.value;
+    return acc;
+  }, {});
+  return {
+    breakSeconds: Number(map.psiko_tryout_break_seconds || 5),
   };
 }
 
@@ -2940,6 +2951,29 @@ export async function updateCermatConfigAdminController(req: Request, res: Respo
       }),
     ]);
     res.json({ status: 'success', data: { questionCount, durationSeconds, totalSessions, breakSeconds } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getPsikoTryoutConfigAdminController(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const settings = await prisma.siteSetting.findMany({ where: { key: { in: [...psikoTryoutConfigKeys] } } });
+    res.json({ status: 'success', data: buildPsikoTryoutConfig(settings) });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function updatePsikoTryoutConfigAdminController(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { breakSeconds } = req.body as { breakSeconds: number };
+    await prisma.siteSetting.upsert({
+      where: { key: 'psiko_tryout_break_seconds' },
+      update: { value: String(breakSeconds) },
+      create: { key: 'psiko_tryout_break_seconds', value: String(breakSeconds) },
+    });
+    res.json({ status: 'success', data: { breakSeconds } });
   } catch (error) {
     next(error);
   }

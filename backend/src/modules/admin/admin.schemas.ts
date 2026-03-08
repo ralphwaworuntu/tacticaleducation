@@ -401,3 +401,9 @@ export const cermatConfigSchema = z.object({
     breakSeconds: z.number().int().min(0).max(30),
   }),
 });
+
+export const psikoTryoutConfigSchema = z.object({
+  body: z.object({
+    breakSeconds: z.number().int().min(0).max(300),
+  }),
+});

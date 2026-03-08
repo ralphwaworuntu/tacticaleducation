@@ -25,6 +25,26 @@ type TryoutSession = {
   durationMinutes: number;
 };
 
+type StartTryoutResponse = {
+  resultId: string;
+  durationMinutes: number;
+  startedSlug?: string;
+  sessionOrder?: number | null;
+};
+
+type SubmitTryoutResponse = {
+  resultId: string;
+  score: number;
+  correct: number;
+  total: number;
+  nextSession?: {
+    slug: string;
+    name: string;
+    sessionOrder: number | null;
+    breakSeconds: number;
+  };
+};
+
 type ApiErrorResponse = {
   message?: string;
   details?: { code?: string };
@@ -55,6 +75,9 @@ export function TryoutPage() {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [finishConfirmOpen, setFinishConfirmOpen] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [isPsikoBreaking, setIsPsikoBreaking] = useState(false);
+  const [psikoBreakLeft, setPsikoBreakLeft] = useState(0);
+  const [pendingPsikoTryout, setPendingPsikoTryout] = useState<Tryout | null>(null);
   const tryoutBlock = blocks?.find((block) => block.type === 'TRYOUT');
   const tryoutBlockEnabled = blockConfig?.tryoutEnabled ?? true;
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
@@ -65,6 +88,7 @@ export function TryoutPage() {
   const endTimeRef = useRef<number | null>(null);
   const timerRef = useRef<number | null>(null);
   const autoSubmitRef = useRef(false);
+  const isStartingFromPsikoBreakRef = useRef(false);
 
   const categoryGroups = useMemo(() => {
     if (!tryouts) return [];
@@ -91,6 +115,42 @@ export function TryoutPage() {
     });
     return Array.from(map.values());
   }, [tryouts]);
+
+  const normalizeWord = useCallback((value?: string | null) => (value ?? '').trim().toLowerCase(), []);
+  const matchesKeyword = useCallback(
+    (name?: string | null, slug?: string | null, keyword?: string) => {
+      const key = normalizeWord(keyword);
+      return normalizeWord(name) === key || normalizeWord(slug) === key;
+    },
+    [normalizeWord],
+  );
+  const isPolriPsikoTryout = useCallback(
+    (item: Tryout) =>
+      item.sessionOrder !== null &&
+      item.sessionOrder !== undefined &&
+      matchesKeyword(item.subCategory.category.name, item.subCategory.category.slug, 'polri') &&
+      matchesKeyword(item.subCategory.name, item.subCategory.slug, 'psiko'),
+    [matchesKeyword],
+  );
+
+  const getPsikoSequence = useCallback(
+    (subCategoryId: string) =>
+      (tryouts ?? [])
+        .filter((item) => item.subCategory.id === subCategoryId && isPolriPsikoTryout(item))
+        .sort((a, b) => (a.sessionOrder ?? 0) - (b.sessionOrder ?? 0)),
+    [isPolriPsikoTryout, tryouts],
+  );
+
+  const resolveInitialPsikoTryout = useCallback(
+    (item: Tryout) => {
+      if (!isPolriPsikoTryout(item)) {
+        return item;
+      }
+      const sequence = getPsikoSequence(item.subCategory.id);
+      return sequence[0] ?? item;
+    },
+    [getPsikoSequence, isPolriPsikoTryout],
+  );
 
   const resolvedCategoryId = activeCategoryId ?? categoryGroups[0]?.id ?? null;
 
@@ -137,6 +197,10 @@ export function TryoutPage() {
         endTimeRef.current = null;
         setTimeLeft(null);
         autoSubmitRef.current = false;
+        setIsPsikoBreaking(false);
+        setPsikoBreakLeft(0);
+        setPendingPsikoTryout(null);
+        isStartingFromPsikoBreakRef.current = false;
         return null;
       });
     },
@@ -171,16 +235,32 @@ export function TryoutPage() {
 
   const startMutation = useMutation({
     mutationFn: async (tryout: Tryout) => {
-      const start = await apiPost<{ resultId: string; durationMinutes: number }>(`/exams/tryouts/${tryout.slug}/start`);
-      const detail = await apiGet<TryoutDetail>(`/exams/tryouts/${tryout.slug}`);
-      return { detail, resultId: start.resultId, durationMinutes: start.durationMinutes } satisfies TryoutSession;
+      const start = await apiPost<StartTryoutResponse>(`/exams/tryouts/${tryout.slug}/start`);
+      const startedSlug = start.startedSlug ?? tryout.slug;
+      const detail = await apiGet<TryoutDetail>(`/exams/tryouts/${startedSlug}`);
+      return {
+        detail,
+        resultId: start.resultId,
+        durationMinutes: start.durationMinutes,
+        requestedSlug: tryout.slug,
+      };
     },
     onSuccess: (payload) => {
-      setSession(payload);
+      setSession({
+        detail: payload.detail,
+        resultId: payload.resultId,
+        durationMinutes: payload.durationMinutes,
+      });
       setAnswers({});
       setResult(null);
       setCurrentQuestionIndex(0);
       autoSubmitRef.current = false;
+      setIsPsikoBreaking(false);
+      setPsikoBreakLeft(0);
+      setPendingPsikoTryout(null);
+      if (payload.requestedSlug !== payload.detail.slug) {
+        toast.info('PSIKO dimulai dari sesi urutan paling awal yang tersedia.');
+      }
       if (payload.durationMinutes > 0) {
         endTimeRef.current = Date.now() + payload.durationMinutes * 60 * 1000;
         setTimeLeft(Math.ceil(payload.durationMinutes * 60));
@@ -188,9 +268,15 @@ export function TryoutPage() {
         endTimeRef.current = null;
         setTimeLeft(null);
       }
-      toast.success('Tryout dimulai, selamat mengerjakan!');
+      if (isStartingFromPsikoBreakRef.current) {
+        toast.success('Lanjut ke sesi PSIKO berikutnya.');
+      } else {
+        toast.success('Tryout dimulai, selamat mengerjakan!');
+      }
+      isStartingFromPsikoBreakRef.current = false;
     },
     onError: (error) => {
+      isStartingFromPsikoBreakRef.current = false;
       const apiError = error as AxiosError<ApiErrorResponse>;
       const serverMessage = apiError.response?.data?.message?.trim();
       const code = apiError.response?.data?.details?.code;
@@ -209,15 +295,32 @@ export function TryoutPage() {
     mutationFn: () => {
       if (!session) throw new Error('No session');
       const { detail, resultId } = session;
-      const payload = Object.entries(answers)
-        .filter(([, optionId]) => optionId)
-        .map(([questionId, optionId]) => ({ questionId, optionId }));
-      return apiPost<{ resultId: string; score: number; correct: number; total: number }>(`/exams/tryouts/${detail.slug}/submit`, {
+      const payload = detail.questions.map((question) => ({
+        questionId: question.id,
+        optionId: answers[question.id],
+      }));
+      return apiPost<SubmitTryoutResponse>(`/exams/tryouts/${detail.slug}/submit`, {
         resultId,
         answers: payload,
       });
     },
     onSuccess: (payload) => {
+      if (payload.nextSession) {
+        const nextTryout = tryouts?.find((item) => item.slug === payload.nextSession?.slug) ?? null;
+        if (nextTryout) {
+          setResult(null);
+          setSession(null);
+          setAnswers({});
+          setCurrentQuestionIndex(0);
+          endTimeRef.current = null;
+          setTimeLeft(null);
+          setPendingPsikoTryout(nextTryout);
+          setPsikoBreakLeft(Math.max(0, payload.nextSession.breakSeconds ?? 0));
+          setIsPsikoBreaking(true);
+          toast.success(`Sesi ${payload.nextSession.sessionOrder} siap dimulai setelah jeda.`);
+          return;
+        }
+      }
       setResult(payload);
       setSession(null);
       setCurrentQuestionIndex(0);
@@ -266,6 +369,45 @@ export function TryoutPage() {
       }
     };
   }, [session, submitMutation]);
+
+  useEffect(() => {
+    if (!isPsikoBreaking || !pendingPsikoTryout || psikoBreakLeft <= 0) {
+      return undefined;
+    }
+    const timer = window.setInterval(() => {
+      setPsikoBreakLeft((previous) => (previous <= 1 ? 0 : previous - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [isPsikoBreaking, pendingPsikoTryout, psikoBreakLeft]);
+
+  useEffect(() => {
+    if (!isPsikoBreaking || !pendingPsikoTryout || psikoBreakLeft > 0) {
+      return;
+    }
+    const beginNextSession = async () => {
+      if (fullscreenSupported && !document.fullscreenElement) {
+        try {
+          await requestFullscreen();
+        } catch {
+          toast.error('Gagal masuk fullscreen untuk sesi PSIKO berikutnya.');
+          setIsPsikoBreaking(false);
+          setPsikoBreakLeft(0);
+          setPendingPsikoTryout(null);
+          navigate(returnToRef.current ?? '/app/latihan/tryout');
+          return;
+        }
+      }
+      isStartingFromPsikoBreakRef.current = true;
+      startMutation.mutate(pendingPsikoTryout, {
+        onSettled: () => {
+          setIsPsikoBreaking(false);
+          setPsikoBreakLeft(0);
+          setPendingPsikoTryout(null);
+        },
+      });
+    };
+    void beginNextSession();
+  }, [fullscreenSupported, isPsikoBreaking, navigate, pendingPsikoTryout, psikoBreakLeft, requestFullscreen, startMutation]);
 
   const handleForceFinish = useCallback(() => {
     if (!session) {
@@ -322,7 +464,8 @@ export function TryoutPage() {
 
   const handleCountdownRequest = useCallback(
     async (item: Tryout, skipCountdown = false) => {
-      if (!hasActiveMembership && !item.isFree) {
+      const targetTryout = resolveInitialPsikoTryout(item);
+      if (!hasActiveMembership && !targetTryout.isFree) {
         toast.error('Aktifkan paket untuk mulai tryout.');
         return;
       }
@@ -331,14 +474,14 @@ export function TryoutPage() {
         return;
       }
       countdownStartRef.current = false;
-      setPendingTryout(item);
+      setPendingTryout(targetTryout);
       skipCountdownRef.current = skipCountdown;
       if (fullscreenSupported && !document.fullscreenElement) {
         setFullscreenGateOpen(true);
         return;
       }
       if (skipCountdown) {
-        startMutation.mutate(item, {
+        startMutation.mutate(targetTryout, {
           onSettled: () => {
             countdownStartRef.current = false;
             setPendingTryout(null);
@@ -349,7 +492,7 @@ export function TryoutPage() {
       setCountdownToken((prev) => prev + 1);
       setCountdownOpen(true);
     },
-    [fullscreenSupported, hasActiveMembership, startMutation, tryoutBlock],
+    [fullscreenSupported, hasActiveMembership, resolveInitialPsikoTryout, startMutation, tryoutBlock],
   );
 
   useEffect(() => {
@@ -807,6 +950,19 @@ export function TryoutPage() {
             </Button>
           )}
         </section>
+      )}
+
+      {isPsikoBreaking && pendingPsikoTryout && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-slate-900/80 px-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-2xl">
+            <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Jeda Sesi PSIKO</p>
+            <h3 className="mt-2 text-xl font-semibold text-slate-900">Persiapan Sesi Berikutnya</h3>
+            <p className="mt-3 text-4xl font-bold text-brand-600">{psikoBreakLeft}s</p>
+            <p className="mt-2 text-sm text-slate-500">
+              Setelah jeda selesai, sistem akan langsung memulai {pendingPsikoTryout.name}.
+            </p>
+          </div>
+        </div>
       )}
 
     <ExamCountdownModal

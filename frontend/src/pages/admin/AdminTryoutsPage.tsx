@@ -30,6 +30,9 @@ type TryoutSubCategory = {
 
 type TryoutOption = { id: string; label: string; isCorrect?: boolean };
 type TryoutQuestion = { id: string; prompt: string; order: number; options: TryoutOption[] };
+type PsikoTryoutConfig = {
+  breakSeconds: number;
+};
 type AdminTryout = {
   id: string;
   name: string;
@@ -78,6 +81,10 @@ export function AdminTryoutsPage() {
     queryKey: ['admin-tryouts'],
     queryFn: () => apiGet<AdminTryout[]>('/admin/tryouts'),
   });
+  const { data: psikoConfigData } = useQuery({
+    queryKey: ['admin-psiko-tryout-config'],
+    queryFn: () => apiGet<PsikoTryoutConfig>('/admin/tryouts/psiko-config'),
+  });
 
   const categoryForm = useForm<{ name: string; slug: string }>({
     defaultValues: { name: '', slug: '' },
@@ -93,6 +100,9 @@ export function AdminTryoutsPage() {
 
   const tryoutForm = useForm<typeof defaultTryoutValues>({
     defaultValues: defaultTryoutValues,
+  });
+  const psikoConfigForm = useForm<PsikoTryoutConfig>({
+    defaultValues: { breakSeconds: 5 },
   });
 
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -239,6 +249,15 @@ export function AdminTryoutsPage() {
     onSettled: () => setTogglingTryoutId(null),
   });
 
+  const savePsikoConfig = useMutation({
+    mutationFn: (values: PsikoTryoutConfig) => apiPut('/admin/tryouts/psiko-config', values),
+    onSuccess: () => {
+      toast.success('Durasi jeda sesi PSIKO diperbarui');
+      queryClient.invalidateQueries({ queryKey: ['admin-psiko-tryout-config'] });
+    },
+    onError: () => toast.error('Gagal memperbarui durasi jeda sesi PSIKO'),
+  });
+
   const onSubmitCategory = categoryForm.handleSubmit((values) => saveCategory.mutate(values));
   const onSubmitSubCategory = subCategoryForm.handleSubmit((values) => {
     if (!values.categoryId) {
@@ -294,6 +313,7 @@ export function AdminTryoutsPage() {
       createTryout.mutate(formData);
     }
   });
+  const onSubmitPsikoConfig = psikoConfigForm.handleSubmit((values) => savePsikoConfig.mutate(values));
 
   const handleCoverChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -399,6 +419,12 @@ export function AdminTryoutsPage() {
     }
   }, [isSessionOrderRequired, selectedSessionOrder, availableSessionOrders, tryoutForm]);
 
+  useEffect(() => {
+    if (psikoConfigData) {
+      psikoConfigForm.reset(psikoConfigData);
+    }
+  }, [psikoConfigData, psikoConfigForm]);
+
   const handleExport = async () => {
     setIsExporting(true);
     try {
@@ -468,6 +494,25 @@ export function AdminTryoutsPage() {
           </Button>
         </div>
       </div>
+
+      <Card>
+        <CardContent className="space-y-4 p-6">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-slate-500">Konfigurasi PSIKO</p>
+            <h3 className="text-xl font-semibold text-slate-900">Durasi Jeda Antar Sesi</h3>
+            <p className="text-xs text-slate-500">Berlaku untuk alur tryout POLRI / PSIKO (urutan sesi 1, 2, 3, dst).</p>
+          </div>
+          <form className="flex flex-wrap items-end gap-3" onSubmit={onSubmitPsikoConfig}>
+            <div className="w-full max-w-xs">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Jeda (detik)</p>
+              <Input type="number" min={0} max={300} {...psikoConfigForm.register('breakSeconds', { valueAsNumber: true })} />
+            </div>
+            <Button type="submit" disabled={savePsikoConfig.isPending}>
+              {savePsikoConfig.isPending ? 'Menyimpan...' : 'Simpan Pengaturan Jeda'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="space-y-4 p-6">

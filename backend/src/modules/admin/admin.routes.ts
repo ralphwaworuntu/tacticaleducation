@@ -104,6 +104,7 @@ import {
   updateExamBlockConfigAdminController,
   createWelcomeModalAdminController,
   getCermatConfigAdminController,
+  getPsikoTryoutConfigAdminController,
   listExamBlocksAdminController,
   listHeroSlidesController,
   listMemberSlidesController,
@@ -115,6 +116,7 @@ import {
   updateWelcomeModalAdminController,
   deleteWelcomeModalAdminController,
   updateCermatConfigAdminController,
+  updatePsikoTryoutConfigAdminController,
   uploadHeroImageController,
   adminMonitoringUsersController,
   adminMonitoringUserDetailController,
@@ -171,6 +173,7 @@ import {
   examControlSchema,
   examBlockConfigSchema,
   cermatConfigSchema,
+  psikoTryoutConfigSchema,
   createMemberSlideSchema,
   updateMemberSlideSchema,
   grantTryoutQuotaSchema,
@@ -275,6 +278,8 @@ adminRouter.put(
 adminRouter.delete('/tryouts/sub-categories/:id', deleteTryoutSubCategoryController);
 
 adminRouter.get('/tryouts', listTryoutsController);
+adminRouter.get('/tryouts/psiko-config', getPsikoTryoutConfigAdminController);
+adminRouter.put('/tryouts/psiko-config', validateResource(psikoTryoutConfigSchema), updatePsikoTryoutConfigAdminController);
 adminRouter.get('/tryouts/export', exportTryoutManagementController);
 adminRouter.get('/tryouts/questions/export', exportTryoutQuestionsCsvAdminController);
 adminRouter.post(
