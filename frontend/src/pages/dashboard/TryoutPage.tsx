@@ -79,6 +79,7 @@ export function TryoutPage() {
   const [isPsikoBreaking, setIsPsikoBreaking] = useState(false);
   const [psikoBreakLeft, setPsikoBreakLeft] = useState(0);
   const [pendingPsikoTryout, setPendingPsikoTryout] = useState<Tryout | null>(null);
+  const [isPreparingNextPsikoSession, setIsPreparingNextPsikoSession] = useState(false);
   const tryoutBlock = blocks?.find((block) => block.type === 'TRYOUT');
   const tryoutBlockEnabled = blockConfig?.tryoutEnabled ?? true;
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
@@ -90,6 +91,7 @@ export function TryoutPage() {
   const timerRef = useRef<number | null>(null);
   const autoSubmitRef = useRef(false);
   const isStartingFromPsikoBreakRef = useRef(false);
+  const psikoAutoStartLockedRef = useRef(false);
 
   const categoryGroups = useMemo(() => {
     if (!tryouts) return [];
@@ -180,6 +182,8 @@ export function TryoutPage() {
         setIsPsikoBreaking(false);
         setPsikoBreakLeft(0);
         setPendingPsikoTryout(null);
+        setIsPreparingNextPsikoSession(false);
+        psikoAutoStartLockedRef.current = false;
         isStartingFromPsikoBreakRef.current = false;
         return null;
       });
@@ -238,6 +242,8 @@ export function TryoutPage() {
       setIsPsikoBreaking(false);
       setPsikoBreakLeft(0);
       setPendingPsikoTryout(null);
+      setIsPreparingNextPsikoSession(false);
+      psikoAutoStartLockedRef.current = false;
       if (payload.requestedSlug !== payload.detail.slug) {
         toast.info('PSIKO dimulai dari sesi urutan paling awal yang tersedia.');
       }
@@ -249,7 +255,7 @@ export function TryoutPage() {
         setTimeLeft(null);
       }
       if (isStartingFromPsikoBreakRef.current) {
-        toast.success('Lanjut ke sesi PSIKO berikutnya.');
+        // Auto transition antar sesi PSIKO: tidak tampilkan toast agar pengalaman tetap mulus.
       } else {
         toast.success('Tryout dimulai, selamat mengerjakan!');
       }
@@ -257,6 +263,8 @@ export function TryoutPage() {
     },
     onError: (error) => {
       isStartingFromPsikoBreakRef.current = false;
+      setIsPreparingNextPsikoSession(false);
+      psikoAutoStartLockedRef.current = false;
       const apiError = error as AxiosError<ApiErrorResponse>;
       const serverMessage = apiError.response?.data?.message?.trim();
       const code = apiError.response?.data?.details?.code;
@@ -297,7 +305,6 @@ export function TryoutPage() {
           setPendingPsikoTryout(nextTryout);
           setPsikoBreakLeft(Math.max(0, payload.nextSession.breakSeconds ?? 0));
           setIsPsikoBreaking(true);
-          toast.success(`Sesi ${payload.nextSession.sessionOrder} siap dimulai setelah jeda.`);
           return;
         }
       }
@@ -364,25 +371,36 @@ export function TryoutPage() {
     if (!isPsikoBreaking || !pendingPsikoTryout || psikoBreakLeft > 0) {
       return;
     }
+    if (psikoAutoStartLockedRef.current) {
+      return;
+    }
+    psikoAutoStartLockedRef.current = true;
+    const nextTryout = pendingPsikoTryout;
+    if (!nextTryout) {
+      psikoAutoStartLockedRef.current = false;
+      return;
+    }
+    setIsPsikoBreaking(false);
+    setPsikoBreakLeft(0);
+    setPendingPsikoTryout(null);
+    setIsPreparingNextPsikoSession(true);
     const beginNextSession = async () => {
       if (fullscreenSupported && !document.fullscreenElement) {
         try {
           await requestFullscreen();
         } catch {
           toast.error('Gagal masuk fullscreen untuk sesi PSIKO berikutnya.');
-          setIsPsikoBreaking(false);
-          setPsikoBreakLeft(0);
-          setPendingPsikoTryout(null);
+          setIsPreparingNextPsikoSession(false);
+          psikoAutoStartLockedRef.current = false;
           navigate(returnToRef.current ?? '/app/latihan/tryout');
           return;
         }
       }
       isStartingFromPsikoBreakRef.current = true;
-      startMutation.mutate(pendingPsikoTryout, {
+      startMutation.mutate(nextTryout, {
         onSettled: () => {
-          setIsPsikoBreaking(false);
-          setPsikoBreakLeft(0);
-          setPendingPsikoTryout(null);
+          setIsPreparingNextPsikoSession(false);
+          psikoAutoStartLockedRef.current = false;
         },
       });
     };
@@ -953,6 +971,16 @@ export function TryoutPage() {
             <p className="mt-2 text-sm text-slate-500">
               Setelah jeda selesai, sistem akan langsung memulai {pendingPsikoTryout.name}.
             </p>
+          </div>
+        </div>
+      )}
+      {isPreparingNextPsikoSession && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-slate-900/80 px-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-2xl">
+            <p className="text-xs uppercase tracking-[0.4em] text-slate-500">PSIKO</p>
+            <h3 className="mt-2 text-xl font-semibold text-slate-900">Memuat Sesi Berikutnya</h3>
+            <p className="mt-2 text-sm text-slate-500">Mohon tunggu, soal sedang disiapkan.</p>
+            <div className="mx-auto mt-4 h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
           </div>
         </div>
       )}
