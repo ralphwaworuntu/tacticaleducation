@@ -5,6 +5,7 @@ import {
   getTryoutDetail,
   getTryoutInfo,
   getTryoutHistory,
+  getTryoutPackageReview,
   getTryoutReview,
   listTryouts,
   startExamTryout,
@@ -109,6 +110,19 @@ export async function tryoutReviewController(req: Request, res: Response, next: 
       throw new HttpError('Result id is required', 400);
     }
     const data = await getTryoutReview(resultId, req.user!.id);
+    res.json({ status: 'success', data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function tryoutPackageReviewController(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { resultId } = req.params;
+    if (!resultId) {
+      throw new HttpError('Result id is required', 400);
+    }
+    const data = await getTryoutPackageReview(resultId, req.user!.id);
     res.json({ status: 'success', data });
   } catch (error) {
     next(error);

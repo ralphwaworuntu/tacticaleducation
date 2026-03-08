@@ -32,6 +32,7 @@ type TryoutOption = { id: string; label: string; isCorrect?: boolean };
 type TryoutQuestion = { id: string; prompt: string; order: number; options: TryoutOption[] };
 type PsikoTryoutConfig = {
   breakSeconds: number;
+  cermatMode: 'NUMBER' | 'LETTER';
 };
 type AdminTryout = {
   id: string;
@@ -102,7 +103,7 @@ export function AdminTryoutsPage() {
     defaultValues: defaultTryoutValues,
   });
   const psikoConfigForm = useForm<PsikoTryoutConfig>({
-    defaultValues: { breakSeconds: 5 },
+    defaultValues: { breakSeconds: 5, cermatMode: 'NUMBER' },
   });
 
   const [coverFile, setCoverFile] = useState<File | null>(null);
@@ -520,6 +521,13 @@ export function AdminTryoutsPage() {
             <div className="w-full max-w-xs">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Jeda (detik)</p>
               <Input type="number" min={0} max={300} {...psikoConfigForm.register('breakSeconds', { valueAsNumber: true })} />
+            </div>
+            <div className="w-full max-w-xs">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Pilih Tes Kecermatan</p>
+              <select className="w-full rounded-2xl border border-slate-200 px-4 py-2 text-sm" {...psikoConfigForm.register('cermatMode')}>
+                <option value="NUMBER">Angka Hilang</option>
+                <option value="LETTER">Huruf Hilang</option>
+              </select>
             </div>
             <Button type="submit" disabled={savePsikoConfig.isPending}>
               {savePsikoConfig.isPending ? 'Menyimpan...' : 'Simpan Pengaturan Jeda'}

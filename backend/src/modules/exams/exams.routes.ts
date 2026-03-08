@@ -33,6 +33,7 @@ import {
   tryoutHistoryController,
   tryoutListController,
   tryoutReviewController,
+  tryoutPackageReviewController,
   tryoutStartController,
   tryoutSubmitController,
 } from './exams.controller';
@@ -60,6 +61,7 @@ examsRouter.post('/tryouts/:slug/start', validateResource(startTryoutSchema), tr
 examsRouter.post('/tryouts/:slug/submit', validateResource(submitTryoutSchema), tryoutSubmitController);
 examsRouter.get('/tryouts-history', tryoutHistoryController);
 examsRouter.get('/tryouts/results/:resultId/review', validateResource(reviewResultSchema), tryoutReviewController);
+examsRouter.get('/tryouts/results/:resultId/review-package', validateResource(reviewResultSchema), tryoutPackageReviewController);
 
 examsRouter.get('/practice/categories', practiceCategoriesController);
 examsRouter.get('/practice/:slug/info', practiceInfoController);

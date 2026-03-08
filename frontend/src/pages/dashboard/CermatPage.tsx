@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { apiPost } from '@/lib/api';
@@ -55,6 +55,7 @@ const TEST_VARIANTS: Array<{ mode: CermatMode; title: string; description: strin
 
 export function CermatPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const membership = useMembershipStatus();
   const [session, setSession] = useState<CermatSession | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -71,6 +72,7 @@ export function CermatPage() {
   const [countdownOpen, setCountdownOpen] = useState(false);
   const [countdownToken, setCountdownToken] = useState(0);
   const autoSubmitRef = useRef<string>('');
+  const autoStartOnceRef = useRef(false);
   const answersRef = useRef<Record<number, string | null>>({});
   const timerRef = useRef<number | null>(null);
   const endTimeRef = useRef<number | null>(null);
@@ -80,6 +82,16 @@ export function CermatPage() {
   });
 
   const currentQuestion = useMemo(() => session?.questions[currentIndex], [session, currentIndex]);
+  const forcedMode = useMemo(() => {
+    const mode = new URLSearchParams(location.search).get('mode');
+    if (mode === 'LETTER' || mode === 'NUMBER') return mode as CermatMode;
+    return null;
+  }, [location.search]);
+  const autoStartRequested = useMemo(() => new URLSearchParams(location.search).get('autoStart') === '1', [location.search]);
+
+  useEffect(() => {
+    autoStartOnceRef.current = false;
+  }, [forcedMode, autoStartRequested]);
 
   const submitMutation = useMutation({
     mutationFn: ({ sessionId, answerMap }: { sessionId: string; answerMap: Record<number, string | null> }) => {
@@ -250,6 +262,39 @@ export function CermatPage() {
     return () => setViolationHandler(null);
   }, [handleForceStop, setViolationHandler]);
 
+  useEffect(() => {
+    if (!forcedMode || !autoStartRequested) return;
+    if (autoStartOnceRef.current) return;
+    if (!membership.data?.isActive || membership.data?.allowCermat === false) return;
+    if (session || pendingSession || countdownOpen || startMutation.isPending) return;
+    autoStartOnceRef.current = true;
+
+    const startForcedMode = async () => {
+      if (fullscreenSupported) {
+        try {
+          await requestFullscreen();
+        } catch {
+          toast.error('Izinkan mode layar penuh untuk mulai tes.');
+          return;
+        }
+      }
+      startMutation.mutate(forcedMode);
+    };
+
+    void startForcedMode();
+  }, [
+    autoStartRequested,
+    countdownOpen,
+    forcedMode,
+    fullscreenSupported,
+    membership.data?.allowCermat,
+    membership.data?.isActive,
+    pendingSession,
+    requestFullscreen,
+    session,
+    startMutation,
+  ]);
+
   if (membership.isLoading) {
     return <Skeleton className="h-72" />;
   }
@@ -278,7 +323,7 @@ export function CermatPage() {
           Lihat Riwayat
         </Button>
       </div>
-      {TEST_VARIANTS.map((variant) => {
+      {(forcedMode ? TEST_VARIANTS.filter((item) => item.mode === forcedMode) : TEST_VARIANTS).map((variant) => {
         const isLoading = startMutation.isPending && pendingMode === variant.mode;
         return (
           <div

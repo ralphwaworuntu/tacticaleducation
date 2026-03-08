@@ -7,6 +7,8 @@ import { assertExamAccess } from './exam-control.service';
 
 const DEFAULT_PSIKO_BREAK_SECONDS = 5;
 const PSIKO_BREAK_SETTING_KEY = 'psiko_tryout_break_seconds';
+const DEFAULT_PSIKO_CERMAT_MODE = 'NUMBER' as const;
+const PSIKO_CERMAT_MODE_SETTING_KEY = 'psiko_tryout_cermat_mode';
 
 function normalizeWord(value: string | null | undefined) {
   return (value ?? '').trim().toLowerCase();
@@ -35,6 +37,11 @@ async function getPsikoBreakSeconds() {
     return DEFAULT_PSIKO_BREAK_SECONDS;
   }
   return Math.floor(parsed);
+}
+
+async function getPsikoCermatMode() {
+  const setting = await prisma.siteSetting.findUnique({ where: { key: PSIKO_CERMAT_MODE_SETTING_KEY } });
+  return setting?.value === 'LETTER' ? 'LETTER' : DEFAULT_PSIKO_CERMAT_MODE;
 }
 
 async function getPsikoSequenceTryouts(subCategoryId: string) {
@@ -374,7 +381,14 @@ export async function submitTryout(
   const currentIndex = sequence.findIndex((item) => item.id === tryout.id);
   const nextTryout = currentIndex >= 0 ? sequence[currentIndex + 1] : null;
   if (!nextTryout) {
-    return { resultId: result.id, score, correct, total: tryout.questions.length };
+    const nextCermatMode = await getPsikoCermatMode();
+    return {
+      resultId: result.id,
+      score,
+      correct,
+      total: tryout.questions.length,
+      nextCermatMode,
+    };
   }
 
   const breakSeconds = await getPsikoBreakSeconds();
@@ -418,6 +432,14 @@ export async function getTryoutReview(resultId: string, userId: string) {
           name: true,
           slug: true,
           isFree: true,
+          sessionOrder: true,
+          subCategory: {
+            select: {
+              name: true,
+              slug: true,
+              category: { select: { name: true, slug: true } },
+            },
+          },
           totalQuestions: true,
           durationMinutes: true,
           questions: {
@@ -464,11 +486,236 @@ export async function getTryoutReview(resultId: string, userId: string) {
       name: result.tryout.name,
       slug: result.tryout.slug,
       isFree: result.tryout.isFree,
+      sessionOrder: result.tryout.sessionOrder,
+      isPsikoSession: isPolriPsikoTryout({
+        sessionOrder: result.tryout.sessionOrder,
+        subCategory: {
+          name: result.tryout.subCategory.name,
+          slug: result.tryout.subCategory.slug,
+          category: {
+            name: result.tryout.subCategory.category.name,
+            slug: result.tryout.subCategory.category.slug,
+          },
+        },
+      }),
       totalQuestions: result.tryout.totalQuestions,
       durationMinutes: result.tryout.durationMinutes,
     },
     score: result.score ?? 0,
     completedAt: result.completedAt ?? result.createdAt,
     questions,
+  };
+}
+
+export async function getTryoutPackageReview(resultId: string, userId: string) {
+  const anchorResult = await prisma.tryoutResult.findFirst({
+    where: { id: resultId, userId },
+    include: {
+      tryout: {
+        select: {
+          id: true,
+          isFree: true,
+          freeForNewMembers: true,
+          freePackageIds: true,
+          sessionOrder: true,
+          subCategory: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              category: { select: { name: true, slug: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!anchorResult) {
+    throw new HttpError('Hasil tryout tidak ditemukan.', 404);
+  }
+
+  await ensureTryoutAccess(userId, {
+    isFree: anchorResult.tryout.isFree,
+    freeForNewMembers: anchorResult.tryout.freeForNewMembers,
+    freePackageIds: anchorResult.tryout.freePackageIds,
+  });
+
+  const isPsiko = isPolriPsikoTryout({
+    sessionOrder: anchorResult.tryout.sessionOrder,
+    subCategory: {
+      name: anchorResult.tryout.subCategory.name,
+      slug: anchorResult.tryout.subCategory.slug,
+      category: {
+        name: anchorResult.tryout.subCategory.category.name,
+        slug: anchorResult.tryout.subCategory.category.slug,
+      },
+    },
+  });
+
+  if (!isPsiko) {
+    throw new HttpError('Tryout ini bukan paket POLRI / PSIKO.', 400);
+  }
+
+  const sequence = await prisma.tryout.findMany({
+    where: {
+      subCategoryId: anchorResult.tryout.subCategory.id,
+      isPublished: true,
+      sessionOrder: { not: null },
+    },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      sessionOrder: true,
+      totalQuestions: true,
+      durationMinutes: true,
+    },
+    orderBy: [{ sessionOrder: 'asc' }, { createdAt: 'asc' }],
+  });
+
+  if (!sequence.length) {
+    throw new HttpError('Data paket PSIKO tidak ditemukan.', 404);
+  }
+
+  const recentCompleted = await prisma.tryoutResult.findMany({
+    where: {
+      userId,
+      completedAt: { not: null },
+      tryoutId: { in: sequence.map((item) => item.id) },
+    },
+    include: {
+      tryout: {
+        select: { sessionOrder: true },
+      },
+    },
+    orderBy: { completedAt: 'desc' },
+    take: Math.max(sequence.length * 5, 20),
+  });
+
+  const resultIdBySessionOrder = new Map<number, string>();
+  recentCompleted.forEach((item) => {
+    const order = item.tryout.sessionOrder;
+    if (!order) return;
+    if (!resultIdBySessionOrder.has(order)) {
+      resultIdBySessionOrder.set(order, item.id);
+    }
+  });
+
+  const selectedResultIds = Array.from(resultIdBySessionOrder.values());
+  if (!selectedResultIds.length) {
+    throw new HttpError('Belum ada data pembahasan paket PSIKO.', 404);
+  }
+
+  const packageResults = await prisma.tryoutResult.findMany({
+    where: { id: { in: selectedResultIds }, userId },
+    include: {
+      tryout: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          sessionOrder: true,
+          totalQuestions: true,
+          durationMinutes: true,
+          questions: {
+            orderBy: { order: 'asc' },
+            include: { options: { select: { id: true, label: true, imageUrl: true, isCorrect: true } } },
+          },
+        },
+      },
+      answers: {
+        select: { questionId: true, optionId: true, isCorrect: true },
+      },
+    },
+  });
+
+  const resultMap = new Map(packageResults.map((item) => [item.id, item]));
+
+  const sections = sequence
+    .map((item) => {
+      const order = item.sessionOrder;
+      if (!order) return null;
+      const selectedResultId = resultIdBySessionOrder.get(order);
+      if (!selectedResultId) return null;
+      const result = resultMap.get(selectedResultId);
+      if (!result) return null;
+
+      const answerMap = new Map<string, { optionId: string | null; isCorrect: boolean }>();
+      result.answers.forEach((answer) => {
+        answerMap.set(answer.questionId, { optionId: answer.optionId ?? null, isCorrect: answer.isCorrect });
+      });
+
+      const questions = result.tryout.questions.map((question) => {
+        const answer = answerMap.get(question.id);
+        return {
+          id: question.id,
+          order: question.order,
+          prompt: question.prompt,
+          imageUrl: question.imageUrl,
+          explanation: question.explanation,
+          explanationImageUrl: question.explanationImageUrl ?? null,
+          options: question.options,
+          userOptionId: answer?.optionId ?? null,
+          isCorrect: answer?.isCorrect ?? false,
+        };
+      });
+
+      return {
+        sessionOrder: order,
+        resultId: result.id,
+        score: result.score ?? 0,
+        completedAt: result.completedAt ?? result.createdAt,
+        tryout: {
+          id: result.tryout.id,
+          name: result.tryout.name,
+          slug: result.tryout.slug,
+          totalQuestions: result.tryout.totalQuestions,
+          durationMinutes: result.tryout.durationMinutes,
+        },
+        questions,
+      };
+    })
+    .filter((item) => Boolean(item));
+
+  const validSections = sections as Array<{
+    sessionOrder: number;
+    resultId: string;
+    score: number;
+    completedAt: Date;
+    tryout: { id: string; name: string; slug: string; totalQuestions: number; durationMinutes: number };
+    questions: Array<{
+      id: string;
+      order: number;
+      prompt: string;
+      imageUrl: string | null;
+      explanation: string | null;
+      explanationImageUrl: string | null;
+      options: Array<{ id: string; label: string; imageUrl: string | null; isCorrect: boolean }>;
+      userOptionId: string | null;
+      isCorrect: boolean;
+    }>;
+  }>;
+
+  const totalScore = validSections.reduce((acc, item) => acc + item.score, 0);
+  const totalCorrect = validSections.reduce(
+    (acc, item) => acc + item.questions.filter((question) => question.isCorrect).length,
+    0,
+  );
+  const totalQuestions = validSections.reduce((acc, item) => acc + item.questions.length, 0);
+
+  return {
+    package: {
+      categoryName: anchorResult.tryout.subCategory.category.name,
+      subCategoryName: anchorResult.tryout.subCategory.name,
+      totalSessions: sequence.length,
+      cermatMode: await getPsikoCermatMode(),
+    },
+    overall: {
+      averageScore: validSections.length ? totalScore / validSections.length : 0,
+      totalCorrect,
+      totalQuestions,
+    },
+    sections: validSections,
   };
 }

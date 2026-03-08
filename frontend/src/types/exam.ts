@@ -39,12 +39,42 @@ export type TryoutReview = {
     name: string;
     slug: string;
     isFree?: boolean;
+    sessionOrder?: number | null;
+    isPsikoSession?: boolean;
     totalQuestions: number;
     durationMinutes: number;
   };
   score: number;
   completedAt?: string | null;
   questions: TryoutReviewQuestion[];
+};
+
+export type TryoutPackageReview = {
+  package: {
+    categoryName: string;
+    subCategoryName: string;
+    totalSessions: number;
+    cermatMode: 'NUMBER' | 'LETTER';
+  };
+  overall: {
+    averageScore: number;
+    totalCorrect: number;
+    totalQuestions: number;
+  };
+  sections: Array<{
+    sessionOrder: number;
+    resultId: string;
+    score: number;
+    completedAt: string;
+    tryout: {
+      id: string;
+      name: string;
+      slug: string;
+      totalQuestions: number;
+      durationMinutes: number;
+    };
+    questions: TryoutReviewQuestion[];
+  }>;
 };
 
 export type PracticeCategory = {

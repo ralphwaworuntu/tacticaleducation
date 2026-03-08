@@ -38,6 +38,7 @@ type SubmitTryoutResponse = {
   score: number;
   correct: number;
   total: number;
+  nextCermatMode?: 'NUMBER' | 'LETTER';
   nextSession?: {
     slug: string;
     name: string;
@@ -307,6 +308,20 @@ export function TryoutPage() {
           setIsPsikoBreaking(true);
           return;
         }
+      }
+      if (payload.nextCermatMode) {
+        setSession(null);
+        setCurrentQuestionIndex(0);
+        exitFullscreen();
+        endTimeRef.current = null;
+        setTimeLeft(null);
+        queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
+        queryClient.invalidateQueries({ queryKey: ['tryout-history'] });
+        toast.success('Paket PSIKO selesai. Lanjut ke tes kecermatan.');
+        navigate(`/app/tes-kecermatan?mode=${payload.nextCermatMode}&autoStart=1`, {
+          state: { fromPsiko: true, cermatMode: payload.nextCermatMode },
+        });
+        return;
       }
       setResult(payload);
       setSession(null);
@@ -966,11 +981,11 @@ export function TryoutPage() {
         <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-slate-900/80 px-4">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 text-center shadow-2xl">
             <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Jeda Sesi PSIKO</p>
-            <h3 className="mt-2 text-xl font-semibold text-slate-900">Persiapan Sesi Berikutnya</h3>
+            <h3 className="mt-2 text-xl font-semibold text-slate-900">
+              Persiapan Mengikuti {pendingPsikoTryout.name}
+            </h3>
             <p className="mt-3 text-4xl font-bold text-brand-600">{psikoBreakLeft}s</p>
-            <p className="mt-2 text-sm text-slate-500">
-              Setelah jeda selesai, sistem akan langsung memulai {pendingPsikoTryout.name}.
-            </p>
+            <p className="mt-2 text-sm text-slate-500">Sesi berikutnya akan dimulai otomatis.</p>
           </div>
         </div>
       )}

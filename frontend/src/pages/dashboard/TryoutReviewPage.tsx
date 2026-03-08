@@ -2,7 +2,7 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api';
 import { getAssetUrl } from '@/lib/media';
-import type { TryoutReview } from '@/types/exam';
+import type { TryoutPackageReview, TryoutReview } from '@/types/exam';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -20,6 +20,11 @@ export function TryoutReviewPage() {
     queryKey: ['tryout-review', resultId],
     queryFn: () => apiGet<TryoutReview>(`/exams/tryouts/results/${resultId}/review`),
     enabled: Boolean(resultId),
+  });
+  const packageReviewQuery = useQuery({
+    queryKey: ['tryout-package-review', resultId],
+    queryFn: () => apiGet<TryoutPackageReview>(`/exams/tryouts/results/${resultId}/review-package`),
+    enabled: Boolean(resultId && data?.tryout.isPsikoSession),
   });
 
   const completedAtLabel = data?.completedAt ? new Date(data.completedAt).toLocaleString('id-ID') : '-';
@@ -54,6 +59,142 @@ export function TryoutReviewPage() {
         <Button variant="outline" onClick={() => navigate('/app/latihan/tryout')}>
           Kembali ke Tryout
         </Button>
+      </section>
+    );
+  }
+
+  if (data.tryout.isPsikoSession && packageReviewQuery.isLoading) {
+    return <Skeleton className="h-[420px]" />;
+  }
+
+  if (data.tryout.isPsikoSession && packageReviewQuery.data) {
+    const packageData = packageReviewQuery.data;
+    return (
+      <section className="space-y-8">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Pembahasan Paket Soal PSIKO</p>
+            <h1 className="mt-2 text-3xl font-bold text-slate-900">{packageData.package.subCategoryName}</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {packageData.package.totalSessions} sesi - Lanjutan kecermatan: {packageData.package.cermatMode === 'NUMBER' ? 'Angka Hilang' : 'Huruf Hilang'}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => navigate('/app/latihan/tryout/riwayat')}>
+              Riwayat Tryout
+            </Button>
+            <Button onClick={() => navigate('/app/latihan/tryout')}>
+              Pilih Tryout Lain
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card>
+            <CardHeader title="Rata-rata Paket" />
+            <CardContent>
+              <p className="text-4xl font-bold text-brand-600">{Math.round(packageData.overall.averageScore)}</p>
+              <p className="text-sm text-slate-500">
+                {packageData.overall.totalCorrect}/{packageData.overall.totalQuestions} soal benar
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader title="Total Sesi" />
+            <CardContent>
+              <p className="text-4xl font-bold text-slate-900">{packageData.package.totalSessions}</p>
+              <p className="text-sm text-slate-500">Pembahasan digabung per sesi dalam satu halaman</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader title="Kategori" />
+            <CardContent>
+              <p className="text-xl font-semibold text-slate-900">{packageData.package.categoryName}</p>
+              <p className="text-sm text-slate-500">{packageData.package.subCategoryName}</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-10">
+          {packageData.sections.map((section) => {
+            const completedAt = section.completedAt ? new Date(section.completedAt).toLocaleString('id-ID') : '-';
+            return (
+              <div key={section.resultId} className="space-y-5">
+                <div className="rounded-3xl border border-brand-200 bg-brand-50 p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.3em] text-brand-700">Section {section.sessionOrder}</p>
+                      <h2 className="text-2xl font-semibold text-slate-900">{section.tryout.name}</h2>
+                      <p className="text-sm text-slate-600">Selesai {completedAt}</p>
+                    </div>
+                    <div className="rounded-2xl bg-white px-4 py-2 text-center shadow-sm">
+                      <p className="text-xs uppercase text-slate-500">Skor Sesi</p>
+                      <p className="text-2xl font-bold text-brand-600">{Math.round(section.score)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {section.questions.map((question) => (
+                  <article key={question.id} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-base font-semibold uppercase tracking-[0.2em] text-slate-400">Soal #{question.order}</p>
+                        <h3 className="mt-1 text-base font-semibold text-slate-900">{question.prompt}</h3>
+                        {question.imageUrl && (
+                          <img src={getAssetUrl(question.imageUrl)} alt="Soal" className="mt-3 w-full rounded-2xl border border-slate-100 object-cover" loading="lazy" />
+                        )}
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={`text-base ${question.isCorrect ? 'border-emerald-200 bg-emerald-50 text-emerald-600' : 'border-rose-200 bg-rose-50 text-rose-600'}`}
+                      >
+                        {question.isCorrect ? 'Jawaban Kamu Benar' : 'Jawaban Kamu Salah'}
+                      </Badge>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {question.options.map((option) => {
+                        const isUserChoice = question.userOptionId === option.id;
+                        const isCorrect = Boolean(option.isCorrect);
+                        const className = `rounded-2xl border p-4 text-base transition ${
+                          isCorrect
+                            ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                            : isUserChoice
+                              ? 'border-rose-300 bg-rose-50 text-rose-700'
+                              : 'border-slate-200 bg-white text-slate-700'
+                        }`;
+                        return (
+                          <div key={option.id} className={className}>
+                            <p className="text-base font-semibold">{option.label}</p>
+                            {option.imageUrl && (
+                              <img src={getAssetUrl(option.imageUrl)} alt="Opsi" className="mt-2 h-20 w-20 rounded-xl object-cover" loading="lazy" />
+                            )}
+                            <p className="text-base text-slate-500">
+                              {isCorrect ? 'Jawaban benar' : isUserChoice ? 'Jawaban kamu' : 'Pilihan lain'}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {question.explanation && (
+                      <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-xl text-slate-600">
+                        <p className="font-semibold text-slate-900">Pembahasan</p>
+                        <p className="mt-2 whitespace-pre-line text-xl">{question.explanation}</p>
+                        {question.explanationImageUrl && (
+                          <img
+                            src={getAssetUrl(question.explanationImageUrl)}
+                            alt="Ilustrasi pembahasan"
+                            className="mt-3 w-full rounded-2xl border border-slate-100 object-cover"
+                            loading="lazy"
+                          />
+                        )}
+                      </div>
+                    )}
+                  </article>
+                ))}
+              </div>
+            );
+          })}
+        </div>
       </section>
     );
   }

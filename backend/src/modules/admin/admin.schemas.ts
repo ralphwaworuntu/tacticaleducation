@@ -405,5 +405,6 @@ export const cermatConfigSchema = z.object({
 export const psikoTryoutConfigSchema = z.object({
   body: z.object({
     breakSeconds: z.number().int().min(0).max(300),
+    cermatMode: z.enum(['NUMBER', 'LETTER']),
   }),
 });

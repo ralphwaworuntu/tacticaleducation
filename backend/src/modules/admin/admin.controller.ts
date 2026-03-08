@@ -90,7 +90,7 @@ function withOrigin(req: Request, path: string | null) {
 const siteContactKeys = ['company_email', 'whatsapp_primary', 'whatsapp_consult', 'company_address'] as const;
 const memberBackgroundKeys = ['member_area_background_enabled', 'member_area_background_image'] as const;
 const cermatConfigKeys = ['cermat_question_count', 'cermat_duration_seconds', 'cermat_total_sessions', 'cermat_break_seconds'] as const;
-const psikoTryoutConfigKeys = ['psiko_tryout_break_seconds'] as const;
+const psikoTryoutConfigKeys = ['psiko_tryout_break_seconds', 'psiko_tryout_cermat_mode'] as const;
 const hiddenAdminEmails = ['developer@tacticaleducation.id'];
 const optionLetters = ['a', 'b', 'c', 'd', 'e'] as const;
 const questionExportHeaders = [
@@ -236,6 +236,7 @@ function buildPsikoTryoutConfig(settings: Array<{ key: string; value: string }>)
   }, {});
   return {
     breakSeconds: Number(map.psiko_tryout_break_seconds || 5),
+    cermatMode: map.psiko_tryout_cermat_mode === 'LETTER' ? 'LETTER' : 'NUMBER',
   };
 }
 
@@ -2967,13 +2968,20 @@ export async function getPsikoTryoutConfigAdminController(_req: Request, res: Re
 
 export async function updatePsikoTryoutConfigAdminController(req: Request, res: Response, next: NextFunction) {
   try {
-    const { breakSeconds } = req.body as { breakSeconds: number };
-    await prisma.siteSetting.upsert({
-      where: { key: 'psiko_tryout_break_seconds' },
-      update: { value: String(breakSeconds) },
-      create: { key: 'psiko_tryout_break_seconds', value: String(breakSeconds) },
-    });
-    res.json({ status: 'success', data: { breakSeconds } });
+    const { breakSeconds, cermatMode } = req.body as { breakSeconds: number; cermatMode: 'NUMBER' | 'LETTER' };
+    await prisma.$transaction([
+      prisma.siteSetting.upsert({
+        where: { key: 'psiko_tryout_break_seconds' },
+        update: { value: String(breakSeconds) },
+        create: { key: 'psiko_tryout_break_seconds', value: String(breakSeconds) },
+      }),
+      prisma.siteSetting.upsert({
+        where: { key: 'psiko_tryout_cermat_mode' },
+        update: { value: cermatMode },
+        create: { key: 'psiko_tryout_cermat_mode', value: cermatMode },
+      }),
+    ]);
+    res.json({ status: 'success', data: { breakSeconds, cermatMode } });
   } catch (error) {
     next(error);
   }
