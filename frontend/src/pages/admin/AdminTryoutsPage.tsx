@@ -363,8 +363,13 @@ export function AdminTryoutsPage() {
     [selectedSubCategoryId, subCategories],
   );
   const normalize = (value?: string | null) => (value ?? '').trim().toLowerCase();
+  const matchesKeyword = (name?: string | null, slug?: string | null, keyword?: string) => {
+    const key = normalize(keyword);
+    return normalize(name) === key || normalize(slug) === key;
+  };
   const isSessionOrderRequired =
-    normalize(selectedCategory?.name) === 'polri' && normalize(selectedSubCategory?.name) === 'psiko';
+    matchesKeyword(selectedCategory?.name, selectedCategory?.slug, 'polri') &&
+    matchesKeyword(selectedSubCategory?.name, selectedSubCategory?.slug, 'psiko');
   const usedSessionOrders = useMemo(() => {
     if (!selectedSubCategoryId) return [] as number[];
     return tryouts

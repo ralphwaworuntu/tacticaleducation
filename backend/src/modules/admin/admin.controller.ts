@@ -138,14 +138,20 @@ function normalizeWord(value: string | null | undefined) {
   return (value ?? '').trim().toLowerCase();
 }
 
+function matchesKeyword(name: string | null | undefined, slug: string | null | undefined, keyword: string) {
+  const key = normalizeWord(keyword);
+  return normalizeWord(name) === key || normalizeWord(slug) === key;
+}
+
 function isPolriPsikoSubCategory(subCategory: {
   name: string;
   slug: string;
   category: { name: string; slug: string };
 }) {
-  const categoryKey = normalizeWord(subCategory.category.slug || subCategory.category.name);
-  const subCategoryKey = normalizeWord(subCategory.slug || subCategory.name);
-  return categoryKey === 'polri' && subCategoryKey === 'psiko';
+  return (
+    matchesKeyword(subCategory.category.name, subCategory.category.slug, 'polri') &&
+    matchesKeyword(subCategory.name, subCategory.slug, 'psiko')
+  );
 }
 
 function buildContactConfig(settings: Array<{ key: string; value: string }>) {
