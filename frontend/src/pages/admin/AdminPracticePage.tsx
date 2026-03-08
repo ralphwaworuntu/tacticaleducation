@@ -128,6 +128,8 @@ export function AdminPracticePage() {
   const isEditing = Boolean(editingSet);
   const [togglingSetId, setTogglingSetId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingQuestionsAll, setIsExportingQuestionsAll] = useState(false);
+  const [exportingSetQuestionsId, setExportingSetQuestionsId] = useState<string | null>(null);
 
   const toInputDateTime = (value?: string | null) => {
     if (!value) return '';
@@ -445,6 +447,37 @@ export function AdminPracticePage() {
     }
   };
 
+  const handleExportQuestionsCsv = async (setItem?: { id: string; slug: string }) => {
+    if (setItem) {
+      setExportingSetQuestionsId(setItem.id);
+    } else {
+      setIsExportingQuestionsAll(true);
+    }
+    try {
+      const query = setItem ? `?setId=${encodeURIComponent(setItem.id)}` : '';
+      const response = await api.get(`/admin/practice/questions/export${query}`, {
+        responseType: 'blob',
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      });
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = setItem ? `soal-latihan-${setItem.slug}.csv` : 'soal-latihan-semua.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      toast.error('Gagal mengunduh CSV soal latihan');
+    } finally {
+      if (setItem) {
+        setExportingSetQuestionsId(null);
+      } else {
+        setIsExportingQuestionsAll(false);
+      }
+    }
+  };
+
   useEffect(() => {
     if (cermatConfig) {
       cermatForm.reset(cermatConfig);
@@ -458,9 +491,14 @@ export function AdminPracticePage() {
           <h2 className="text-3xl font-bold text-slate-900">Latihan & Bank Soal</h2>
           <p className="mt-2 text-sm text-slate-500">Kelola modul latihan, tugas, dan jenis soal harian.</p>
         </div>
-        <Button type="button" variant="outline" onClick={handleExport} disabled={isExporting}>
-          {isExporting ? 'Mengunduh...' : 'Download CSV'}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={handleExport} disabled={isExporting}>
+            {isExporting ? 'Mengunduh...' : 'Download Struktur CSV'}
+          </Button>
+          <Button type="button" variant="outline" onClick={() => handleExportQuestionsCsv()} disabled={isExportingQuestionsAll}>
+            {isExportingQuestionsAll ? 'Mengunduh...' : 'Download Soal CSV (Semua)'}
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -891,6 +929,14 @@ export function AdminPracticePage() {
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => handleEditSet(set)}>
                       Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleExportQuestionsCsv({ id: set.id, slug: set.slug })}
+                      disabled={exportingSetQuestionsId === set.id}
+                    >
+                      {exportingSetQuestionsId === set.id ? 'Mengunduh...' : 'CSV Soal'}
                     </Button>
                     <Button
                       variant="ghost"

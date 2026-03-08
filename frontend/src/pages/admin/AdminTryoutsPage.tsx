@@ -100,6 +100,8 @@ export function AdminTryoutsPage() {
   const isEditing = Boolean(editingTryout);
   const [togglingTryoutId, setTogglingTryoutId] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingQuestionsAll, setIsExportingQuestionsAll] = useState(false);
+  const [exportingTryoutQuestionsId, setExportingTryoutQuestionsId] = useState<string | null>(null);
 
   const toInputDateTime = (value?: string | null) => {
     if (!value) return '';
@@ -340,6 +342,7 @@ export function AdminTryoutsPage() {
     () => subCategories.filter((item) => item.category.id === selectedCategoryId),
     [selectedCategoryId, subCategories],
   );
+
   const handleExport = async () => {
     setIsExporting(true);
     try {
@@ -362,6 +365,37 @@ export function AdminTryoutsPage() {
     }
   };
 
+  const handleExportQuestionsCsv = async (tryout?: { id: string; slug: string }) => {
+    if (tryout) {
+      setExportingTryoutQuestionsId(tryout.id);
+    } else {
+      setIsExportingQuestionsAll(true);
+    }
+    try {
+      const query = tryout ? `?tryoutId=${encodeURIComponent(tryout.id)}` : '';
+      const response = await api.get(`/admin/tryouts/questions/export${query}`, {
+        responseType: 'blob',
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      });
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = tryout ? `soal-tryout-${tryout.slug}.csv` : 'soal-tryout-semua.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      toast.error('Gagal mengunduh CSV soal tryout');
+    } finally {
+      if (tryout) {
+        setExportingTryoutQuestionsId(null);
+      } else {
+        setIsExportingQuestionsAll(false);
+      }
+    }
+  };
+
   return (
     <section className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -369,9 +403,14 @@ export function AdminTryoutsPage() {
           <h2 className="text-3xl font-bold text-slate-900">Manajemen Tryout & Tes</h2>
           <p className="mt-2 text-sm text-slate-500">Buat kategori, atur tryout resmi, dan unggah soal melalui template CSV.</p>
         </div>
-        <Button type="button" variant="outline" onClick={handleExport} disabled={isExporting}>
-          {isExporting ? 'Mengunduh...' : 'Download CSV'}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={handleExport} disabled={isExporting}>
+            {isExporting ? 'Mengunduh...' : 'Download Struktur CSV'}
+          </Button>
+          <Button type="button" variant="outline" onClick={() => handleExportQuestionsCsv()} disabled={isExportingQuestionsAll}>
+            {isExportingQuestionsAll ? 'Mengunduh...' : 'Download Soal CSV (Semua)'}
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -675,6 +714,14 @@ export function AdminTryoutsPage() {
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => handleEditTryout(tryout)}>
                       Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleExportQuestionsCsv({ id: tryout.id, slug: tryout.slug })}
+                      disabled={exportingTryoutQuestionsId === tryout.id}
+                    >
+                      {exportingTryoutQuestionsId === tryout.id ? 'Mengunduh...' : 'CSV Soal'}
                     </Button>
                     <Button
                       size="sm"

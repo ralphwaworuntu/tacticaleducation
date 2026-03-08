@@ -59,6 +59,21 @@ function toCsv(rows: Array<Record<string, string | number | null | undefined>>) 
   return lines.join('\n');
 }
 
+function toCsvWithHeaders(headers: string[], rows: Array<Record<string, string | number | null | undefined>>) {
+  const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+  const lines = [headers.join(',')];
+  rows.forEach((row) => {
+    const values = headers.map((key) => {
+      const raw = row[key];
+      if (raw === null || raw === undefined) return '';
+      if (typeof raw === 'number') return String(raw);
+      return escape(String(raw));
+    });
+    lines.push(values.join(','));
+  });
+  return lines.join('\n');
+}
+
 function withOrigin(req: Request, path: string | null) {
   if (!path) {
     return null;
@@ -77,7 +92,48 @@ const siteContactKeys = ['company_email', 'whatsapp_primary', 'whatsapp_consult'
 const memberBackgroundKeys = ['member_area_background_enabled', 'member_area_background_image'] as const;
 const cermatConfigKeys = ['cermat_question_count', 'cermat_duration_seconds', 'cermat_total_sessions', 'cermat_break_seconds'] as const;
 const hiddenAdminEmails = ['developer@tacticaleducation.id'];
+const optionLetters = ['a', 'b', 'c', 'd', 'e'] as const;
+const questionExportHeaders = [
+  'exam_type',
+  'category',
+  'sub_category',
+  'sub_sub_category',
+  'item_id',
+  'item_name',
+  'item_slug',
+  'prompt',
+  'prompt_image',
+  'explanation',
+  'explanationImageUrl',
+  'order',
+  'option_a',
+  'option_a_image',
+  'option_a_correct',
+  'option_b',
+  'option_b_image',
+  'option_b_correct',
+  'option_c',
+  'option_c_image',
+  'option_c_correct',
+  'option_d',
+  'option_d_image',
+  'option_d_correct',
+  'option_e',
+  'option_e_image',
+  'option_e_correct',
+] as const;
 type WelcomeModalItem = { id: string; imageUrl: string; linkUrl?: string | null; enabled: boolean; createdAt: string };
+
+function mapOptionsToCsvFields(options: Array<{ label: string; imageUrl: string | null; isCorrect: boolean }>) {
+  const fields: Record<string, string> = {};
+  optionLetters.forEach((letter, index) => {
+    const option = options[index];
+    fields[`option_${letter}`] = option?.label ?? '';
+    fields[`option_${letter}_image`] = option?.imageUrl ?? '';
+    fields[`option_${letter}_correct`] = option ? (option.isCorrect ? 'TRUE' : 'FALSE') : '';
+  });
+  return fields;
+}
 
 function buildContactConfig(settings: Array<{ key: string; value: string }>) {
   const map = settings.reduce<Record<string, string>>((acc, setting) => {
@@ -787,6 +843,60 @@ export async function exportTryoutManagementController(_req: Request, res: Respo
   }
 }
 
+export async function exportTryoutQuestionsCsvAdminController(req: Request, res: Response, next: NextFunction) {
+  try {
+    const tryoutId = typeof req.query.tryoutId === 'string' && req.query.tryoutId.trim() ? req.query.tryoutId.trim() : null;
+    const tryouts = await prisma.tryout.findMany({
+      where: tryoutId ? { id: tryoutId } : {},
+      orderBy: { createdAt: 'desc' },
+      include: {
+        subCategory: { include: { category: true } },
+        questions: {
+          orderBy: { order: 'asc' },
+          include: {
+            options: { orderBy: { createdAt: 'asc' } },
+          },
+        },
+      },
+    });
+
+    if (tryoutId && tryouts.length === 0) {
+      throw new HttpError('Tryout tidak ditemukan', 404);
+    }
+
+    const rows: Array<Record<string, string | number | null | undefined>> = [];
+    tryouts.forEach((tryout) => {
+      tryout.questions.forEach((question) => {
+        rows.push({
+          exam_type: 'TRYOUT',
+          category: tryout.subCategory.category.name,
+          sub_category: tryout.subCategory.name,
+          sub_sub_category: '',
+          item_id: tryout.id,
+          item_name: tryout.name,
+          item_slug: tryout.slug,
+          prompt: question.prompt,
+          prompt_image: question.imageUrl ?? '',
+          explanation: question.explanation ?? '',
+          explanationImageUrl: question.explanationImageUrl ?? '',
+          order: question.order,
+          ...mapOptionsToCsvFields(question.options),
+        });
+      });
+    });
+
+    const csv = toCsvWithHeaders([...questionExportHeaders], rows);
+    const singleTryout = tryouts[0];
+    const filename = tryoutId && singleTryout ? `soal-tryout-${singleTryout.slug}.csv` : 'soal-tryout-semua.csv';
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(csv);
+  } catch (error) {
+    next(error);
+  }
+}
+
 type UploadedFiles = Partial<Record<string, Express.Multer.File[]>>;
 
 function getFile(req: Request, fieldName: string) {
@@ -1390,6 +1500,60 @@ export async function exportPracticeManagementController(_req: Request, res: Res
     const csv = toCsv(rows);
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="latihan-bank-soal.csv"');
+    res.send(csv);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function exportPracticeQuestionsCsvAdminController(req: Request, res: Response, next: NextFunction) {
+  try {
+    const setId = typeof req.query.setId === 'string' && req.query.setId.trim() ? req.query.setId.trim() : null;
+    const sets = await prisma.practiceSet.findMany({
+      where: setId ? { id: setId } : {},
+      orderBy: { createdAt: 'desc' },
+      include: {
+        subSubCategory: { include: { subCategory: { include: { category: true } } } },
+        questions: {
+          orderBy: { order: 'asc' },
+          include: {
+            options: { orderBy: { createdAt: 'asc' } },
+          },
+        },
+      },
+    });
+
+    if (setId && sets.length === 0) {
+      throw new HttpError('Set latihan tidak ditemukan', 404);
+    }
+
+    const rows: Array<Record<string, string | number | null | undefined>> = [];
+    sets.forEach((set) => {
+      set.questions.forEach((question) => {
+        rows.push({
+          exam_type: 'PRACTICE',
+          category: set.subSubCategory.subCategory.category.name,
+          sub_category: set.subSubCategory.subCategory.name,
+          sub_sub_category: set.subSubCategory.name,
+          item_id: set.id,
+          item_name: set.title,
+          item_slug: set.slug,
+          prompt: question.prompt,
+          prompt_image: question.imageUrl ?? '',
+          explanation: question.explanation ?? '',
+          explanationImageUrl: question.explanationImageUrl ?? '',
+          order: question.order,
+          ...mapOptionsToCsvFields(question.options),
+        });
+      });
+    });
+
+    const csv = toCsvWithHeaders([...questionExportHeaders], rows);
+    const singleSet = sets[0];
+    const filename = setId && singleSet ? `soal-latihan-${singleSet.slug}.csv` : 'soal-latihan-semua.csv';
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(csv);
   } catch (error) {
     next(error);

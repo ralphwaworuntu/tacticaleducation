@@ -39,6 +39,7 @@ import {
   deleteTryoutSubCategoryController,
   listTryoutsController,
   exportTryoutManagementController,
+  exportTryoutQuestionsCsvAdminController,
   createTryoutController,
   updateTryoutController,
   updateTryoutFreeAdminController,
@@ -57,6 +58,7 @@ import {
   deletePracticeSubSubCategoryController,
   listPracticeSetsController,
   exportPracticeManagementController,
+  exportPracticeQuestionsCsvAdminController,
   createPracticeSetController,
   updatePracticeSetController,
   updatePracticeSetFreeAdminController,
@@ -274,6 +276,7 @@ adminRouter.delete('/tryouts/sub-categories/:id', deleteTryoutSubCategoryControl
 
 adminRouter.get('/tryouts', listTryoutsController);
 adminRouter.get('/tryouts/export', exportTryoutManagementController);
+adminRouter.get('/tryouts/questions/export', exportTryoutQuestionsCsvAdminController);
 adminRouter.post(
   '/tryouts',
   examAssetUpload.fields([
@@ -372,6 +375,7 @@ adminRouter.put(
 adminRouter.patch('/practice/sets/:id/free', validateResource(updatePracticeSetFreeSchema), updatePracticeSetFreeAdminController);
 adminRouter.delete('/practice/sets/:id', deletePracticeSetController);
 adminRouter.get('/practice/export', exportPracticeManagementController);
+adminRouter.get('/practice/questions/export', exportPracticeQuestionsCsvAdminController);
 
 adminRouter.get('/materials', listMaterialsAdminController);
 adminRouter.get('/materials/export', exportMaterialsAdminController);
