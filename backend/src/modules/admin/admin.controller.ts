@@ -76,6 +76,7 @@ function withOrigin(req: Request, path: string | null) {
 const siteContactKeys = ['company_email', 'whatsapp_primary', 'whatsapp_consult', 'company_address'] as const;
 const memberBackgroundKeys = ['member_area_background_enabled', 'member_area_background_image'] as const;
 const cermatConfigKeys = ['cermat_question_count', 'cermat_duration_seconds', 'cermat_total_sessions', 'cermat_break_seconds'] as const;
+const hiddenAdminEmails = ['developer@tacticaleducation.id'];
 type WelcomeModalItem = { id: string; imageUrl: string; linkUrl?: string | null; enabled: boolean; createdAt: string };
 
 function buildContactConfig(settings: Array<{ key: string; value: string }>) {
@@ -2373,7 +2374,6 @@ export async function uploadHeroImageController(req: Request, res: Response, nex
 
 export async function adminUsersController(_req: Request, res: Response, next: NextFunction) {
   try {
-    const hiddenAdminEmails = ['developer@tacticaleducation.id'];
     const data = await prisma.user.findMany({
       where: { email: { notIn: hiddenAdminEmails } },
       orderBy: { createdAt: 'desc' },
@@ -2397,6 +2397,46 @@ export async function adminUsersController(_req: Request, res: Response, next: N
       },
     });
     res.json({ status: 'success', data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function adminUsersExportController(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const users = await prisma.user.findMany({
+      where: { email: { notIn: hiddenAdminEmails } },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        referralCode: true,
+        memberArea: { select: { slug: true } },
+        createdAt: true,
+      },
+    });
+
+    const csv = toCsv(
+      users.map((item) => ({
+        id: item.id,
+        name: item.name,
+        email: item.email,
+        phone: item.phone ?? '',
+        role: item.role,
+        status: item.isActive ? 'AKTIF' : 'NONAKTIF',
+        kodeAkses: item.memberArea?.slug ?? '',
+        referralCode: item.referralCode ?? '',
+        joinedAt: item.createdAt.toISOString(),
+      })),
+    );
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="manajemen-pengguna.csv"');
+    res.send(csv);
   } catch (error) {
     next(error);
   }

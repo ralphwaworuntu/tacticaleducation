@@ -73,6 +73,7 @@ import {
   listTransactionsAdminController,
   updateTransactionStatusController,
   adminUsersController,
+  adminUsersExportController,
   updateUserRoleController,
   updateUserStatusController,
   impersonateUserController,
@@ -427,6 +428,7 @@ adminRouter.get('/transactions', listTransactionsAdminController);
 adminRouter.patch('/transactions/:id/status', validateResource(transactionStatusSchema), updateTransactionStatusController);
 
 adminRouter.get('/users', adminUsersController);
+adminRouter.get('/users/export', adminUsersExportController);
 adminRouter.patch('/users/:id/role', validateResource(userRoleSchema), updateUserRoleController);
 adminRouter.patch('/users/:id/status', validateResource(userStatusSchema), updateUserStatusController);
 adminRouter.post('/users/:id/reset-password', validateResource(userResetPasswordSchema), resetUserPasswordController);

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { apiGet, apiPatch, apiPost } from '@/lib/api';
+import { api, apiGet, apiPatch, apiPost } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -24,11 +24,12 @@ type AdminUser = {
 export function AdminUsersPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { setSession } = useAuth();
+  const { setSession, accessToken } = useAuth();
   const [statusConfirm, setStatusConfirm] = useState<{ user: AdminUser; nextStatus: boolean } | null>(null);
   const [resetConfirm, setResetConfirm] = useState<AdminUser | null>(null);
   const [resetResult, setResetResult] = useState<{ userId: string; tempPassword: string } | null>(null);
   const [impersonateConfirm, setImpersonateConfirm] = useState<AdminUser | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const { data, isLoading } = useQuery({ queryKey: ['admin-users'], queryFn: () => apiGet<AdminUser[]>('/admin/users') });
 
   const mutation = useMutation({
@@ -74,11 +75,38 @@ export function AdminUsersPage() {
 
   const users = data ?? [];
 
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const response = await api.get('/admin/users/export', {
+        responseType: 'blob',
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      });
+      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = 'manajemen-pengguna.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      toast.error('Gagal mengunduh CSV pengguna');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <section className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold text-slate-900">Manajemen Pengguna</h2>
-        <p className="mt-2 text-sm text-slate-500">Promosikan mentor menjadi admin atau pantau member aktif.</p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 className="text-3xl font-bold text-slate-900">Manajemen Pengguna</h2>
+          <p className="mt-2 text-sm text-slate-500">Promosikan mentor menjadi admin atau pantau member aktif.</p>
+        </div>
+        <Button type="button" variant="outline" onClick={handleExport} disabled={isExporting}>
+          {isExporting ? 'Mengunduh...' : 'Download CSV'}
+        </Button>
       </div>
       <Card>
         <CardContent className="space-y-4 p-6">
