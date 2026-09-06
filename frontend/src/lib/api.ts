@@ -31,13 +31,21 @@ const resolveApiBase = () => {
   if (import.meta.env.DEV) {
     return '/api/v1';
   }
+  // Production: pakai VITE_API_URL (harus HTTPS di site HTTPS, hindari mixed content).
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
     if (host !== 'localhost' && host !== '127.0.0.1') {
+      // Jangan pakai http://host:5000 di halaman HTTPS (browser akan block).
+      if (window.location.protocol === 'https:') {
+        return `${window.location.origin}/api/v1`;
+      }
       return `http://${host}:5000/api/v1`;
     }
   }
-  return import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+  return 'http://localhost:5000/api/v1';
 };
 
 const resolveApiOrigin = () => {
