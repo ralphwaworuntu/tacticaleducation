@@ -1,0 +1,33 @@
+[SOAL 1]
+Seorang anggota Satlantas menemukan dompet berisi uang di lokasi kecelakaan. Tindakan paling mencerminkan integritas adalah?
+[GAMBAR]
+
+A. Mengamankan isi dompet dan menyerahkan ke komandan
+B. Mengambil sebagian uang untuk kebutuhan mendesak
+C. Melaporkan temuan sebagai barang bukti resmi
+D. Meninggalkan dompet agar tidak terlibat
+E. Menunggu rekan patroli memberi arahan
+
+KUNCI: A
+PEMBAHASAN: Integritas adalah bertindak sesuai prosedur walau tidak diawasi. Setiap temuan harus diamankan dan dilaporkan resmi.
+
+[SOAL 2]
+Aksi unjuk rasa damai telah diberitahukan. Peran utama Polri adalah?
+
+A. Melakukan negosiasi agar massa bubar
+B. Mengamankan dan mengatur lalu lintas
+C. Memeriksa identitas seluruh peserta
+D. Menutup total akses jalan
+E. Membubarkan aksi saat macet
+
+KUNCI: B
+PEMBAHASAN: Tugas utama Polri adalah pengamanan agar aksi berjalan tertib dan lalu lintas tetap terkendali.
+
+---
+PANDUAN FORMAT WORD
+1. Setiap soal diawali dengan [SOAL N] (N = nomor urut).
+2. Tulis pertanyaan, lalu pilihan A–E dengan format "A. ..." atau "A) ...".
+3. Kunci jawaban: KUNCI: B  (satu huruf A–E).
+4. Pembahasan: PEMBAHAASAN: ... (wajib diisi).
+5. Gambar: sisipkan [GAMBAR] di teks soal atau pembahasan untuk menandai posisi gambar.
+6. Simpan sebagai .docx lalu unggah di halaman Konversi Word → CSV.

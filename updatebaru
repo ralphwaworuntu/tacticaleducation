@@ -1,0 +1,56 @@
+   1. Personal Account Settings Modal
+     •  Add avatar button action (member topbar) that opens a modal with multi-step form or
+        grouped fields.
+     •  Extend backend user profile (Prisma User + maybe MemberProfile) to store all required
+        attributes (photo URL, NIK/KK, phone, address, height/weight, parent info, health issues).
+     •  Provide member API endpoints (GET/PUT /account/profile) plus upload support for avatar
+        (reuse existing upload config).
+     •  Update registration validation schemas & DTOs to include these fields.
+
+   2. Admin Password Reset
+     •  Build API endpoint /admin/users/:id/reset-password generating random secure password,
+        hashing, emailing/returning (per requirement?).
+     •  Admin UI button (on User table row) opening confirm dialog + showing generated password
+        (with copy) for sharing to member.
+
+   3. Image-Supported Questions & Templates
+     •  Extend tryout/practice question models to include promptImageUrl and per option image
+        support (imageUrl).
+     •  Update CSV parsing logic: maintain existing template + new “with image” template (two
+        upload buttons or detection by columns). Provide new files in /public/templates.
+     •  Update frontend question rendering to show images.
+
+   4. Admin-Controlled Cermat Settings & Multi-Session Flow
+     •  Add admin UI to set total randomized questions & duration.
+     •  Modify backend generator to accept these settings, but also implement 10-session flow:
+        each session uses subset of questions, 5s pause between sessions, track per-session score,
+         final summary (UI & API adjustments).
+
+   5. Welcome Modal
+     •  Admin configuration (image upload + link + enable/disable + target audience). Possibly
+        reuse site settings collection.
+     •  Member dashboard loads config and shows modal once per session (respect localStorage
+        flag).
+
+   6. Single Device Login Enforcement
+     •  Store active session token per user (e.g., sessionId). When a new login occurs, invalidate
+         previous tokens (set flag, push realtime? at least block API by checking stored
+        currentSessionId).
+     •  Ensure frontend handles 401 with message indicating login elsewhere.
+
+   7. Registration Form Expansion
+     •  Update public register page to collect all profile fields, send to backend, ensure
+        validation + DB columns align.
+
+   8. Targeted Announcements
+     •  Add audience field referencing membership package IDs or “ALL”. Admin UI multi-select.
+     •  When fetching announcements, filter by user’s active package (server-side).
+
+   9. Reporting Page
+     •  New admin route /admin/reporting with cards summarizing metrics (members, tryout
+        categories/questions, practice categories/questions, activity logs). Include date filter.
+     •  Provide CSV export endpoints per metric.
+
+   10. Parent Landing Page Section
+     •  New landing route (e.g., /orang-tua) displaying explanation + maybe cards/testimonials +
+        CTA.

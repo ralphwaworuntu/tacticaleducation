@@ -1,0 +1,4 @@
+ALTER TABLE `MembershipPackage`
+  ADD COLUMN `allowTryout` BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN `allowPractice` BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN `allowCermat` BOOLEAN NOT NULL DEFAULT true;

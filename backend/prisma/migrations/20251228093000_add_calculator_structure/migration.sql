@@ -1,0 +1,12 @@
+-- AlterEnum
+ALTER TABLE `PsychCalculatorTemplate`
+  MODIFY `type` ENUM('ANGKA_HILANG', 'GENERAL') NOT NULL DEFAULT 'ANGKA_HILANG';
+
+-- AlterTable
+ALTER TABLE `PsychCalculatorTemplate`
+  ADD COLUMN `category` VARCHAR(191) NOT NULL DEFAULT 'general',
+  ADD COLUMN `categoryLabel` VARCHAR(191) NOT NULL DEFAULT 'Kalkulator',
+  ADD COLUMN `section` VARCHAR(191) NULL,
+  ADD COLUMN `sectionLabel` VARCHAR(191) NULL,
+  ADD COLUMN `order` INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN `sectionOrder` INTEGER NOT NULL DEFAULT 0;

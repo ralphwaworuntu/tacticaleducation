@@ -1,0 +1,61 @@
+Deploy Requirement & Checklist System
+=====================================
+
+Rekomendasi Environment VPS
+---------------------------
+- OS: Ubuntu 22.04 LTS
+- CPU/RAM: minimal 2 vCPU, 4 GB RAM
+- Node.js: v20.x (via nvm)
+- Database: MySQL 8.x (managed atau self-hosted)
+- Reverse proxy: Nginx
+- Process manager: PM2
+- SSL: Certbot (Let's Encrypt)
+- Direktori deploy: /var/www/tactical-education
+
+Checklist Deploy Produksi
+-------------------------
+1) Server & Runtime
+   - Update OS dan install build tools: build-essential, nginx, mysql-client
+   - Install Node v20, npm, pm2
+
+2) Repository
+   - Clone repo ke /var/www/tactical-education
+   - Pastikan permission user non-root
+
+3) Backend (.env)
+   - PORT=5000
+   - DATABASE_URL=mysql://USER:PASSWORD@HOST:3306/DB
+   - JWT_ACCESS_SECRET, JWT_REFRESH_SECRET
+   - FRONTEND_URL=https://app.domain.com
+
+4) Frontend (.env)
+   - VITE_API_URL=https://api.domain.com/api/v1
+   - VITE_WHATSAPP_LINK=https://wa.me/62xxxx
+
+5) Database
+   - npx prisma migrate deploy
+   - npx prisma db seed (opsional, jika butuh data demo)
+
+6) Build & Run
+   - Backend: npm install && npm run build
+   - Frontend: npm install && npm run build
+   - PM2: pm2 start dist/server.js --name tactical-api
+
+7) Nginx
+   - api.domain.com -> proxy http://127.0.0.1:5000
+   - app.domain.com -> serve /var/www/tactical-education/frontend_dist (SPA)
+
+8) HTTPS
+   - certbot --nginx -d api.domain.com -d app.domain.com
+
+9) Smoke Check
+   - GET /api/v1/health -> 200
+   - Login admin & member
+   - Tryout/latihan/ujian berjalan
+   - Riwayat & pembahasan tampil
+   - Upload CSV (admin) berhasil
+
+10) Monitoring
+   - pm2 logs tactical-api
+   - pm2 install pm2-logrotate (opsional)
+   - Backup database berkala

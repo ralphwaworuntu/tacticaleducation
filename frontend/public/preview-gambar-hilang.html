@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Preview — Gambar Hilang</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f5ff', 100: '#dce8f7', 500: '#1e3a8a', 600: '#162f72', 800: '#091c47', 900: '#051332',
+            },
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body { font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+  <div class="mx-auto max-w-5xl">
+    <header class="border-b border-brand-100/80 bg-gradient-to-r from-white via-brand-50/30 to-white shadow-sm">
+      <div class="px-6 py-3.5">
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex items-center gap-4">
+            <div class="flex h-14 w-14 items-center justify-center rounded-2xl border border-brand-100 bg-white shadow-[0_2px_12px_rgba(30,58,138,0.08)]">
+              <img src="/Logo_tactical.png" alt="Logo" class="h-10 w-auto object-contain" />
+            </div>
+            <div>
+              <h1 class="text-xl font-bold tracking-tight text-brand-900">Tactical Education</h1>
+              <p class="mt-0.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">Bimbingan Belajar Profesional</p>
+            </div>
+          </div>
+          <div class="text-right">
+            <span class="inline-flex rounded-full bg-brand-600 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-sm">Gambar Hilang</span>
+            <p class="mt-1.5 text-xs font-medium uppercase tracking-wide text-slate-500">Tes Kecermatan</p>
+            <p class="text-sm font-bold tabular-nums text-brand-800">Sesi 1/3</p>
+          </div>
+        </div>
+      </div>
+      <div class="h-0.5 bg-gradient-to-r from-transparent via-brand-500/70 to-transparent"></div>
+    </header>
+
+    <main class="px-6 py-5 space-y-4">
+      <div class="grid grid-cols-3 gap-4">
+        <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center">
+          <p class="text-xs font-semibold uppercase text-slate-500">Kolom</p>
+          <p class="mt-0.5 text-2xl font-bold text-slate-900">3</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center">
+          <p class="text-xs font-semibold uppercase text-slate-500">Durasi</p>
+          <p class="mt-0.5 text-2xl font-bold text-slate-900">00:42</p>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center">
+          <p class="text-xs font-semibold uppercase text-slate-500">Terjawab</p>
+          <p class="mt-0.5 text-2xl font-bold text-slate-900">2</p>
+        </div>
+      </div>
+
+      <section class="overflow-hidden rounded-3xl border-2 border-slate-800 bg-white shadow-sm">
+        <div class="border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-center">
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Kunci Referensi</p>
+        </div>
+        <div class="grid grid-cols-5 divide-x divide-slate-200">
+          <div class="flex flex-col items-center gap-3 bg-white py-5"><div class="flex h-16 w-16 items-center justify-center rounded-lg border bg-white text-2xl">⬡</div><span class="flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-sm font-bold text-white">A</span></div>
+          <div class="flex flex-col items-center gap-3 bg-slate-50/80 py-5"><div class="flex h-16 w-16 items-center justify-center rounded-lg border bg-white text-2xl">△</div><span class="flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-sm font-bold text-white">B</span></div>
+          <div class="flex flex-col items-center gap-3 bg-white py-5"><div class="flex h-16 w-16 items-center justify-center rounded-lg border bg-white text-2xl">○</div><span class="flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-sm font-bold text-white">C</span></div>
+          <div class="flex flex-col items-center gap-3 bg-slate-50/80 py-5"><div class="flex h-16 w-16 items-center justify-center rounded-lg border bg-white text-2xl">□</div><span class="flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-sm font-bold text-white">D</span></div>
+          <div class="flex flex-col items-center gap-3 bg-white py-5"><div class="flex h-16 w-16 items-center justify-center rounded-lg border bg-white text-2xl">◇</div><span class="flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-sm font-bold text-white">E</span></div>
+        </div>
+      </section>
+
+      <section class="rounded-3xl border-2 border-dashed border-brand-200 bg-brand-50/40 px-6 py-5">
+        <p class="mb-4 text-center text-base text-slate-600">Pilih huruf gambar yang <span class="font-semibold text-brand-700">tidak muncul</span></p>
+        <div class="flex items-center justify-center gap-8">
+          <div class="flex h-16 w-16 items-center justify-center rounded-xl border bg-white shadow-sm text-2xl">⬡</div>
+          <div class="flex h-16 w-16 items-center justify-center rounded-xl border bg-white shadow-sm text-2xl">△</div>
+          <div class="flex h-16 w-16 items-center justify-center rounded-xl border bg-white shadow-sm text-2xl">□</div>
+          <div class="flex h-16 w-16 items-center justify-center rounded-xl border bg-white shadow-sm text-2xl">◇</div>
+        </div>
+      </section>
+
+      <section class="grid grid-cols-5 gap-3">
+        <button class="rounded-2xl border-2 border-slate-300 bg-white py-5 text-2xl font-bold text-slate-900">A</button>
+        <button class="rounded-2xl border-2 border-brand-600 bg-brand-600 py-5 text-2xl font-bold text-white shadow-md">B</button>
+        <button class="rounded-2xl border-2 border-slate-300 bg-white py-5 text-2xl font-bold text-slate-900">C</button>
+        <button class="rounded-2xl border-2 border-slate-300 bg-white py-5 text-2xl font-bold text-slate-900">D</button>
+        <button class="rounded-2xl border-2 border-slate-300 bg-white py-5 text-2xl font-bold text-slate-900">E</button>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

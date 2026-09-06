@@ -1,0 +1,651 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum TransactionStatus {
+  PENDING
+  PAID
+  REJECTED
+}
+
+enum TransactionType {
+  MEMBERSHIP
+  ADDON
+}
+
+enum NewsKind {
+  NEWS
+  INSIGHT
+}
+
+enum MaterialType {
+  PDF
+  VIDEO
+  LINK
+}
+
+enum CalculatorType {
+  ANGKA_HILANG
+  GENERAL
+}
+
+enum ExamBlockType {
+  TRYOUT
+  PRACTICE
+  CERMAT
+}
+
+model User {
+  id                     String                      @id @default(cuid())
+  name                   String
+  email                  String                      @unique
+  passwordHash           String
+  role                   Role                        @default(MEMBER)
+  isActive               Boolean                     @default(true)
+  isEmailVerified        Boolean                     @default(false)
+  emailVerifiedAt        DateTime?
+  emailVerificationToken String?                     @unique
+  avatarUrl              String?
+  phone                  String?
+  nationalId             String?
+  address                String?
+  heightCm               Int?
+  weightKg               Int?
+  parentName             String?
+  parentPhone            String?
+  parentOccupation       String?
+  parentAddress          String?
+  healthIssues           String?
+  sessionVersion         Int                         @default(0)
+  referralCode           String                      @unique
+  bio                    String?
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+  refreshTokens          RefreshToken[]
+  announcements          Announcement[]              @relation("AnnouncementAuthor")
+  tryoutResults          TryoutResult[]
+  tryoutAnswers          TryoutAnswer[]
+  practiceResults        PracticeResult[]
+  practiceAnswers        PracticeAnswer[]
+  cermatSessions         CermatSession[]
+  cermatAttempts         CermatAttempt[]
+  materials              Material[]                  @relation("MaterialUploader")
+  transactions           Transaction[]
+  referralsMade          Referral[]                  @relation("UserReferrals")
+  referralSource         Referral?                   @relation("UserReferred")
+  calculatorSubmissions  PsychCalculatorSubmission[] @relation("UserCalculatorSubmissions")
+  memberArea             MemberArea?
+  examBlocks             ExamBlock[]
+  examQuotaUsage         ExamQuotaUsage?
+}
+
+model MemberArea {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  slug      String   @unique
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  tokenHash String
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Announcement {
+  id               String   @id @default(cuid())
+  title            String
+  body             String
+  publishedAt      DateTime @default(now())
+  imageUrl         String?
+  targetAll        Boolean  @default(true)
+  targetPackageIds Json?
+  createdById      String?
+  createdBy        User?    @relation("AnnouncementAuthor", fields: [createdById], references: [id])
+}
+
+model ExamControlConfig {
+  id               String   @id @default(cuid())
+  enabled          Boolean  @default(false)
+  targetAll        Boolean  @default(true)
+  targetPackageIds Json?
+  tryoutQuota      Int      @default(0)
+  examQuota        Int      @default(0)
+  startAt          DateTime?
+  endAt            DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model ExamQuotaUsage {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  tryoutsUsed Int      @default(0)
+  examsUsed   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Faq {
+  id       String @id @default(cuid())
+  question String
+  answer   String
+  order    Int    @default(0)
+}
+
+model NewsArticle {
+  id        String   @id @default(cuid())
+  title     String
+  slug      String   @unique
+  excerpt   String
+  content   String
+  coverUrl  String?
+  published DateTime @default(now())
+  kind      NewsKind @default(NEWS)
+}
+
+model LandingStat {
+  id    String @id @default(cuid())
+  label String
+  value Int
+}
+
+model GalleryItem {
+  id       String @id @default(cuid())
+  title    String
+  imageUrl String
+  kind     String
+}
+
+model Testimonial {
+  id        String  @id @default(cuid())
+  name      String
+  message   String
+  role      String?
+  avatarUrl String?
+  videoUrl  String?
+}
+
+model YoutubeVideo {
+  id          String  @id @default(cuid())
+  title       String
+  embedUrl    String
+  thumbnail   String?
+  description String?
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String?
+  message   String
+  status    String   @default("NEW")
+  createdAt DateTime @default(now())
+}
+
+model TryoutCategory {
+  id            String              @id @default(cuid())
+  name          String
+  slug          String              @unique
+  thumbnail     String?
+  subCategories TryoutSubCategory[]
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+}
+
+model TryoutSubCategory {
+  id         String         @id @default(cuid())
+  name       String
+  slug       String         @unique
+  categoryId String
+  imageUrl   String?
+  category   TryoutCategory @relation(fields: [categoryId], references: [id])
+  tryouts    Tryout[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+}
+
+model Tryout {
+  id              String           @id @default(cuid())
+  name            String
+  slug            String           @unique
+  summary         String
+  description     String
+  coverImageUrl   String?
+  durationMinutes Int              @default(90)
+  totalQuestions  Int              @default(100)
+  isPublished     Boolean          @default(true)
+  isFree          Boolean          @default(false)
+  freeForNewMembers Boolean        @default(true)
+  freePackageIds   Json            @default("[]")
+  sessionOrder    Int?
+  openAt          DateTime?
+  closeAt         DateTime?
+  subCategoryId   String
+  subCategory     TryoutSubCategory @relation(fields: [subCategoryId], references: [id])
+  questions       TryoutQuestion[]
+  results         TryoutResult[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([subCategoryId, sessionOrder])
+}
+
+model TryoutQuestion {
+  id          String         @id @default(cuid())
+  prompt      String         @db.LongText
+  imageUrl    String?
+  explanation String?        @db.LongText
+  explanationImageUrl String?
+  order       Int
+  multipleCorrect Boolean      @default(false)
+  tryoutId    String
+  tryout      Tryout         @relation(fields: [tryoutId], references: [id])
+  options     TryoutOption[]
+  answers     TryoutAnswer[]
+  createdAt   DateTime       @default(now())
+}
+
+model TryoutOption {
+  id         String         @id @default(cuid())
+  label      String         @db.LongText
+  imageUrl   String?
+  isCorrect  Boolean        @default(false)
+  questionId String
+  question   TryoutQuestion @relation(fields: [questionId], references: [id])
+  answers    TryoutAnswer[]
+  createdAt  DateTime       @default(now())
+}
+
+model TryoutResult {
+  id              String         @id @default(cuid())
+  userId          String
+  tryoutId        String
+  startedAt       DateTime       @default(now())
+  completedAt     DateTime?
+  durationSeconds Int?
+  score           Float?
+  createdAt       DateTime       @default(now())
+  user            User           @relation(fields: [userId], references: [id])
+  tryout          Tryout         @relation(fields: [tryoutId], references: [id])
+  answers         TryoutAnswer[]
+}
+
+model TryoutAnswer {
+  id         String         @id @default(cuid())
+  resultId   String
+  questionId String
+  optionId   String?
+  selectedOptionIds Json?
+  userId     String
+  isCorrect  Boolean
+  createdAt  DateTime       @default(now())
+  result     TryoutResult   @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  question   TryoutQuestion @relation(fields: [questionId], references: [id])
+  option     TryoutOption?  @relation(fields: [optionId], references: [id])
+  user       User           @relation(fields: [userId], references: [id])
+}
+
+model PracticeCategory {
+  id            String               @id @default(cuid())
+  name          String
+  slug          String               @unique
+  imageUrl      String?
+  subCategories PracticeSubCategory[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+}
+
+model PracticeSubCategory {
+  id         String                  @id @default(cuid())
+  name       String
+  slug       String                  @unique
+  categoryId String
+  imageUrl   String?
+  category   PracticeCategory        @relation(fields: [categoryId], references: [id])
+  subSubs    PracticeSubSubCategory[]
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+}
+
+model PracticeSubSubCategory {
+  id            String         @id @default(cuid())
+  name          String
+  slug          String         @unique
+  subCategoryId String
+  imageUrl      String?
+  subCategory   PracticeSubCategory @relation(fields: [subCategoryId], references: [id])
+  sets          PracticeSet[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model PracticeSet {
+  id            String             @id @default(cuid())
+  title         String
+  slug          String             @unique
+  description   String
+  coverImageUrl String?
+  level         String?
+  durationMinutes Int              @default(30)
+  totalQuestions  Int              @default(0)
+  isFree          Boolean           @default(false)
+  freeForNewMembers Boolean         @default(true)
+  freePackageIds   Json             @default("[]")
+  openAt          DateTime?
+  closeAt         DateTime?
+  subSubCategoryId String
+  subSubCategory   PracticeSubSubCategory @relation(fields: [subSubCategoryId], references: [id])
+  questions     PracticeQuestion[]
+  results       PracticeResult[]
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+}
+
+model PracticeQuestion {
+  id          String           @id @default(cuid())
+  prompt      String           @db.LongText
+  imageUrl    String?
+  explanation String?          @db.LongText
+  explanationImageUrl String?
+  order       Int
+  multipleCorrect Boolean      @default(false)
+  setId       String
+  set         PracticeSet      @relation(fields: [setId], references: [id])
+  options     PracticeOption[]
+  answers     PracticeAnswer[]
+  createdAt   DateTime         @default(now())
+}
+
+model PracticeOption {
+  id         String           @id @default(cuid())
+  label      String           @db.LongText
+  imageUrl   String?
+  isCorrect  Boolean          @default(false)
+  questionId String
+  question   PracticeQuestion @relation(fields: [questionId], references: [id])
+  answers    PracticeAnswer[]
+  createdAt  DateTime         @default(now())
+}
+
+model PracticeResult {
+  id          String           @id @default(cuid())
+  userId      String
+  setId       String
+  score       Float?
+  completedAt DateTime?
+  createdAt   DateTime         @default(now())
+  user        User             @relation(fields: [userId], references: [id])
+  set         PracticeSet      @relation(fields: [setId], references: [id])
+  answers     PracticeAnswer[]
+}
+
+model PracticeAnswer {
+  id         String           @id @default(cuid())
+  resultId   String
+  questionId String
+  optionId   String?
+  selectedOptionIds Json?
+  isCorrect  Boolean
+  userId     String
+  createdAt  DateTime         @default(now())
+  user       User             @relation(fields: [userId], references: [id])
+  result     PracticeResult   @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  question   PracticeQuestion @relation(fields: [questionId], references: [id])
+  option     PracticeOption?  @relation(fields: [optionId], references: [id])
+}
+
+enum CermatMode {
+  NUMBER
+  LETTER
+  IMAGE
+}
+
+model CermatSession {
+  id              String         @id @default(cuid())
+  userId          String
+  attemptId       String?
+  sessionIndex    Int            @default(1)
+  totalQuestions  Int
+  correctCount    Int
+  score           Float?
+  durationSeconds Int
+  baseSet         String         @default("[]")
+  mode            CermatMode     @default(NUMBER)
+  startedAt       DateTime       @default(now())
+  finishedAt      DateTime?
+  createdAt       DateTime       @default(now())
+  user            User           @relation(fields: [userId], references: [id])
+  attempt         CermatAttempt? @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  answers         CermatAnswer[]
+}
+
+model CermatAttempt {
+  id              String          @id @default(cuid())
+  userId          String
+  mode            CermatMode      @default(NUMBER)
+  totalSessions   Int
+  questionCount   Int
+  durationSeconds Int
+  breakSeconds    Int
+  startedAt       DateTime        @default(now())
+  finishedAt      DateTime?
+  averageScore    Float?
+  totalAnswered   Int?
+  user            User            @relation(fields: [userId], references: [id])
+  sessions        CermatSession[]
+}
+
+model CermatAnswer {
+  id            String        @id @default(cuid())
+  sessionId     String
+  order         Int
+  sequence      String
+  userAnswer    String?
+  correctAnswer String
+  isCorrect     Boolean
+  session       CermatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model Material {
+  id            String                 @id @default(cuid())
+  title         String
+  category      String
+  type          MaterialType
+  description   String?
+  fileUrl       String
+  uploadedById  String?
+  uploadedBy    User?                  @relation("MaterialUploader", fields: [uploadedById], references: [id])
+  createdAt     DateTime               @default(now())
+  packageAccess PackageMaterial[]
+  addonAccess   AddonPackageMaterial[]
+}
+
+model MembershipPackage {
+  id           String            @id @default(cuid())
+  name         String
+  slug         String            @unique
+  category     String
+  tagline      String?
+  description  String
+  price        Int
+  durationDays Int
+  badgeLabel   String?
+  features     Json
+  tryoutQuota  Int               @default(0)
+  moduleQuota  Int               @default(0)
+  allowTryout  Boolean           @default(true)
+  allowPractice Boolean          @default(true)
+  allowCermat  Boolean           @default(true)
+  accessAllPackages Boolean      @default(false)
+  isActive     Boolean           @default(true)
+  transactions Transaction[]
+  materials    PackageMaterial[]
+}
+
+model Transaction {
+  id                  String            @id @default(cuid())
+  code                String            @unique
+  userId              String
+  packageId           String
+  addonId             String?
+  targetTransactionId String?
+  amount              Int
+  method              String
+  type                TransactionType   @default(MEMBERSHIP)
+  status              TransactionStatus @default(PENDING)
+  proofUrl            String?
+  description         String?
+  activatedAt         DateTime?
+  expiresAt           DateTime?
+  tryoutQuota         Int               @default(0)
+  tryoutUsed          Int               @default(0)
+  moduleQuota         Int               @default(0)
+  moduleUsed          Int               @default(0)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  user                User              @relation(fields: [userId], references: [id])
+  package             MembershipPackage @relation(fields: [packageId], references: [id])
+  addon               AddonPackage?     @relation(fields: [addonId], references: [id])
+  targetTransaction   Transaction?      @relation("AddonTarget", fields: [targetTransactionId], references: [id])
+  addonTransactions   Transaction[]     @relation("AddonTarget")
+}
+
+model PackageMaterial {
+  id         String            @id @default(cuid())
+  packageId  String
+  materialId String
+  package    MembershipPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  material   Material          @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([packageId, materialId])
+}
+
+model AddonPackage {
+  id           String                 @id @default(cuid())
+  name         String
+  slug         String                 @unique
+  description  String?
+  price        Int
+  tryoutBonus  Int                    @default(0)
+  moduleBonus  Int                    @default(0)
+  isActive     Boolean                @default(true)
+  transactions Transaction[]
+  materials    AddonPackageMaterial[]
+}
+
+model AddonPackageMaterial {
+  id         String       @id @default(cuid())
+  addonId    String
+  materialId String
+  addon      AddonPackage @relation(fields: [addonId], references: [id], onDelete: Cascade)
+  material   Material     @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([addonId, materialId])
+}
+
+model PaymentSetting {
+  id            String   @id @default(cuid())
+  bankName      String
+  accountNumber String
+  accountHolder String   @default("")
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+}
+
+model SiteSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.LongText
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Referral {
+  id             String   @id @default(cuid())
+  referrerId     String
+  referredUserId String   @unique
+  status         String   @default("REGISTERED")
+  createdAt      DateTime @default(now())
+  referrer       User     @relation("UserReferrals", fields: [referrerId], references: [id])
+  referred       User     @relation("UserReferred", fields: [referredUserId], references: [id])
+}
+
+model HeroSlide {
+  id        String   @id @default(cuid())
+  imageUrl  String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model MemberOverviewSlide {
+  id        String   @id @default(cuid())
+  title     String?
+  subtitle  String?
+  imageUrl  String
+  ctaLabel  String?
+  ctaLink   String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model ExamBlock {
+  id             String        @id @default(cuid())
+  userId         String
+  type           ExamBlockType
+  reason         String?
+  code           String
+  violationCount Int           @default(1)
+  blockedAt      DateTime      @default(now())
+  resolvedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PsychCalculatorTemplate {
+  id            String                      @id @default(cuid())
+  title         String
+  slug          String                      @unique
+  description   String
+  type          CalculatorType              @default(ANGKA_HILANG)
+  config        Json
+  category      String                      @default("general")
+  categoryLabel String                      @default("Kalkulator")
+  section       String?
+  sectionLabel  String?
+  order         Int                         @default(0)
+  sectionOrder  Int                         @default(0)
+  submissions   PsychCalculatorSubmission[]
+}
+
+model PsychCalculatorSubmission {
+  id             String                  @id @default(cuid())
+  calculatorId   String
+  userId         String?
+  score          Int
+  interpretation String
+  payload        Json
+  createdAt      DateTime                @default(now())
+  calculator     PsychCalculatorTemplate @relation(fields: [calculatorId], references: [id])
+  user           User?                   @relation("UserCalculatorSubmissions", fields: [userId], references: [id])
+}
