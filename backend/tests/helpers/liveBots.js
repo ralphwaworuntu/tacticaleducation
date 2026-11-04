@@ -12,6 +12,8 @@ const { io } = require('socket.io-client');
 const pin = process.argv[2];
 const base = process.argv[3] || 'http://localhost:5000';
 const total = Math.max(2, Number(process.argv[4] || 2));
+// Jumlah bot terakhir yang sengaja tidak menjawab (env LQ_SILENT), untuk menguji "Tidak Menjawab".
+const silent = Math.max(0, Number(process.env.LQ_SILENT || 0));
 if (!pin) {
   console.error('Gunakan: node tests/helpers/liveBots.js <PIN> [baseUrl] [jumlahBot]');
   process.exit(1);
@@ -45,6 +47,7 @@ async function startBot(name, avatarId, pick, delayMs, reactEvery) {
   socket.on('question_started', (payload) => {
     const options = payload.question.options || [];
     const optionIds = pick(options);
+    if (!optionIds.length) return; // bot "diam": sengaja tidak menjawab
     setTimeout(() => {
       socket.emit('submit_answer', { questionIndex: payload.questionIndex, optionIds }, (ack) => {
         console.log(`[${name}] soal ${payload.questionIndex + 1} ->`, ack && ack.ok ? 'terkirim' : JSON.stringify(ack));
@@ -69,7 +72,9 @@ async function startBot(name, avatarId, pick, delayMs, reactEvery) {
     await startBot(
       name,
       AVATARS[i % AVATARS.length],
-      (options) => (options.length ? [options[Math.floor(Math.random() * options.length)].id] : []),
+      i >= total - silent
+        ? () => []
+        : (options) => (options.length ? [options[Math.floor(Math.random() * options.length)].id] : []),
       1000 + Math.floor(Math.random() * 6000),
       500 + Math.floor(Math.random() * 2500),
     );

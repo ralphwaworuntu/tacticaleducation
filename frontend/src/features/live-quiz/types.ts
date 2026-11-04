@@ -44,7 +44,14 @@ export type ClientSettings = {
   allowAvatarChange: boolean;
 };
 
-export type LobbyPlayer = { id: string; name: string; avatarId: string; connected: boolean; joinedAt: number };
+export type LobbyPlayer = {
+  id: string;
+  name: string;
+  avatarId: string;
+  avatarUrl?: string | null;
+  connected: boolean;
+  joinedAt: number;
+};
 export type LobbyPayload = {
   version: number;
   players: LobbyPlayer[];
@@ -82,8 +89,10 @@ export type ScorePayload = {
   version: number;
   questionIndex: number;
   // host
-  topGains?: Array<{ name: string; avatarId?: string; earned: number }>;
+  topGains?: Array<{ name: string; avatarId?: string; avatarUrl?: string | null; earned: number }>;
   answeredCount?: number;
+  /** Detail Jawaban Siswa: semua peserta aktif, sudah diurutkan server berdasarkan poin soal ini. */
+  answers?: RevealRow[];
   // player
   correct?: boolean;
   answered?: boolean;
@@ -92,10 +101,25 @@ export type ScorePayload = {
   previousScore?: number;
 };
 
+export type RevealStatus = 'CORRECT' | 'WRONG' | 'NONE';
+
+export type RevealRow = {
+  playerId: string;
+  name: string;
+  avatarId: string;
+  avatarUrl?: string | null;
+  status: RevealStatus;
+  selectedOptionIds: string[];
+  selectedLetters: string[];
+  earned: number;
+  responseMs: number | null;
+};
+
 export type LeaderboardEntry = {
   playerId: string;
   name: string;
   avatarId?: string;
+  avatarUrl?: string | null;
   rank: number;
   totalScore: number;
   correctCount: number;
@@ -112,6 +136,8 @@ export type LeaderboardPayload = {
   autoAdvanceAt: number | null;
   // host
   entries?: LeaderboardEntry[];
+  /** Seluruh ranking (hanya tutor). Mode utama tetap Top N di `entries`. */
+  standings?: LeaderboardEntry[];
   // player
   rank?: number;
   totalScore?: number;
@@ -124,6 +150,7 @@ export type PodiumRow = {
   playerId: string;
   name: string;
   avatarId?: string;
+  avatarUrl?: string | null;
   rank: number;
   totalScore: number;
   correctCount: number;
@@ -158,7 +185,15 @@ export type SyncPayload = {
   settings: ClientSettings;
   playerCount: number;
   lobby?: LobbyPayload;
-  me?: { id: string; name: string; avatarId?: string; totalScore: number; correctCount: number; rank: number | null };
+  me?: {
+    id: string;
+    name: string;
+    avatarId?: string;
+    avatarUrl?: string | null;
+    totalScore: number;
+    correctCount: number;
+    rank: number | null;
+  };
   countdown?: { startedAt: number; deadlineAt: number; countdownMs: number; version: number } | null;
   question?: QuestionPayload | PublicQuestion | null;
   myAnswer?: { optionIds: string[] } | null;
@@ -306,6 +341,7 @@ export type ReportData = {
     playerId: string;
     name: string;
     avatarId?: string;
+    avatarUrl?: string | null;
     userId: string | null;
     totalPoints: number;
     correctCount: number;
@@ -330,7 +366,16 @@ export type ReportData = {
 };
 
 export type PlayerDetail = {
-  player: { id: string; name: string; avatarId?: string; totalScore: number; correctCount: number; rank: number | null; kicked: boolean };
+  player: {
+    id: string;
+    name: string;
+    avatarId?: string;
+    avatarUrl?: string | null;
+    totalScore: number;
+    correctCount: number;
+    rank: number | null;
+    kicked: boolean;
+  };
   answers: Array<{
     number: number;
     prompt: string;
@@ -379,7 +424,14 @@ export const REACTION_LABEL: Record<ReactionId, string> = {
   rocket: 'Roket',
 };
 
-export type ReactionItem = { playerId: string; name: string; avatarId: string; emoji: ReactionId; at: number };
+export type ReactionItem = {
+  playerId: string;
+  name: string;
+  avatarId: string;
+  avatarUrl?: string | null;
+  emoji: ReactionId;
+  at: number;
+};
 export type ReactionBatchHost = { items: ReactionItem[]; counts: Partial<Record<ReactionId, number>>; total: number; serverNow: number };
 export type ReactionBatchPlayer = { counts: Partial<Record<ReactionId, number>>; total: number; serverNow: number };
 export type ReactionSettingsPayload = { reactionsEnabled: boolean; reactionsAfterSubmit: boolean; reactionsOnProjector: boolean };

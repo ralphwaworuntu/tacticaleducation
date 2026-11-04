@@ -10,10 +10,28 @@ export type PodiumEvent = 'lights' | 'podium' | 'avatar' | 'winner' | 'trophy' |
 
 type Step = { at: number; key: string; kind: PodiumEvent; position?: number };
 
-const BLOCK: Record<number, { height: string; gradient: string; label: string; medal: string }> = {
-  0: { height: 'clamp(9rem, 26vh, 15rem)', gradient: 'linear-gradient(180deg,#FFE9A8 0%,#FFD166 45%,#E9A92F 100%)', label: '#4a2f00', medal: '#FFD166' },
-  1: { height: 'clamp(6.5rem, 19vh, 11rem)', gradient: 'linear-gradient(180deg,#F6F9FE 0%,#C8D3E6 50%,#9AA9C2 100%)', label: '#1f2d44', medal: '#D6DFEE' },
-  2: { height: 'clamp(5rem, 14vh, 8rem)', gradient: 'linear-gradient(180deg,#FFD0A0 0%,#F0A05A 50%,#C9742B 100%)', label: '#4a2500', medal: '#F0A05A' },
+const BLOCK: Record<number, { height: string; gradient: string; label: string; medal: string; width: string }> = {
+  0: {
+    height: 'clamp(12rem, 34vh, 20rem)',
+    gradient: 'linear-gradient(180deg,#FFE9A8 0%,#FFD166 42%,#E9A92F 100%)',
+    label: '#4a2f00',
+    medal: '#FFD166',
+    width: 'w-[38%] max-w-[22rem]',
+  },
+  1: {
+    height: 'clamp(8.5rem, 25vh, 14.5rem)',
+    gradient: 'linear-gradient(180deg,#F6F9FE 0%,#C8D3E6 50%,#9AA9C2 100%)',
+    label: '#1f2d44',
+    medal: '#D6DFEE',
+    width: 'w-[31%] max-w-[18rem]',
+  },
+  2: {
+    height: 'clamp(6.75rem, 19vh, 11.5rem)',
+    gradient: 'linear-gradient(180deg,#FFD0A0 0%,#F0A05A 50%,#C9742B 100%)',
+    label: '#4a2500',
+    medal: '#F0A05A',
+    width: 'w-[31%] max-w-[18rem]',
+  },
 };
 
 /**
@@ -88,7 +106,7 @@ export function PodiumStage({
   const layout = [1, 0, 2].filter((position) => rows[position]);
 
   return (
-    <div className={cn('relative flex w-full flex-1 flex-col items-center justify-end', className)} aria-label="Podium pemenang">
+    <div className={cn('relative flex w-full min-h-0 flex-1 flex-col items-center justify-end', className)} aria-label="Podium pemenang">
       {/* Lampu panggung */}
       {has('lights') && (
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
@@ -110,19 +128,19 @@ export function PodiumStage({
         </button>
       )}
 
-      <div className="relative mx-auto flex w-full max-w-4xl items-end justify-center gap-3 px-2 sm:gap-6">
+      <div className="relative mx-auto flex w-full max-w-[min(94%,76rem)] items-end justify-center gap-2 px-1 sm:gap-5">
         {layout.map((position) => {
           const row = rows[position]!;
           const block = BLOCK[position]!;
           const winner = position === 0;
-          const avatarSize = winner ? 132 : 92;
+          const avatarSize = winner ? 176 : 124;
           const podiumUp = has(`podium-${position}`);
           const avatarIn = has(`avatar-${position}`);
           const trophy = has('trophy');
           return (
-            <div key={row.playerId} className="flex w-1/3 max-w-[17rem] flex-col items-center">
+            <div key={row.playerId} className={cn('flex flex-col items-center', block.width)}>
               {/* Avatar + nama */}
-              <div className="relative flex min-h-[11rem] w-full flex-col items-center justify-end pb-2 text-center">
+              <div className="relative flex min-h-[clamp(10rem,22vh,16rem)] w-full flex-col items-center justify-end pb-2 text-center">
                 <AnimatePresence>
                   {avatarIn && (
                     <motion.div
@@ -133,7 +151,7 @@ export function PodiumStage({
                       className="relative flex w-full flex-col items-center"
                     >
                       {winner && fancy && (
-                        <span className="pointer-events-none absolute -top-8 left-1/2 -z-10 h-64 w-64 -translate-x-1/2 opacity-60" aria-hidden>
+                        <span className="pointer-events-none absolute -top-10 left-1/2 -z-10 h-80 w-80 -translate-x-1/2 opacity-70" aria-hidden>
                           <svg viewBox="0 0 100 100" className="lq-rays h-full w-full">
                             {Array.from({ length: 12 }, (_, i) => (
                               <path key={i} d="M50 50 L44 0 L56 0Z" fill="#FFE9A8" opacity={0.55} transform={`rotate(${i * 30} 50 50)`} />
@@ -148,12 +166,22 @@ export function PodiumStage({
                           transition={{ delay: animate ? 0.35 : 0, type: 'spring', stiffness: 260, damping: 14 }}
                           className="mb-1 text-amber-300 drop-shadow-lg"
                         >
-                          <Crown className="h-10 w-10" fill="currentColor" aria-label="Juara 1" />
+                          <Crown className="h-12 w-12 sm:h-14 sm:w-14" fill="currentColor" aria-label="Juara 1" />
                         </motion.span>
                       )}
-                      <PlayerAvatar avatarId={row.avatarId} seed={row.playerId} size={avatarSize} ring idle={winner} />
-                      <p className={cn('mt-2 w-full truncate font-black text-white', winner ? 'text-2xl sm:text-3xl' : 'text-lg sm:text-xl')}>{row.name}</p>
-                      <p className={cn('font-black text-amber-200', winner ? 'text-2xl' : 'text-lg')}>
+                      <PlayerAvatar
+                        avatarId={row.avatarId}
+                        src={row.avatarUrl}
+                        seed={row.playerId}
+                        size={avatarSize}
+                        ring
+                        idle={winner}
+                        className={winner ? 'lq-rank-gold' : undefined}
+                      />
+                      <p className={cn('mt-2 w-full truncate px-1 font-black text-white drop-shadow', winner ? 'text-3xl sm:text-4xl xl:text-5xl' : 'text-xl sm:text-2xl xl:text-3xl')}>
+                        {row.name}
+                      </p>
+                      <p className={cn('font-black tabular-nums text-amber-200', winner ? 'text-3xl sm:text-4xl' : 'text-xl sm:text-2xl')}>
                         <AnimatedNumber value={row.totalScore} animate={animate} durationMs={1200} />
                       </p>
                     </motion.div>
@@ -167,9 +195,12 @@ export function PodiumStage({
                 animate={{ scaleY: podiumUp ? 1 : 0.02, opacity: podiumUp ? 1 : 0.15 }}
                 transition={{ type: 'spring', stiffness: 150, damping: 17 }}
                 style={{ height: block.height, background: block.gradient, transformOrigin: '50% 100%' }}
-                className="relative flex w-full items-start justify-center rounded-t-3xl shadow-2xl"
+                className={cn(
+                  'relative flex w-full items-start justify-center rounded-t-3xl shadow-2xl',
+                  winner && 'lq-rank-gold',
+                )}
               >
-                <span className="mt-2 text-5xl font-black sm:text-6xl" style={{ color: block.label }}>
+                <span className="mt-2 text-6xl font-black sm:text-7xl xl:text-8xl" style={{ color: block.label }}>
                   {row.rank}
                 </span>
                 <AnimatePresence>
@@ -181,7 +212,7 @@ export function PodiumStage({
                       className="absolute -bottom-0 left-1/2 mb-3 -translate-x-1/2"
                       style={{ bottom: '0.6rem', color: block.label }}
                     >
-                      {winner ? <Trophy className="h-10 w-10" aria-label="Piala" /> : <Medal className="h-8 w-8" aria-label="Medali" />}
+                      {winner ? <Trophy className="h-12 w-12" aria-label="Piala" /> : <Medal className="h-10 w-10" aria-label="Medali" />}
                     </motion.span>
                   )}
                 </AnimatePresence>
@@ -198,14 +229,14 @@ export function PodiumStage({
             initial={animate ? { opacity: 0, y: 24 } : false}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            className="mt-5 w-full max-w-4xl"
+            className="mt-4 w-full max-w-[min(94%,76rem)] min-h-0"
           >
             <p className="mb-2 text-center text-xs font-black uppercase tracking-[0.3em] text-sky-200">Semua juara</p>
-            <ol className="grid gap-2 sm:grid-cols-2">
+            <ol className="grid max-h-[22vh] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
               {rest.map((row) => (
                 <li key={row.playerId} className="lq-glass flex items-center gap-3 rounded-2xl px-3 py-2 text-lg font-bold">
                   <span className="w-8 text-center font-black text-amber-300">{row.rank}</span>
-                  <PlayerAvatar avatarId={row.avatarId} seed={row.playerId} size={36} />
+                  <PlayerAvatar avatarId={row.avatarId} src={row.avatarUrl} seed={row.playerId} size={40} />
                   <span className="min-w-0 flex-1 truncate">{row.name}</span>
                   <span className="tabular-nums text-amber-200">{row.totalScore.toLocaleString('id-ID')}</span>
                 </li>

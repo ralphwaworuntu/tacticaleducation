@@ -770,6 +770,8 @@ model LivePlayer {
   displayName   String
   // ID avatar dari katalog bersama (liveAvatars.ts). Null = pakai avatar default deterministik.
   avatarId      String?      @db.VarChar(32)
+  // URL avatar kartun hasil selfie (hanya /uploads/live-quiz/avatars/...). Null = pakai katalog SVG.
+  avatarUrl     String?      @db.VarChar(500)
   // Nama dinormalisasi (lowercase) untuk keunikan per sesi.
   nameKey       String
   tokenHash     String

@@ -11,7 +11,7 @@ import {
   quizSettingsSchema,
   resolveQuizSettings,
 } from './live.settings';
-import { normalizeAvatarId } from './liveAvatars';
+import { isLivePlayerAvatarUrl, normalizeAvatarId } from './liveAvatars';
 import { rankPlayers } from './liveRanking';
 import { computeAccuracy } from './liveScoring';
 import { csvSafeCell } from './liveText';
@@ -473,11 +473,17 @@ async function loadReportData(sessionId: string) {
   const closed = new Set(states.map((s) => s.questionIndex));
   // Jawaban untuk soal yang tidak pernah ditutup (sesi dihentikan) tidak dihitung.
   const validAnswers = answers.filter((a) => closed.has(a.questionIndex));
-  return { session, snapshot, players, answers: validAnswers, closedCount: closed.size };
+  const urlRows = await prisma.$queryRaw<Array<{ id: string; avatarUrl: string | null }>>`
+    SELECT id, avatarUrl FROM LivePlayer WHERE sessionId = ${sessionId}
+  `;
+  const avatarUrlById = new Map(
+    urlRows.map((row) => [row.id, isLivePlayerAvatarUrl(row.avatarUrl) ? row.avatarUrl : null] as const),
+  );
+  return { session, snapshot, players, answers: validAnswers, closedCount: closed.size, avatarUrlById };
 }
 
 export async function buildReport(sessionId: string) {
-  const { session, snapshot, players, answers, closedCount } = await loadReportData(sessionId);
+  const { session, snapshot, players, answers, closedCount, avatarUrlById } = await loadReportData(sessionId);
   const totalQuestions = session.status === 'FINISHED' || session.status === 'CANCELLED' ? closedCount : snapshot.questions.length;
   const active = players.filter((p) => !p.kickedAt);
 
@@ -507,6 +513,7 @@ export async function buildReport(sessionId: string) {
         playerId: p.id,
         name: p.displayName,
         avatarId: normalizeAvatarId(p.avatarId, p.id),
+        avatarUrl: avatarUrlById.get(p.id) ?? null,
         userId: p.userId,
         totalPoints: p.totalScore,
         correctCount: p.correctCount,
@@ -580,7 +587,7 @@ export async function buildReport(sessionId: string) {
 }
 
 export async function buildPlayerDetail(sessionId: string, playerId: string) {
-  const { snapshot, players, answers, closedCount } = await loadReportData(sessionId);
+  const { snapshot, players, answers, closedCount, avatarUrlById } = await loadReportData(sessionId);
   const player = players.find((p) => p.id === playerId);
   if (!player) throw new HttpError('Peserta tidak ditemukan.', 404);
   const mine = new Map(answers.filter((a) => a.playerId === playerId).map((a) => [a.questionIndex, a]));
@@ -603,6 +610,7 @@ export async function buildPlayerDetail(sessionId: string, playerId: string) {
       id: player.id,
       name: player.displayName,
       avatarId: normalizeAvatarId(player.avatarId, player.id),
+      avatarUrl: avatarUrlById.get(player.id) ?? null,
       totalScore: player.totalScore,
       correctCount: player.correctCount,
       rank: player.rank,

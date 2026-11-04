@@ -12,7 +12,7 @@ import { liveQuizApi } from '../api';
 import { liveAudio, type Sfx } from '../audio';
 import { PlayerAvatar } from '../avatars';
 import { formatPin } from '../format';
-import type { ClientSettings, JoinInfo, LobbyPlayer, ReactionBatchHost } from '../types';
+import type { ClientSettings, JoinInfo, LobbyPlayer, ReactionBatchHost, RevealRow, RevealStatus } from '../types';
 import { useLiveSession, type HostAction, type LiveState } from '../useLiveSession';
 import { useMotionLevel } from '../useMotionLevel';
 import { AnswerCard, themeFor } from '../ui/AnswerCard';
@@ -174,7 +174,7 @@ function HostLobby({ state, join, onKick, view }: { state: LiveState; join: Join
                     className="group relative flex flex-col items-center gap-1.5 rounded-2xl bg-white/[0.07] px-2 pb-2 pt-3"
                     title={player.connected ? 'Terhubung' : 'Terputus'}
                   >
-                    <PlayerAvatar avatarId={player.avatarId} seed={player.id} size={avatarSize} idle={view.fancy && !dense} />
+                    <PlayerAvatar avatarId={player.avatarId} src={player.avatarUrl} seed={player.id} size={avatarSize} idle={view.fancy && !dense} />
                     <span
                       className={cn(
                         'max-w-full truncate rounded-full px-3 py-0.5 text-center font-extrabold',
@@ -352,7 +352,172 @@ function HostResult({ state, view }: { state: LiveState; view: View }) {
   );
 }
 
+type RevealFilter = 'ALL' | RevealStatus;
+
+const REVEAL_FILTERS: Array<{ id: RevealFilter; label: string }> = [
+  { id: 'ALL', label: 'Semua' },
+  { id: 'CORRECT', label: 'Benar' },
+  { id: 'WRONG', label: 'Salah' },
+  { id: 'NONE', label: 'Tidak Menjawab' },
+];
+
+const REVEAL_STATUS: Record<RevealStatus, { label: string; chip: string; row: string; points: string }> = {
+  CORRECT: {
+    label: 'Benar',
+    chip: 'bg-emerald-400/25 text-emerald-100 ring-1 ring-emerald-300/50',
+    row: 'border-emerald-300/40 bg-emerald-500/15',
+    points: 'text-emerald-300',
+  },
+  WRONG: {
+    label: 'Salah',
+    chip: 'bg-rose-400/25 text-rose-100 ring-1 ring-rose-300/50',
+    row: 'border-rose-300/40 bg-rose-500/15',
+    points: 'text-rose-200/80',
+  },
+  NONE: {
+    label: 'Tidak Menjawab',
+    chip: 'bg-slate-400/20 text-slate-200 ring-1 ring-slate-300/30',
+    row: 'border-white/10 bg-slate-500/15',
+    points: 'text-slate-300/70',
+  },
+};
+
+// Kolom: No | Siswa | Pilihan | Status | Poin (grid yang sama untuk header sticky dan setiap baris).
+const REVEAL_GRID =
+  'grid grid-cols-[clamp(2.25rem,4vw,3.5rem)_minmax(0,1.7fr)_clamp(3.75rem,8vw,6.5rem)_clamp(6.5rem,14vw,12rem)_clamp(4.5rem,9vw,8rem)] items-center gap-2 sm:gap-4';
+
+function letterTheme(letter: string) {
+  return themeFor(Math.max(0, letter.charCodeAt(0) - 65));
+}
+
+/** Sama dengan backend `compareReveal`: poin soal ini ↓, waktu ↑, nama A–Z, ID. Tidak menghitung ulang poin. */
+function compareRevealRows(a: RevealRow, b: RevealRow): number {
+  if (a.earned !== b.earned) return b.earned - a.earned;
+  const ta = a.responseMs ?? Number.POSITIVE_INFINITY;
+  const tb = b.responseMs ?? Number.POSITIVE_INFINITY;
+  if (ta !== tb) return ta < tb ? -1 : 1;
+  const byName = a.name.localeCompare(b.name, 'id', { sensitivity: 'base' });
+  if (byName !== 0) return byName;
+  return a.playerId < b.playerId ? -1 : a.playerId > b.playerId ? 1 : 0;
+}
+
+/** Detail Jawaban Siswa: seluruh peserta, diurutkan poin soal ini (bukan total leaderboard). */
+function HostAnswerDetails({ rows, view }: { rows: RevealRow[]; view: View }) {
+  const [filter, setFilter] = useState<RevealFilter>('ALL');
+  const counts = useMemo(() => {
+    const c = { ALL: rows.length, CORRECT: 0, WRONG: 0, NONE: 0 } as Record<RevealFilter, number>;
+    for (const row of rows) c[row.status] += 1;
+    return c;
+  }, [rows]);
+  const visible = useMemo(() => {
+    const list = filter === 'ALL' ? rows : rows.filter((row) => row.status === filter);
+    return [...list].sort(compareRevealRows);
+  }, [rows, filter]);
+
+  const many = visible.length >= 12;
+  const avatarSize = many ? 36 : visible.length <= 6 ? 64 : 48;
+  const rowPad = many ? 'px-2 py-1.5' : visible.length <= 6 ? 'px-3 py-3' : 'px-3 py-2';
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col items-center gap-3 text-white">
+      <div className="flex w-[min(96%,88rem)] flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="flex items-center gap-3 text-[clamp(1.75rem,3.6vw,3.25rem)] font-black leading-tight">
+            <BarChart3 className="h-[1.1em] w-[1.1em] text-amber-300" /> Detail Jawaban Siswa
+          </h2>
+          <p className="mt-1 text-sm font-semibold text-sky-100/80 xl:text-base">Poin soal ini, dari tertinggi ke terendah</p>
+        </div>
+        <div role="tablist" aria-label="Filter jawaban" className="flex flex-wrap gap-2">
+          {REVEAL_FILTERS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={filter === item.id}
+              onClick={() => setFilter(item.id)}
+              className={cn(
+                'rounded-full px-3 py-1.5 text-sm font-bold transition xl:px-4 xl:text-base',
+                filter === item.id ? 'bg-white text-slate-900 shadow-lg' : 'lq-glass text-white hover:bg-white/20',
+              )}
+            >
+              {item.label} <span className="tabular-nums opacity-70">{counts[item.id]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className={cn('lq-glass flex w-[min(96%,88rem)] flex-col overflow-hidden rounded-3xl', many || visible.length > 8 ? 'min-h-0 flex-1' : 'max-h-full')}>
+        <div className={cn(REVEAL_GRID, 'sticky top-0 z-10 shrink-0 border-b border-white/15 bg-slate-950/70 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-sky-100/80 backdrop-blur xl:text-sm')}>
+          <span className="text-center">No</span>
+          <span>Avatar & Nama</span>
+          <span className="text-center">Pilihan</span>
+          <span className="text-center">Status</span>
+          <span className="text-right">Poin</span>
+        </div>
+        <ol className={cn('min-h-0 space-y-1.5 overflow-y-auto p-2', (many || visible.length > 8) && 'flex-1')} aria-label="Daftar jawaban siswa">
+          {visible.length === 0 && (
+            <li className="py-10 text-center text-xl text-sky-100">Tidak ada siswa pada filter ini.</li>
+          )}
+          {visible.map((row, index) => {
+            const style = REVEAL_STATUS[row.status];
+            const stagger = Math.min(index, 14) * 0.045;
+            return (
+              <motion.li
+                key={row.playerId}
+                layout={view.animate ? 'position' : false}
+                initial={view.animate ? { opacity: 0, x: -28 } : false}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: view.animate ? stagger : 0, duration: 0.3 }}
+                data-testid="reveal-row"
+                data-status={row.status}
+                className={cn(REVEAL_GRID, 'rounded-xl border', rowPad, style.row)}
+              >
+                <span className="text-center text-[clamp(1rem,1.8vw,1.75rem)] font-black tabular-nums text-white/70">{index + 1}</span>
+                <span className="flex min-w-0 items-center gap-3">
+                  <PlayerAvatar avatarId={row.avatarId} src={row.avatarUrl} seed={row.playerId} size={avatarSize} />
+                  <span className="min-w-0 truncate text-[clamp(1rem,1.8vw,1.75rem)] font-bold">{row.name}</span>
+                </span>
+                <span className="flex justify-center gap-1">
+                  {row.selectedLetters.length ? (
+                    row.selectedLetters.map((letter) => {
+                      const theme = letterTheme(letter);
+                      return (
+                        <span
+                          key={letter}
+                          className="flex h-9 w-9 items-center justify-center rounded-lg text-base font-black text-white shadow xl:h-11 xl:w-11 xl:text-xl"
+                          style={{ background: `linear-gradient(180deg, ${theme.top}, ${theme.bottom})` }}
+                        >
+                          {letter}
+                        </span>
+                      );
+                    })
+                  ) : (
+                    <span className="text-xl font-black text-white/40">–</span>
+                  )}
+                </span>
+                <span className="flex justify-center">
+                  <span className={cn('whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold xl:text-base', style.chip)}>{style.label}</span>
+                </span>
+                <span className={cn('text-right text-[clamp(1.1rem,2vw,2rem)] font-black', style.points)}>
+                  {row.earned > 0 ? '+' : ''}
+                  <AnimatedNumber value={row.earned} animate={view.animate && index < 15 && row.earned > 0} durationMs={900} />
+                </span>
+              </motion.li>
+            );
+          })}
+        </ol>
+      </div>
+    </div>
+  );
+}
+
 function HostScore({ state, view }: { state: LiveState; view: View }) {
+  const answers = state.score?.answers;
+  if (answers) return <HostAnswerDetails key={state.score?.questionIndex} rows={answers} view={view} />;
+  return <HostTopGains state={state} view={view} />;
+}
+
+// Cadangan untuk server lama yang belum mengirim daftar jawaban lengkap.
+function HostTopGains({ state, view }: { state: LiveState; view: View }) {
   const gains = state.score?.topGains ?? [];
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6 text-white">
@@ -369,7 +534,7 @@ function HostScore({ state, view }: { state: LiveState; view: View }) {
               transition={{ delay: view.animate ? index * 0.12 : 0 }}
               className="lq-glass flex items-center gap-4 rounded-2xl px-5 py-3 text-2xl font-bold"
             >
-              <PlayerAvatar avatarId={gain.avatarId} seed={gain.name} size={52} />
+              <PlayerAvatar avatarId={gain.avatarId} src={gain.avatarUrl} seed={gain.name} size={52} />
               <span className="min-w-0 flex-1 truncate">{gain.name}</span>
               <span className="font-black text-emerald-300">+{gain.earned.toLocaleString('id-ID')}</span>
             </motion.li>
@@ -384,16 +549,31 @@ function HostScore({ state, view }: { state: LiveState; view: View }) {
 
 function HostLeaderboard({ state, view }: { state: LiveState; view: View }) {
   const lb = state.leaderboard;
+  const [showAll, setShowAll] = useState(false);
+  const top = lb?.entries ?? [];
+  const all = lb?.standings ?? top;
+  const shown = showAll ? all : top;
   if (!lb) return null;
   return (
-    <div className="flex h-full min-h-0 flex-col items-center gap-4 overflow-y-auto text-white">
-      <h2 className="flex items-center gap-3 text-4xl font-black tracking-wide">
-        <Trophy className="h-10 w-10 text-amber-300" /> TACTICAL LEADERBOARD
+    <div className="flex h-full min-h-0 flex-col items-center gap-3 overflow-hidden text-white">
+      <h2 className="flex shrink-0 items-center gap-3 text-[clamp(1.85rem,4.2vw,4.25rem)] font-black tracking-wide">
+        <Trophy className="h-[0.9em] w-[0.9em] text-amber-300" /> TACTICAL LEADERBOARD
       </h2>
       {lb.visible === false ? (
         <p className="mt-10 text-2xl text-sky-100">Leaderboard disembunyikan oleh pengaturan sesi.</p>
       ) : (
-        <Leaderboard entries={lb.entries ?? []} animate={view.animate} large />
+        <>
+          <Leaderboard entries={shown} animate={view.animate && !showAll} large className="min-h-0 flex-1" />
+          {all.length > top.length && (
+            <button
+              type="button"
+              onClick={() => setShowAll((v) => !v)}
+              className="lq-btn lq-btn-ghost shrink-0 px-5 py-2 text-sm"
+            >
+              {showAll ? `Tampilkan Top ${top.length}` : `Lihat semua peringkat (${all.length})`}
+            </button>
+          )}
+        </>
       )}
     </div>
   );
@@ -401,7 +581,7 @@ function HostLeaderboard({ state, view }: { state: LiveState; view: View }) {
 
 function HostFinal({ state, view, sfx, sessionId }: { state: LiveState; view: View; sfx: (name: Sfx) => void; sessionId: string }) {
   const final = state.final;
-  const rest = useMemo(() => (final?.standings ?? []).filter((row) => row.rank > 3).slice(0, 6), [final?.standings]);
+  const rest = useMemo(() => (final?.standings ?? []).filter((row) => row.rank > 3), [final?.standings]);
   const onEvent = useCallback(
     (event: PodiumEvent) => {
       switch (event) {
@@ -430,8 +610,10 @@ function HostFinal({ state, view, sfx, sessionId }: { state: LiveState; view: Vi
   );
   if (!final) return null;
   return (
-    <div className="relative flex h-full min-h-0 flex-col items-center gap-3 overflow-y-auto text-white">
-      <h2 className="text-5xl font-black tracking-wide">{final.early ? 'SESI DIHENTIKAN' : 'FINAL CHAMPIONS'}</h2>
+    <div className="relative flex h-full min-h-0 flex-col items-center gap-2 overflow-hidden text-white">
+      <h2 className="shrink-0 text-[clamp(1.75rem,4vw,3.75rem)] font-black tracking-wide">
+        {final.early ? 'SESI DIHENTIKAN' : 'FINAL CHAMPIONS'}
+      </h2>
       {final.podium.length ? (
         <PodiumStage podium={final.podium} rest={rest} animate={view.animate} fancy={view.fancy} onEvent={onEvent} />
       ) : (

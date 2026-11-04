@@ -49,3 +49,12 @@ export function defaultAvatarFor(seed: string): AvatarId {
 export function normalizeAvatarId(value: unknown, seed: string): AvatarId {
   return isAvatarId(value) ? value : defaultAvatarFor(seed);
 }
+
+/** Hanya path unggahan avatar pemain Live Quiz — menolak URL asing / traversal. */
+export const LIVE_PLAYER_AVATAR_PREFIX = '/uploads/live-quiz/avatars/';
+
+export function isLivePlayerAvatarUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || !value.startsWith(LIVE_PLAYER_AVATAR_PREFIX)) return false;
+  const name = value.slice(LIVE_PLAYER_AVATAR_PREFIX.length);
+  return /^[A-Za-z0-9._-]+\.(jpe?g|png|webp)$/i.test(name);
+}

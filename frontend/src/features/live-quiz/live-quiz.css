@@ -164,6 +164,23 @@
   animation: lq-bob 3.2s ease-in-out infinite;
 }
 
+@keyframes lq-gold-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px rgba(255, 209, 102, 0.55),
+      0 0 22px rgba(255, 209, 102, 0.38);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px rgba(255, 209, 102, 0.9),
+      0 0 36px rgba(255, 209, 102, 0.55);
+  }
+}
+.lq-rank-gold {
+  animation: lq-gold-pulse 1.8s ease-in-out infinite;
+}
+
 @keyframes lq-pulse {
   0%,
   100% {
@@ -259,7 +276,8 @@
 .lq-lite .lq-rays,
 .lq-lite .lq-pulse,
 .lq-lite .lq-avatar-idle,
-.lq-lite .lq-beam {
+.lq-lite .lq-beam,
+.lq-lite .lq-rank-gold {
   animation: none !important;
 }
 .lq-lite .lq-shine::after {
@@ -286,7 +304,8 @@
   .lq-root .lq-rays,
   .lq-root .lq-pulse,
   .lq-root .lq-avatar-idle,
-  .lq-root .lq-beam {
+  .lq-root .lq-beam,
+  .lq-root .lq-rank-gold {
     animation: none !important;
   }
   .lq-root .lq-shine::after {

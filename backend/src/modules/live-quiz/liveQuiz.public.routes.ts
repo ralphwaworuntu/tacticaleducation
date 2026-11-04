@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { env } from '../../config/env';
 import { prisma } from '../../config/prisma';
+import { buildPublicUploadPath, livePlayerAvatarUpload, optimizeLivePlayerAvatar, removePublicUploadPath } from '../../config/upload';
 import { HttpError } from '../../middlewares/errorHandler';
 import { validateResource } from '../../middlewares/validateResource';
 import { liveEngine } from './liveEngine';
@@ -93,3 +94,32 @@ liveQuizPublicRouter.get('/sessions/:sessionId/me', async (req, res) => {
   const sync = await liveEngine.getSync(sessionId, { role: 'player', playerId: player.id });
   res.json({ status: 'success', data: sync });
 });
+
+/** Unggah hasil akhir avatar kartun (bukan selfie asli). Hanya pemilik token. */
+liveQuizPublicRouter.post(
+  '/sessions/:sessionId/avatar',
+  failedAttemptLimiter,
+  livePlayerAvatarUpload.single('avatar'),
+  optimizeLivePlayerAvatar,
+  async (req, res) => {
+    const token = String(req.headers['x-player-token'] ?? '');
+    const sessionId = String(req.params.sessionId ?? '');
+    const file = (req as Request & { file?: Express.Multer.File }).file;
+    const publicPath = file ? buildPublicUploadPath(file.path) : null;
+    const player = token ? await liveEngine.authenticatePlayer(sessionId, token) : null;
+    if (!player) {
+      if (publicPath) await removePublicUploadPath(publicPath);
+      throw new HttpError('Token pemain tidak valid.', 401);
+    }
+    if (!publicPath) throw new HttpError('Gambar wajib.', 400);
+    const result = await liveEngine.setPlayerCustomAvatar(sessionId, player.id, publicPath);
+    if (!result.ok) {
+      await removePublicUploadPath(publicPath);
+      throw new HttpError(result.message, 400, { code: result.code });
+    }
+    res.json({
+      status: 'success',
+      data: { avatarUrl: result.avatarUrl, avatarId: result.avatarId },
+    });
+  },
+);

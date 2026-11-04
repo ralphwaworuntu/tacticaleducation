@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
 import { prisma as defaultPrisma } from '../../config/prisma';
+import { removePublicUploadPath } from '../../config/upload';
 import { HttpError } from '../../middlewares/errorHandler';
 import {
   ALLOWED_TIME_LIMITS,
@@ -10,7 +11,8 @@ import {
   resolveQuizSettings,
   type QuizSettings,
 } from './live.settings';
-import { isAvatarId, normalizeAvatarId, type AvatarId } from './liveAvatars';
+import { buildAnswerReveal } from './liveAnswerReveal';
+import { isAvatarId, isLivePlayerAvatarUrl, normalizeAvatarId, type AvatarId } from './liveAvatars';
 import { rankPlayers } from './liveRanking';
 import {
   REACTION_BATCH_MS,
@@ -50,12 +52,24 @@ import {
   type SnapshotQuestion,
 } from './live.types';
 
+async function persistPlayerAvatarUrl(db: PrismaClient, playerId: string, url: string | null) {
+  await db.$executeRaw`UPDATE LivePlayer SET avatarUrl = ${url} WHERE id = ${playerId}`;
+}
+
+async function loadSessionAvatarUrls(db: PrismaClient, sessionId: string) {
+  return db.$queryRaw<Array<{ id: string; avatarUrl: string | null }>>`
+    SELECT id, avatarUrl FROM LivePlayer WHERE sessionId = ${sessionId}
+  `;
+}
+
 type RtPlayer = {
   id: string;
   userId: string | null;
   name: string;
   /** Selalu ID avatar valid (default deterministik bila pemain tidak memilih). */
   avatarId: AvatarId;
+  /** Path unggahan kartun; null = pakai SVG katalog. */
+  avatarUrl: string | null;
   tokenHash: string;
   connected: boolean;
   kicked: boolean;
@@ -144,6 +158,7 @@ export type JoinResult = {
   playerToken: string;
   displayName: string;
   avatarId: AvatarId;
+  avatarUrl: string | null;
   status: LivePhase;
   rejoined: boolean;
 };
@@ -338,6 +353,7 @@ export class LiveEngine {
           playerToken: input.rejoinToken,
           displayName: existing.name,
           avatarId: existing.avatarId,
+          avatarUrl: existing.avatarUrl,
           status: rt.status,
           rejoined: true,
         };
@@ -357,6 +373,7 @@ export class LiveEngine {
           playerToken: token,
           displayName: existing.name,
           avatarId: existing.avatarId,
+          avatarUrl: existing.avatarUrl,
           status: rt.status,
           rejoined: true,
         };
@@ -403,6 +420,7 @@ export class LiveEngine {
       userId: created.userId,
       name: created.displayName,
       avatarId: normalizeAvatarId(created.avatarId, created.id),
+      avatarUrl: null,
       tokenHash,
       connected: false,
       kicked: false,
@@ -429,6 +447,7 @@ export class LiveEngine {
       playerToken: token,
       displayName: player.name,
       avatarId: player.avatarId,
+      avatarUrl: player.avatarUrl,
       status: rt.status,
       rejoined: false,
     };
@@ -674,7 +693,7 @@ export class LiveEngine {
     sessionId: string,
     playerId: string,
     avatarId: unknown,
-  ): Promise<EngineResult<{ avatarId: AvatarId }>> {
+  ): Promise<EngineResult<{ avatarId: AvatarId; avatarUrl: string | null }>> {
     const rt = await this.getRuntime(sessionId);
     if (!rt) return fail('not_found', 'Sesi tidak ditemukan.');
     if (!isAvatarId(avatarId)) return fail('invalid_avatar', 'Karakter tidak dikenal.');
@@ -683,17 +702,54 @@ export class LiveEngine {
       if (!player || player.kicked) return fail('not_found', 'Pemain tidak ditemukan.');
       if (rt.status !== 'LOBBY') return fail('phase_not_allowed', 'Karakter hanya bisa diganti di lobby.');
       if (!rt.settings.allowAvatarChange) return fail('avatar_locked', 'Tutor tidak mengizinkan ganti karakter.');
-      if (player.avatarId === avatarId) return { ok: true, avatarId };
+      if (player.avatarId === avatarId && !player.avatarUrl) return { ok: true, avatarId, avatarUrl: null };
+      const previousUrl = player.avatarUrl;
       await this.db.livePlayer.update({ where: { id: player.id }, data: { avatarId } });
+      await persistPlayerAvatarUrl(this.db, player.id, null);
       player.avatarId = avatarId;
-      this.emitter.toHost(rt.id, LIVE_EVENTS.playerAvatarUpdated, {
-        player: this.toLobbyPlayer(player),
-        version: rt.version,
-      });
-      this.emitter.toPlayer(player.id, LIVE_EVENTS.playerAvatarUpdated, { avatarId });
-      this.emitLobby(rt);
-      return { ok: true, avatarId };
+      player.avatarUrl = null;
+      if (previousUrl) void removePublicUploadPath(previousUrl);
+      this.emitAvatarUpdated(rt, player);
+      return { ok: true, avatarId, avatarUrl: null };
     });
+  }
+
+  /**
+   * Pasang avatar kartun hasil unggahan (hanya path /uploads/live-quiz/avatars/...).
+   * Selfie asli tidak disimpan — klien hanya mengirim hasil akhir.
+   */
+  async setPlayerCustomAvatar(
+    sessionId: string,
+    playerId: string,
+    url: string,
+  ): Promise<EngineResult<{ avatarId: AvatarId; avatarUrl: string }>> {
+    const rt = await this.getRuntime(sessionId);
+    if (!rt) return fail('not_found', 'Sesi tidak ditemukan.');
+    if (!isLivePlayerAvatarUrl(url)) return fail('invalid_avatar', 'Avatar tidak valid.');
+    return this.exclusive(rt, async () => {
+      const player = rt.players.get(playerId);
+      if (!player || player.kicked) return fail('not_found', 'Pemain tidak ditemukan.');
+      if (rt.status !== 'LOBBY') return fail('phase_not_allowed', 'Karakter hanya bisa diganti di lobby.');
+      if (!rt.settings.allowAvatarChange) return fail('avatar_locked', 'Tutor tidak mengizinkan ganti karakter.');
+      const previousUrl = player.avatarUrl;
+      await persistPlayerAvatarUrl(this.db, player.id, url);
+      player.avatarUrl = url;
+      if (previousUrl && previousUrl !== url) void removePublicUploadPath(previousUrl);
+      this.emitAvatarUpdated(rt, player);
+      return { ok: true, avatarId: player.avatarId, avatarUrl: url };
+    });
+  }
+
+  private emitAvatarUpdated(rt: Runtime, player: RtPlayer) {
+    this.emitter.toHost(rt.id, LIVE_EVENTS.playerAvatarUpdated, {
+      player: this.toLobbyPlayer(player),
+      version: rt.version,
+    });
+    this.emitter.toPlayer(player.id, LIVE_EVENTS.playerAvatarUpdated, {
+      avatarId: player.avatarId,
+      avatarUrl: player.avatarUrl,
+    });
+    this.emitLobby(rt);
   }
 
   /**
@@ -722,6 +778,7 @@ export class LiveEngine {
       playerId: player.id,
       name: player.name,
       avatarId: player.avatarId,
+      avatarUrl: player.avatarUrl,
       emoji,
       at: this.now(),
     });
@@ -1134,6 +1191,7 @@ export class LiveEngine {
         id: player.id,
         name: player.name,
         avatarId: player.avatarId,
+        avatarUrl: player.avatarUrl,
         totalScore: player.totalScore,
         correctCount: player.correctCount,
         rank,
@@ -1294,9 +1352,22 @@ export class LiveEngine {
       .filter((item) => item.player && !item.player.kicked && item.answer.score > 0)
       .sort((a, b) => b.answer.score - a.answer.score || a.answer.responseMs - b.answer.responseMs)
       .slice(0, 5)
-      .map((item) => ({ name: item.player!.name, avatarId: item.player!.avatarId, earned: item.answer.score }));
+      .map((item) => ({
+        name: item.player!.name,
+        avatarId: item.player!.avatarId,
+        avatarUrl: item.player!.avatarUrl,
+        earned: item.answer.score,
+      }));
 
-    const host = { version: rt.version, questionIndex: index, topGains: gains, answeredCount: rt.answers.size };
+    // Detail Jawaban Siswa (hanya layar tutor): data jawaban & poin asli server, diurutkan berdasarkan poin SOAL INI.
+    // Tidak memengaruhi ranking utama (leaderboard/podium memakai total poin).
+    const question = rt.snapshot.questions[index];
+    const answers = buildAnswerReveal(
+      this.activePlayers(rt).map((p) => ({ id: p.id, name: p.name, avatarId: p.avatarId, avatarUrl: p.avatarUrl })),
+      rt.answers,
+      question ? question.options.map((o) => o.id) : [],
+    );
+    const host = { version: rt.version, questionIndex: index, topGains: gains, answeredCount: rt.answers.size, answers };
     const byPlayer = new Map<string, Record<string, unknown>>();
     for (const player of this.activePlayers(rt)) {
       const answer = rt.answers.get(player.id);
@@ -1323,6 +1394,7 @@ export class LiveEngine {
         playerId: p.id,
         name: p.name,
         avatarId: p.avatarId,
+        avatarUrl: p.avatarUrl,
         rank: p.rank,
         totalScore: p.totalScore,
         correctCount: p.correctCount,
@@ -1344,7 +1416,7 @@ export class LiveEngine {
           ? this.now() + rt.settings.leaderboardDurationSec * 1000
           : null,
     };
-    const host = { ...shared, entries: top };
+    const host = { ...shared, entries: top, standings: entries };
     const byPlayer = new Map<string, Record<string, unknown>>();
     for (const entry of entries) {
       byPlayer.set(entry.playerId, {
@@ -1382,15 +1454,19 @@ export class LiveEngine {
   ): PhaseEntry {
     const nameOf = (id: string) => rt.players.get(id)?.name ?? '-';
     const sorted = [...results].sort((a, b) => a.finalRank - b.finalRank);
-    const toRow = (r: (typeof results)[number]) => ({
-      playerId: r.playerId,
-      name: nameOf(r.playerId),
-      avatarId: rt.players.get(r.playerId)?.avatarId ?? normalizeAvatarId(null, r.playerId),
-      rank: r.finalRank,
-      totalScore: r.totalPoints,
-      correctCount: r.correctCount,
-      accuracy: r.accuracy,
-    });
+    const toRow = (r: (typeof results)[number]) => {
+      const player = rt.players.get(r.playerId);
+      return {
+        playerId: r.playerId,
+        name: nameOf(r.playerId),
+        avatarId: player?.avatarId ?? normalizeAvatarId(null, r.playerId),
+        avatarUrl: player?.avatarUrl ?? null,
+        rank: r.finalRank,
+        totalScore: r.totalPoints,
+        correctCount: r.correctCount,
+        accuracy: r.accuracy,
+      };
+    };
     const totalQuestions = sorted[0]?.totalQuestions ?? rt.snapshot.questions.length;
     // Podium: tampilkan hanya jumlah pemenang yang tersedia (1-3 pemain).
     const podium = sorted.filter((r) => r.finalRank <= 3).slice(0, 3).map(toRow);
@@ -1401,7 +1477,7 @@ export class LiveEngine {
       early,
       podium,
     };
-    const host = { ...shared, standings: sorted.slice(0, 10).map(toRow) };
+    const host = { ...shared, standings: sorted.map(toRow) };
     const byPlayer = new Map<string, Record<string, unknown>>();
     for (const r of sorted) {
       byPlayer.set(r.playerId, {
@@ -1455,6 +1531,7 @@ export class LiveEngine {
       id: player.id,
       name: player.name,
       avatarId: player.avatarId,
+      avatarUrl: player.avatarUrl,
       connected: player.connected,
       joinedAt: player.joinedAt,
     };
@@ -1662,6 +1739,9 @@ export class LiveEngine {
         userId: p.userId,
         name: p.displayName,
         avatarId: normalizeAvatarId(p.avatarId, p.id),
+        avatarUrl: isLivePlayerAvatarUrl((p as { avatarUrl?: unknown }).avatarUrl)
+          ? ((p as { avatarUrl: string }).avatarUrl)
+          : null,
         tokenHash: p.tokenHash,
         connected: false,
         kicked: Boolean(p.kickedAt),
@@ -1673,6 +1753,11 @@ export class LiveEngine {
         rank: p.rank,
       });
       rt.tokenIndex.set(p.tokenHash, p.id);
+    }
+    const avatarRows = await loadSessionAvatarUrls(this.db, sessionId);
+    for (const avatarRow of avatarRows) {
+      const player = rt.players.get(avatarRow.id);
+      if (player) player.avatarUrl = isLivePlayerAvatarUrl(avatarRow.avatarUrl) ? avatarRow.avatarUrl : null;
     }
 
     const closed = await this.db.liveQuestionState.findMany({

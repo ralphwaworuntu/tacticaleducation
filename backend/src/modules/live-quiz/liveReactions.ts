@@ -83,6 +83,7 @@ export type ReactionItem = {
   playerId: string;
   name: string;
   avatarId: string;
+  avatarUrl?: string | null;
   emoji: ReactionId;
   at: number;
 };
