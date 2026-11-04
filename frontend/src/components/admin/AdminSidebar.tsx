@@ -21,6 +21,10 @@ import {
   BadgeCheck,
   FileText,
   Eye,
+  Radio,
+  ListChecks,
+  History,
+  Settings2,
 } from 'lucide-react';
 import { adminMenu } from '@/constants/navigation';
 import { BrandMark } from '@/components/common/BrandMark';
@@ -37,6 +41,10 @@ const menuIcons: Record<string, LucideIcon> = {
   '/admin/ranking': Trophy,
   '/admin/contacts': Mail,
   '/admin/exam-control': ShieldCheck,
+  '/admin/live-quiz': Radio,
+  '/admin/live-quiz/kuis': ListChecks,
+  '/admin/live-quiz/riwayat': History,
+  '/admin/live-quiz/pengaturan': Settings2,
   '/admin/tryouts': ClipboardList,
   '/admin/word-converter': FileText,
   '/admin/practice': BookOpen,

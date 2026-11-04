@@ -84,6 +84,15 @@ export const adminMenu: NavSection[] = [
     items: [{ label: 'Kontrol Ujian', to: '/admin/exam-control' }],
   },
   {
+    title: 'LIVE QUIZ',
+    items: [
+      { label: 'Dashboard Live Quiz', to: '/admin/live-quiz', exact: true },
+      { label: 'Kuis Saya', to: '/admin/live-quiz/kuis' },
+      { label: 'Riwayat & Laporan', to: '/admin/live-quiz/riwayat' },
+      { label: 'Pengaturan Live Quiz', to: '/admin/live-quiz/pengaturan' },
+    ],
+  },
+  {
     title: 'Konten Akademik',
     items: [
       { label: 'Konversi Word → CSV', to: '/admin/word-converter' },

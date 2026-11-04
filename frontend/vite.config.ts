@@ -54,6 +54,16 @@ export default defineConfig(({ mode }) => {
           target: 'http://127.0.0.1:5000',
           changeOrigin: true,
         },
+        // Live Quiz (Socket.IO) -- WebSocket harus ikut di-proxy agar HP bisa memakai satu origin.
+        '/socket.io': {
+          target: 'http://127.0.0.1:5000',
+          changeOrigin: true,
+          ws: true,
+          // Tab ditutup/di-refresh memutus socket secara kasar; itu normal, jangan penuhi log dengan stack trace.
+          configure: (proxy) => {
+            proxy.on('error', () => undefined);
+          },
+        },
       },
     },
     build: {

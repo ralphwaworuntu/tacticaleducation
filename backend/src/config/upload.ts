@@ -14,6 +14,7 @@ const avatarRoot = path.join(uploadsRoot, 'avatars');
 const examCoverRoot = path.join(uploadsRoot, 'exams', 'covers');
 const examCsvRoot = path.join(uploadsRoot, 'exams', 'questions');
 const examDocxRoot = path.join(uploadsRoot, 'exams', 'docx');
+const liveQuizRoot = path.join(uploadsRoot, 'live-quiz');
 
 const normalizePath = (value: string) => value.replace(/\\/g, '/');
 
@@ -247,5 +248,29 @@ export const examAssetUpload = multer({
   },
   limits: {
     fileSize: 5 * 1024 * 1024,
+  },
+});
+
+export const liveQuizImageUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      fs.mkdirSync(liveQuizRoot, { recursive: true });
+      cb(null, liveQuizRoot);
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `live-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`);
+    },
+  }),
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new HttpError('Gunakan gambar JPG, PNG, atau WEBP.', 400));
+    }
+  },
+  limits: {
+    fileSize: 4 * 1024 * 1024,
   },
 });
