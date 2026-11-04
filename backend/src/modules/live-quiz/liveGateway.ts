@@ -35,9 +35,18 @@ const hostActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('resume') }),
   z.object({ type: z.literal('lock'), locked: z.boolean() }),
   z.object({ type: z.literal('kick'), playerId: z.string().min(1).max(40) }),
+  z.object({
+    type: z.literal('set_reactions'),
+    enabled: z.boolean().optional(),
+    afterSubmit: z.boolean().optional(),
+    onProjector: z.boolean().optional(),
+  }),
   z.object({ type: z.literal('end') }),
   z.object({ type: z.literal('cancel') }),
 ]);
+
+const avatarSchema = z.object({ avatarId: z.string().min(1).max(32) });
+const reactionSchema = z.object({ emoji: z.string().min(1).max(20) });
 
 const answerSchema = z.object({
   questionIndex: z.number().int().min(0).max(1000),
@@ -53,6 +62,9 @@ const LIMITS: Record<string, { max: number; windowMs: number }> = {
   host_action: { max: 30, windowMs: 10_000 },
   request_sync: { max: 6, windowMs: 10_000 },
   time_sync: { max: 20, windowMs: 10_000 },
+  set_avatar: { max: 6, windowMs: 10_000 },
+  // Lebih longgar dari aturan engine (1/3 dtk) agar penolakan "cooldown" tetap informatif; ini hanya perisai spam.
+  player_reaction_sent: { max: 10, windowMs: 10_000 },
 };
 
 function createLimiter() {
@@ -211,6 +223,36 @@ export function attachLiveGateway(httpServer: HttpServer, engine: LiveEngine = l
         .then((result) => respond(ack, { ...result }))
         .catch((error) => {
           console.error('[live-quiz] host_action gagal', error);
+          respond(ack, { ok: false, code: 'server_error', message: 'Terjadi kesalahan server.' });
+        });
+    });
+
+    // Ganti avatar: playerId SELALU dari autentikasi socket; payload klien tidak pernah menentukan siapa pemainnya.
+    socket.on('set_avatar', (payload: unknown, ack?: unknown) => {
+      if (data.role !== 'player') return respond(ack, { ok: false, code: 'forbidden' });
+      if (!allow('set_avatar')) return respond(ack, { ok: false, code: 'rate_limited' });
+      const parsed = avatarSchema.safeParse(payload);
+      if (!parsed.success) return respond(ack, { ok: false, code: 'invalid_payload' });
+      void engine
+        .setPlayerAvatar(data.sessionId, data.playerId, parsed.data.avatarId)
+        .then((result) => respond(ack, { ...result }))
+        .catch((error) => {
+          console.error('[live-quiz] set_avatar gagal', error);
+          respond(ack, { ok: false, code: 'server_error', message: 'Terjadi kesalahan server.' });
+        });
+    });
+
+    // Reaksi emoji: efemeral, tidak memengaruhi skor/timer/ranking. Pembatasan laju utama ada di engine.
+    socket.on('player_reaction_sent', (payload: unknown, ack?: unknown) => {
+      if (data.role !== 'player') return respond(ack, { ok: false, code: 'forbidden' });
+      if (!allow('player_reaction_sent')) return respond(ack, { ok: false, code: 'rate_limited' });
+      const parsed = reactionSchema.safeParse(payload);
+      if (!parsed.success) return respond(ack, { ok: false, code: 'invalid_payload' });
+      void engine
+        .sendReaction(data.sessionId, data.playerId, parsed.data.emoji)
+        .then((result) => respond(ack, { ...result }))
+        .catch((error) => {
+          console.error('[live-quiz] player_reaction_sent gagal', error);
           respond(ack, { ok: false, code: 'server_error', message: 'Terjadi kesalahan server.' });
         });
     });

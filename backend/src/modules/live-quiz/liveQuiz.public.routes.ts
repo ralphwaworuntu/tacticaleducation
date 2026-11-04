@@ -66,17 +66,20 @@ const joinSchema = z.object({
     pin: pinSchema,
     name: z.string().trim().max(60).default(''),
     rejoinToken: z.string().min(10).max(200).nullable().optional(),
+    // Opsional (klien lama tanpa avatar tetap berfungsi). ID tidak dikenal -> avatar default.
+    avatarId: z.string().max(32).nullable().optional(),
   }),
 });
 
 liveQuizPublicRouter.post('/join', failedAttemptLimiter, validateResource(joinSchema), async (req, res) => {
-  const body = req.body as { pin: string; name: string; rejoinToken?: string | null };
+  const body = req.body as { pin: string; name: string; rejoinToken?: string | null; avatarId?: string | null };
   const user = await optionalUser(req);
   const result = await liveEngine.joinPlayer({
     pin: body.pin,
     name: body.name || user?.name || '',
     userId: user?.id ?? null,
     rejoinToken: body.rejoinToken ?? null,
+    avatarId: body.avatarId ?? null,
   });
   res.json({ status: 'success', data: result });
 });

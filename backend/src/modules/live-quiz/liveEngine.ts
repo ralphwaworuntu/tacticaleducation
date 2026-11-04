@@ -10,7 +10,16 @@ import {
   resolveQuizSettings,
   type QuizSettings,
 } from './live.settings';
+import { isAvatarId, normalizeAvatarId, type AvatarId } from './liveAvatars';
 import { rankPlayers } from './liveRanking';
+import {
+  REACTION_BATCH_MS,
+  ReactionState,
+  checkReactionPhase,
+  isReactionId,
+  type ReactionBatch,
+  type ReactionRejectCode,
+} from './liveReactions';
 import {
   computeAccuracy,
   computeScore,
@@ -45,6 +54,8 @@ type RtPlayer = {
   id: string;
   userId: string | null;
   name: string;
+  /** Selalu ID avatar valid (default deterministik bila pemain tidak memilih). */
+  avatarId: AvatarId;
   tokenHash: string;
   connected: boolean;
   kicked: boolean;
@@ -99,6 +110,8 @@ type Runtime = {
   queue: Promise<void>;
   cache: PhaseCache;
   evictTimer: NodeJS.Timeout | null;
+  /** Reaksi emoji: efemeral, hanya di memori. */
+  reactions: ReactionState;
 };
 
 export type CreateSessionInput = {
@@ -121,6 +134,8 @@ export type JoinInput = {
   name: string;
   userId?: string | null;
   rejoinToken?: string | null;
+  /** Opsional; ID tidak dikenal diganti avatar default. Diabaikan saat rejoin (avatar lama dipertahankan). */
+  avatarId?: string | null;
 };
 
 export type JoinResult = {
@@ -128,6 +143,7 @@ export type JoinResult = {
   playerId: string;
   playerToken: string;
   displayName: string;
+  avatarId: AvatarId;
   status: LivePhase;
   rejoined: boolean;
 };
@@ -139,8 +155,13 @@ export type HostAction =
   | { type: 'resume' }
   | { type: 'lock'; locked: boolean }
   | { type: 'kick'; playerId: string }
+  | { type: 'set_reactions'; enabled?: boolean; afterSubmit?: boolean; onProjector?: boolean }
   | { type: 'end' }
   | { type: 'cancel' };
+
+export type ReactionResult =
+  | { ok: true }
+  | { ok: false; code: ReactionRejectCode | (string & {}); message: string; retryAfterMs?: number };
 
 export type AnswerInput = { questionIndex: number; optionIds: string[] };
 export type AnswerAck = {
@@ -316,6 +337,7 @@ export class LiveEngine {
           playerId: existing.id,
           playerToken: input.rejoinToken,
           displayName: existing.name,
+          avatarId: existing.avatarId,
           status: rt.status,
           rejoined: true,
         };
@@ -334,6 +356,7 @@ export class LiveEngine {
           playerId: existing.id,
           playerToken: token,
           displayName: existing.name,
+          avatarId: existing.avatarId,
           status: rt.status,
           rejoined: true,
         };
@@ -359,6 +382,7 @@ export class LiveEngine {
           sessionId: rt.id,
           userId: input.userId ?? null,
           displayName: name,
+          avatarId: isAvatarId(input.avatarId) ? input.avatarId : null,
           nameKey: playerNameKey(name),
           tokenHash,
           isConnected: false,
@@ -378,6 +402,7 @@ export class LiveEngine {
       id: created.id,
       userId: created.userId,
       name: created.displayName,
+      avatarId: normalizeAvatarId(created.avatarId, created.id),
       tokenHash,
       connected: false,
       kicked: false,
@@ -403,6 +428,7 @@ export class LiveEngine {
       playerId: player.id,
       playerToken: token,
       displayName: player.name,
+      avatarId: player.avatarId,
       status: rt.status,
       rejoined: false,
     };
@@ -567,6 +593,31 @@ export class LiveEngine {
         return { ok: true };
       }
 
+      case 'set_reactions': {
+        // Pengaturan reaksi per sesi. Tidak menyentuh skor/timer/ranking.
+        const next = {
+          reactionsEnabled: action.enabled ?? rt.settings.reactionsEnabled,
+          reactionsAfterSubmit: action.afterSubmit ?? rt.settings.reactionsAfterSubmit,
+          reactionsOnProjector: action.onProjector ?? rt.settings.reactionsOnProjector,
+        };
+        const changed = (Object.keys(next) as Array<keyof typeof next>).some((k) => next[k] !== rt.settings[k]);
+        if (!changed) return { ok: true, ignored: true };
+        rt.settings = { ...rt.settings, ...next };
+        await this.db.liveSession.update({
+          where: { id: rt.id },
+          data: { settings: rt.settings as unknown as Prisma.InputJsonValue },
+        });
+        const payload = {
+          reactionsEnabled: rt.settings.reactionsEnabled,
+          reactionsAfterSubmit: rt.settings.reactionsAfterSubmit,
+          reactionsOnProjector: rt.settings.reactionsOnProjector,
+          serverNow: this.now(),
+        };
+        this.emitter.toHost(rt.id, LIVE_EVENTS.reactionsEnabledChanged, payload);
+        this.emitter.toPlayers(rt.id, LIVE_EVENTS.reactionsEnabledChanged, payload);
+        return { ok: true };
+      }
+
       case 'kick': {
         const player = rt.players.get(action.playerId);
         if (!player) return fail('not_found', 'Peserta tidak ditemukan.');
@@ -608,6 +659,100 @@ export class LiveEngine {
 
       default:
         return fail('unknown_action', 'Aksi tidak dikenal.');
+    }
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Avatar & reaksi (Live Quiz 2.0)                                      */
+  /* ------------------------------------------------------------------ */
+
+  /**
+   * Ganti avatar milik pemain itu sendiri (playerId berasal dari autentikasi socket, bukan dari klien).
+   * Hanya di LOBBY dan bila host mengizinkan.
+   */
+  async setPlayerAvatar(
+    sessionId: string,
+    playerId: string,
+    avatarId: unknown,
+  ): Promise<EngineResult<{ avatarId: AvatarId }>> {
+    const rt = await this.getRuntime(sessionId);
+    if (!rt) return fail('not_found', 'Sesi tidak ditemukan.');
+    if (!isAvatarId(avatarId)) return fail('invalid_avatar', 'Karakter tidak dikenal.');
+    return this.exclusive(rt, async () => {
+      const player = rt.players.get(playerId);
+      if (!player || player.kicked) return fail('not_found', 'Pemain tidak ditemukan.');
+      if (rt.status !== 'LOBBY') return fail('phase_not_allowed', 'Karakter hanya bisa diganti di lobby.');
+      if (!rt.settings.allowAvatarChange) return fail('avatar_locked', 'Tutor tidak mengizinkan ganti karakter.');
+      if (player.avatarId === avatarId) return { ok: true, avatarId };
+      await this.db.livePlayer.update({ where: { id: player.id }, data: { avatarId } });
+      player.avatarId = avatarId;
+      this.emitter.toHost(rt.id, LIVE_EVENTS.playerAvatarUpdated, {
+        player: this.toLobbyPlayer(player),
+        version: rt.version,
+      });
+      this.emitter.toPlayer(player.id, LIVE_EVENTS.playerAvatarUpdated, { avatarId });
+      this.emitLobby(rt);
+      return { ok: true, avatarId };
+    });
+  }
+
+  /**
+   * Terima reaksi emoji dari pemain. SENGAJA tidak memakai antrean serial sesi (tidak ada I/O DB dan tidak
+   * menyentuh state skor), sehingga burst reaksi tidak menunda transisi fase atau pengiriman jawaban.
+   * Seluruh pengecekan + pencatatan laju berjalan sinkron setelah runtime tersedia.
+   */
+  async sendReaction(
+    sessionId: string,
+    playerId: string,
+    emoji: unknown,
+  ): Promise<ReactionResult> {
+    const rt = this.runtimes.get(sessionId) ?? (await this.getRuntime(sessionId));
+    if (!rt) return fail('not_found', 'Sesi tidak ditemukan.');
+    const player = rt.players.get(playerId);
+    if (!player || player.kicked) return fail('not_found', 'Pemain tidak ditemukan.');
+    if (!isReactionId(emoji)) {
+      return { ok: false, code: 'invalid_emoji', message: 'Emoji tidak dikenal.' };
+    }
+    const phase = checkReactionPhase(rt.status, rt.settings, rt.answers.has(player.id));
+    if (!phase.ok) return phase;
+    const admitted = rt.reactions.admit(player.id, this.now());
+    if (!admitted.ok) return admitted;
+
+    rt.reactions.enqueue({
+      playerId: player.id,
+      name: player.name,
+      avatarId: player.avatarId,
+      emoji,
+      at: this.now(),
+    });
+    if (!rt.reactions.timer) {
+      rt.reactions.timer = setTimeout(() => this.flushReactions(rt), REACTION_BATCH_MS);
+      rt.reactions.timer.unref?.();
+    }
+    return { ok: true };
+  }
+
+  private flushReactions(rt: Runtime) {
+    rt.reactions.timer = null;
+    const batch: ReactionBatch | null = rt.reactions.drain();
+    if (!batch) return;
+    const serverNow = this.now();
+    // Host: item bernama + avatar (kecuali host menyembunyikan reaksi dari proyektor).
+    if (rt.settings.reactionsOnProjector && rt.settings.reactionsEnabled) {
+      this.emitter.toHost(rt.id, LIVE_EVENTS.liveReactionBroadcast, {
+        items: batch.items,
+        counts: batch.counts,
+        total: batch.total,
+        serverNow,
+      });
+    }
+    // Pemain: hanya hitungan agregat, tanpa nama.
+    if (rt.settings.reactionsEnabled) {
+      this.emitter.toPlayers(rt.id, LIVE_EVENTS.liveReactionBroadcast, {
+        counts: batch.counts,
+        total: batch.total,
+        serverNow,
+      });
     }
   }
 
@@ -988,6 +1133,7 @@ export class LiveEngine {
       sync.me = {
         id: player.id,
         name: player.name,
+        avatarId: player.avatarId,
         totalScore: player.totalScore,
         correctCount: player.correctCount,
         rank,
@@ -1148,7 +1294,7 @@ export class LiveEngine {
       .filter((item) => item.player && !item.player.kicked && item.answer.score > 0)
       .sort((a, b) => b.answer.score - a.answer.score || a.answer.responseMs - b.answer.responseMs)
       .slice(0, 5)
-      .map((item) => ({ name: item.player!.name, earned: item.answer.score }));
+      .map((item) => ({ name: item.player!.name, avatarId: item.player!.avatarId, earned: item.answer.score }));
 
     const host = { version: rt.version, questionIndex: index, topGains: gains, answeredCount: rt.answers.size };
     const byPlayer = new Map<string, Record<string, unknown>>();
@@ -1176,6 +1322,7 @@ export class LiveEngine {
       return {
         playerId: p.id,
         name: p.name,
+        avatarId: p.avatarId,
         rank: p.rank,
         totalScore: p.totalScore,
         correctCount: p.correctCount,
@@ -1238,6 +1385,7 @@ export class LiveEngine {
     const toRow = (r: (typeof results)[number]) => ({
       playerId: r.playerId,
       name: nameOf(r.playerId),
+      avatarId: rt.players.get(r.playerId)?.avatarId ?? normalizeAvatarId(null, r.playerId),
       rank: r.finalRank,
       totalScore: r.totalPoints,
       correctCount: r.correctCount,
@@ -1291,6 +1439,10 @@ export class LiveEngine {
       scoreMode: s.scoreMode,
       lockLobbyOnStart: s.lockLobbyOnStart,
       allowLateJoin: s.allowLateJoin,
+      reactionsEnabled: s.reactionsEnabled,
+      reactionsAfterSubmit: s.reactionsAfterSubmit,
+      reactionsOnProjector: s.reactionsOnProjector,
+      allowAvatarChange: s.allowAvatarChange,
     };
   }
 
@@ -1299,7 +1451,13 @@ export class LiveEngine {
   /* ------------------------------------------------------------------ */
 
   private toLobbyPlayer(player: RtPlayer): LobbyPlayer {
-    return { id: player.id, name: player.name, connected: player.connected, joinedAt: player.joinedAt };
+    return {
+      id: player.id,
+      name: player.name,
+      avatarId: player.avatarId,
+      connected: player.connected,
+      joinedAt: player.joinedAt,
+    };
   }
 
   private lobbyPayload(rt: Runtime) {
@@ -1395,6 +1553,7 @@ export class LiveEngine {
   private scheduleEviction(rt: Runtime) {
     if (rt.evictTimer) clearTimeout(rt.evictTimer);
     rt.evictTimer = setTimeout(() => {
+      rt.reactions.dispose();
       this.runtimes.delete(rt.id);
     }, RUNTIME_EVICT_MS);
     rt.evictTimer.unref?.();
@@ -1494,6 +1653,7 @@ export class LiveEngine {
       queue: Promise.resolve(),
       cache: {},
       evictTimer: null,
+      reactions: new ReactionState(),
     };
 
     for (const p of row.players) {
@@ -1501,6 +1661,7 @@ export class LiveEngine {
         id: p.id,
         userId: p.userId,
         name: p.displayName,
+        avatarId: normalizeAvatarId(p.avatarId, p.id),
         tokenHash: p.tokenHash,
         connected: false,
         kicked: Boolean(p.kickedAt),
@@ -1667,6 +1828,7 @@ export class LiveEngine {
   shutdown() {
     for (const rt of this.runtimes.values()) {
       this.clearTimer(rt);
+      rt.reactions.dispose();
       if (rt.evictTimer) clearTimeout(rt.evictTimer);
     }
     this.runtimes.clear();

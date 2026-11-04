@@ -40,6 +40,11 @@ export const quizSettingsSchema = z.object({
   leaderboardSize: z.number().int().min(3).max(10).default(5),
   maxPoints: z.number().int().min(100).max(10000).default(1000),
   maxPlayers: z.number().int().min(1).max(500).default(200),
+  // Live Quiz 2.0: reaksi emoji & avatar. Dapat diubah host selama sesi (disimpan per sesi).
+  reactionsEnabled: z.boolean().default(true),
+  reactionsAfterSubmit: z.boolean().default(true),
+  reactionsOnProjector: z.boolean().default(true),
+  allowAvatarChange: z.boolean().default(true),
 });
 
 export type QuizSettings = z.infer<typeof quizSettingsSchema>;

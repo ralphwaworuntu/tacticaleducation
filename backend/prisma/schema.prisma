@@ -768,6 +768,8 @@ model LivePlayer {
   sessionId     String
   userId        String?
   displayName   String
+  // ID avatar dari katalog bersama (liveAvatars.ts). Null = pakai avatar default deterministik.
+  avatarId      String?      @db.VarChar(32)
   // Nama dinormalisasi (lowercase) untuk keunikan per sesi.
   nameKey       String
   tokenHash     String

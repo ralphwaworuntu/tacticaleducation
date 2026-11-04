@@ -67,6 +67,7 @@ export type PublicQuestion = {
 export type LobbyPlayer = {
   id: string;
   name: string;
+  avatarId: string;
   connected: boolean;
   joinedAt: number;
 };
@@ -74,6 +75,7 @@ export type LobbyPlayer = {
 export type LeaderboardEntry = {
   playerId: string;
   name: string;
+  avatarId: string;
   rank: number;
   totalScore: number;
   correctCount: number;
@@ -121,5 +123,9 @@ export const LIVE_EVENTS = {
   sessionEnded: 'session_ended',
   sessionStateSync: 'session_state_sync',
   pauseChanged: 'pause_changed',
+  // Live Quiz 2.0
+  playerAvatarUpdated: 'player_avatar_updated',
+  liveReactionBroadcast: 'live_reaction_broadcast',
+  reactionsEnabledChanged: 'reactions_enabled_changed',
   kicked: 'kicked',
 } as const;

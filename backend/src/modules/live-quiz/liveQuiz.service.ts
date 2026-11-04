@@ -11,6 +11,7 @@ import {
   quizSettingsSchema,
   resolveQuizSettings,
 } from './live.settings';
+import { normalizeAvatarId } from './liveAvatars';
 import { rankPlayers } from './liveRanking';
 import { computeAccuracy } from './liveScoring';
 import { csvSafeCell } from './liveText';
@@ -505,6 +506,7 @@ export async function buildReport(sessionId: string) {
         rank: rankingById.get(p.id)?.rank ?? 0,
         playerId: p.id,
         name: p.displayName,
+        avatarId: normalizeAvatarId(p.avatarId, p.id),
         userId: p.userId,
         totalPoints: p.totalScore,
         correctCount: p.correctCount,
@@ -600,6 +602,7 @@ export async function buildPlayerDetail(sessionId: string, playerId: string) {
     player: {
       id: player.id,
       name: player.displayName,
+      avatarId: normalizeAvatarId(player.avatarId, player.id),
       totalScore: player.totalScore,
       correctCount: player.correctCount,
       rank: player.rank,
