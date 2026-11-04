@@ -92,13 +92,7 @@ export function Leaderboard({
             >
               {gold ? <Crown className={scale.crown} aria-label="Peringkat 1" /> : shownRank}
             </span>
-            <PlayerAvatar
-              avatarId={entry.avatarId}
-              src={entry.avatarUrl}
-              seed={entry.playerId}
-              size={scale.avatar}
-              ring={gold}
-            />
+            <PlayerAvatar avatarId={entry.avatarId} seed={entry.playerId} size={scale.avatar} ring={gold} />
             <span className={cn('min-w-0 flex-1 truncate font-extrabold', scale.name)}>{entry.name}</span>
             <RankDelta delta={showFinal ? entry.delta : null} />
             <span className={cn('text-right font-black tabular-nums text-amber-200', scale.score)}>

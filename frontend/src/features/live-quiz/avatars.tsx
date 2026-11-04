@@ -1,6 +1,5 @@
 import { memo } from 'react';
 import type { ReactNode } from 'react';
-import { getAssetUrl } from '@/lib/media';
 import { cn } from '@/utils/cn';
 
 /**
@@ -454,8 +453,6 @@ type PlayerAvatarProps = {
   avatarId?: string | null | undefined;
   /** Seed untuk avatar default (mis. playerId). */
   seed?: string;
-  /** URL avatar kartun (unggahan). Jika ada, menggantikan SVG katalog di bingkai yang sama. */
-  src?: string | null;
   /** Ukuran piksel (lebar = tinggi). */
   size?: number;
   /** Bingkai bercahaya warna aksen karakter. */
@@ -466,41 +463,24 @@ type PlayerAvatarProps = {
   className?: string;
 };
 
-function PlayerAvatarImpl({
-  avatarId,
-  seed = '',
-  src,
-  size = 48,
-  ring = false,
-  idle = false,
-  label,
-  className,
-}: PlayerAvatarProps) {
+function PlayerAvatarImpl({ avatarId, seed = '', size = 48, ring = false, idle = false, label, className }: PlayerAvatarProps) {
   const avatar = resolveAvatar(avatarId, seed);
-  const photo = src ? getAssetUrl(src) : '';
-  const ringShadow = ring
-    ? `0 0 0 ${Math.max(2, size / 22)}px #fff, 0 0 ${size / 3}px ${photo ? '#FFD166' : avatar.accent}`
-    : '0 6px 14px -8px rgba(2, 10, 30, 0.55)';
   return (
     <span
       role="img"
-      aria-label={label ?? (photo ? 'Avatar kartun' : `Karakter ${avatar.name}`)}
+      aria-label={label ?? `Karakter ${avatar.name}`}
       className={cn('lq-avatar relative inline-block shrink-0 overflow-hidden rounded-full', idle && 'lq-avatar-idle', className)}
       style={{
         width: size,
         height: size,
-        backgroundColor: photo ? '#102a43' : avatar.bg,
-        boxShadow: ringShadow,
+        backgroundColor: avatar.bg,
+        boxShadow: ring ? `0 0 0 ${Math.max(2, size / 22)}px #fff, 0 0 ${size / 3}px ${avatar.accent}` : '0 6px 14px -8px rgba(2, 10, 30, 0.55)',
       }}
     >
-      {photo ? (
-        <img src={photo} alt="" className="block h-full w-full object-cover" draggable={false} />
-      ) : (
-        <svg viewBox="0 0 100 100" aria-hidden focusable="false" className="block h-full w-full">
-          <circle cx={34} cy={16} r={46} fill="#fff" opacity={0.2} />
-          {avatar.art()}
-        </svg>
-      )}
+      <svg viewBox="0 0 100 100" aria-hidden focusable="false" className="block h-full w-full">
+        <circle cx={34} cy={16} r={46} fill="#fff" opacity={0.2} />
+        {avatar.art()}
+      </svg>
       <span className="pointer-events-none absolute inset-0 rounded-full ring-1 ring-inset ring-black/20" aria-hidden />
     </span>
   );

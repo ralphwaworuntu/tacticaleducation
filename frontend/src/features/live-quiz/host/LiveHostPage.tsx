@@ -174,7 +174,7 @@ function HostLobby({ state, join, onKick, view }: { state: LiveState; join: Join
                     className="group relative flex flex-col items-center gap-1.5 rounded-2xl bg-white/[0.07] px-2 pb-2 pt-3"
                     title={player.connected ? 'Terhubung' : 'Terputus'}
                   >
-                    <PlayerAvatar avatarId={player.avatarId} src={player.avatarUrl} seed={player.id} size={avatarSize} idle={view.fancy && !dense} />
+                    <PlayerAvatar avatarId={player.avatarId} seed={player.id} size={avatarSize} idle={view.fancy && !dense} />
                     <span
                       className={cn(
                         'max-w-full truncate rounded-full px-3 py-0.5 text-center font-extrabold',
@@ -473,7 +473,7 @@ function HostAnswerDetails({ rows, view }: { rows: RevealRow[]; view: View }) {
               >
                 <span className="text-center text-[clamp(1rem,1.8vw,1.75rem)] font-black tabular-nums text-white/70">{index + 1}</span>
                 <span className="flex min-w-0 items-center gap-3">
-                  <PlayerAvatar avatarId={row.avatarId} src={row.avatarUrl} seed={row.playerId} size={avatarSize} />
+                  <PlayerAvatar avatarId={row.avatarId} seed={row.playerId} size={avatarSize} />
                   <span className="min-w-0 truncate text-[clamp(1rem,1.8vw,1.75rem)] font-bold">{row.name}</span>
                 </span>
                 <span className="flex justify-center gap-1">
@@ -534,7 +534,7 @@ function HostTopGains({ state, view }: { state: LiveState; view: View }) {
               transition={{ delay: view.animate ? index * 0.12 : 0 }}
               className="lq-glass flex items-center gap-4 rounded-2xl px-5 py-3 text-2xl font-bold"
             >
-              <PlayerAvatar avatarId={gain.avatarId} src={gain.avatarUrl} seed={gain.name} size={52} />
+              <PlayerAvatar avatarId={gain.avatarId} seed={gain.name} size={52} />
               <span className="min-w-0 flex-1 truncate">{gain.name}</span>
               <span className="font-black text-emerald-300">+{gain.earned.toLocaleString('id-ID')}</span>
             </motion.li>

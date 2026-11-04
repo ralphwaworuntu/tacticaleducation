@@ -68,8 +68,6 @@ export type LobbyPlayer = {
   id: string;
   name: string;
   avatarId: string;
-  /** Path unggahan avatar kartun; null = pakai SVG katalog. */
-  avatarUrl: string | null;
   connected: boolean;
   joinedAt: number;
 };
@@ -78,7 +76,6 @@ export type LeaderboardEntry = {
   playerId: string;
   name: string;
   avatarId: string;
-  avatarUrl: string | null;
   rank: number;
   totalScore: number;
   correctCount: number;

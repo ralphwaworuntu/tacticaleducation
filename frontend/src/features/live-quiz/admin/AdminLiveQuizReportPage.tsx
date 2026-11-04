@@ -154,7 +154,7 @@ export function AdminLiveQuizReportPage() {
                       <td className="font-bold">{row.rank}</td>
                       <td className="font-semibold text-slate-900">
                         <span className="inline-flex items-center gap-2 align-middle">
-                          <PlayerAvatar avatarId={row.avatarId} src={row.avatarUrl} seed={row.playerId} size={28} />
+                          <PlayerAvatar avatarId={row.avatarId} seed={row.playerId} size={28} />
                           {row.name}
                         </span>
                         {row.userId && (

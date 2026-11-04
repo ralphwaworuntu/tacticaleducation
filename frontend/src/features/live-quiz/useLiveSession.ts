@@ -167,17 +167,8 @@ function reduce(state: LiveState, action: Action): LiveState {
           lobby: { ...state.lobby, players: state.lobby.players.map((p) => (p.id === hostPlayer.id ? { ...p, ...hostPlayer } : p)) },
         };
       }
-      const patch = data as { avatarId?: string; avatarUrl?: string | null };
-      if (state.me && (patch.avatarId || patch.avatarUrl !== undefined)) {
-        return {
-          ...state,
-          me: {
-            ...state.me,
-            ...(patch.avatarId ? { avatarId: patch.avatarId } : {}),
-            ...(patch.avatarUrl !== undefined ? { avatarUrl: patch.avatarUrl } : {}),
-          },
-        };
-      }
+      const avatarId = (data as { avatarId?: string }).avatarId;
+      if (avatarId && state.me) return { ...state, me: { ...state.me, avatarId } };
       return state;
     }
 

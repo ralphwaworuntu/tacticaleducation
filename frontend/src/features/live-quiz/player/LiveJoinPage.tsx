@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -10,10 +10,7 @@ import { AVATARS, PlayerAvatar } from '../avatars';
 import { useMotionLevel } from '../useMotionLevel';
 import { AvatarPicker } from '../ui/AvatarPicker';
 import { GameStage, LiveBrand } from '../ui/GameStage';
-import { uploadLivePlayerAvatar } from '../selfie/uploadAvatar';
 import { avatarPreference, playerStorage } from './storage';
-
-const SelfieAvatarStudio = lazy(() => import('../selfie/SelfieAvatarStudio').then((m) => ({ default: m.SelfieAvatarStudio })));
 
 type JoinResult = {
   sessionId: string;
@@ -21,7 +18,6 @@ type JoinResult = {
   playerToken: string;
   displayName: string;
   avatarId?: string;
-  avatarUrl?: string | null;
   rejoined: boolean;
 };
 
@@ -43,9 +39,6 @@ export function LiveJoinPage() {
     const saved = avatarPreference.load();
     return saved && AVATARS.some((a) => a.id === saved) ? saved : AVATARS[Math.floor(Math.random() * AVATARS.length)]!.id;
   });
-  const [customSrc, setCustomSrc] = useState<string | null>(null);
-  const [studioOpen, setStudioOpen] = useState(false);
-  const pendingBlob = useRef<Blob | null>(null);
   const [info, setInfo] = useState<PinInfo | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -105,23 +98,12 @@ export function LiveJoinPage() {
         avatarId,
         ...(stored && stored.pin === pin ? { rejoinToken: stored.playerToken } : {}),
       });
-      let avatarUrl = result.avatarUrl ?? null;
-      if (pendingBlob.current) {
-        try {
-          const uploaded = await uploadLivePlayerAvatar(result.sessionId, result.playerToken, pendingBlob.current);
-          avatarUrl = uploaded.avatarUrl;
-        } catch {
-          setError('Bergabung berhasil. Avatar kartun gagal disimpan, karakter bawaan dipakai.');
-        }
-        pendingBlob.current = null;
-      }
       playerStorage.save({
         sessionId: result.sessionId,
         playerId: result.playerId,
         playerToken: result.playerToken,
         name: result.displayName,
         ...(result.avatarId ? { avatarId: result.avatarId } : {}),
-        ...(avatarUrl ? { avatarUrl } : {}),
         pin,
       });
       avatarPreference.save(avatarId);
@@ -159,7 +141,7 @@ export function LiveJoinPage() {
             onClick={() => navigate(`/live/play/${last.sessionId}`)}
             className="lq-glass mb-4 flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left text-white"
           >
-            <PlayerAvatar avatarId={last.avatarId} src={last.avatarUrl} seed={last.playerId} size={40} />
+            <PlayerAvatar avatarId={last.avatarId} seed={last.playerId} size={40} />
             <span className="min-w-0 flex-1">
               <span className="block text-xs text-amber-200">Lanjutkan sesi sebelumnya</span>
               <span className="block truncate font-bold">{last.name}</span>
@@ -224,27 +206,17 @@ export function LiveJoinPage() {
             ) : (
               <motion.div key="s2" className="space-y-4" {...slide}>
                 <div className="flex items-center gap-4 rounded-2xl bg-slate-50 p-3">
-                  <PlayerAvatar avatarId={avatarId} src={customSrc} size={72} ring idle={animate} />
+                  <PlayerAvatar avatarId={avatarId} size={72} ring idle={animate} />
                   <div className="min-w-0">
                     <p className="truncate text-xl font-black text-slate-900">{name.trim()}</p>
-                    <p className="text-sm font-semibold text-slate-500">
-                      {customSrc ? 'Avatar kartun dari selfie' : (chosen?.name ?? 'Pilih karakter')}
-                    </p>
+                    <p className="text-sm font-semibold text-slate-500">{chosen?.name ?? 'Pilih karakter'}</p>
                   </div>
                 </div>
                 <AvatarPicker
                   value={avatarId}
-                  customSrc={customSrc}
-                  onSelfie={() => {
-                    liveAudio.unlock();
-                    setStudioOpen(true);
-                  }}
                   onChange={(id) => {
                     liveAudio.unlock();
                     liveAudio.play('avatarPick');
-                    pendingBlob.current = null;
-                    if (customSrc) URL.revokeObjectURL(customSrc);
-                    setCustomSrc(null);
                     setAvatarId(id);
                   }}
                 />
@@ -279,20 +251,6 @@ export function LiveJoinPage() {
           </Link>
         </p>
       </div>
-      {studioOpen && (
-        <Suspense fallback={null}>
-          <SelfieAvatarStudio
-            onClose={() => setStudioOpen(false)}
-            onUse={(result) => {
-              pendingBlob.current = result.blob;
-              if (customSrc) URL.revokeObjectURL(customSrc);
-              setCustomSrc(result.previewUrl);
-              setStudioOpen(false);
-              liveAudio.play('avatarPick');
-            }}
-          />
-        </Suspense>
-      )}
     </GameStage>
   );
 }

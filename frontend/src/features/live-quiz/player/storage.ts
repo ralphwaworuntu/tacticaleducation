@@ -4,7 +4,6 @@ export type StoredPlayer = {
   playerToken: string;
   name: string;
   avatarId?: string;
-  avatarUrl?: string | null;
   pin: string;
   savedAt: number;
 };

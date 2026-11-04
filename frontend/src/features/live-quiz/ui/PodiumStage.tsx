@@ -171,7 +171,6 @@ export function PodiumStage({
                       )}
                       <PlayerAvatar
                         avatarId={row.avatarId}
-                        src={row.avatarUrl}
                         seed={row.playerId}
                         size={avatarSize}
                         ring
@@ -236,7 +235,7 @@ export function PodiumStage({
               {rest.map((row) => (
                 <li key={row.playerId} className="lq-glass flex items-center gap-3 rounded-2xl px-3 py-2 text-lg font-bold">
                   <span className="w-8 text-center font-black text-amber-300">{row.rank}</span>
-                  <PlayerAvatar avatarId={row.avatarId} src={row.avatarUrl} seed={row.playerId} size={40} />
+                  <PlayerAvatar avatarId={row.avatarId} seed={row.playerId} size={40} />
                   <span className="min-w-0 flex-1 truncate">{row.name}</span>
                   <span className="tabular-nums text-amber-200">{row.totalScore.toLocaleString('id-ID')}</span>
                 </li>

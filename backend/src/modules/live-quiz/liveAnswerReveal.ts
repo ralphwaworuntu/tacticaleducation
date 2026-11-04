@@ -11,7 +11,6 @@ export type AnswerRevealRow = {
   playerId: string;
   name: string;
   avatarId: string;
-  avatarUrl: string | null;
   status: RevealStatus;
   /** ID opsi yang benar-benar dipilih siswa (sesuai yang tersimpan). */
   selectedOptionIds: string[];
@@ -23,7 +22,7 @@ export type AnswerRevealRow = {
   responseMs: number | null;
 };
 
-export type RevealPlayer = { id: string; name: string; avatarId: string; avatarUrl?: string | null };
+export type RevealPlayer = { id: string; name: string; avatarId: string };
 export type RevealAnswer = { optionIds: string[]; isCorrect: boolean; score: number; responseMs: number };
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -59,7 +58,6 @@ export function buildAnswerReveal(
         playerId: player.id,
         name: player.name,
         avatarId: player.avatarId,
-        avatarUrl: player.avatarUrl ?? null,
         status: 'NONE',
         selectedOptionIds: [],
         selectedLetters: [],
@@ -73,7 +71,6 @@ export function buildAnswerReveal(
       playerId: player.id,
       name: player.name,
       avatarId: player.avatarId,
-      avatarUrl: player.avatarUrl ?? null,
       status: answer.isCorrect ? 'CORRECT' : 'WRONG',
       selectedOptionIds: selected,
       selectedLetters: selected

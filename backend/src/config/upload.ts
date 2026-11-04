@@ -17,7 +17,6 @@ const examDocxRoot = path.join(uploadsRoot, 'exams', 'docx');
 export const examWordAssetsRoot = path.join(uploadsRoot, 'exams', 'word-assets');
 const memberSlideRoot = path.join(uploadsRoot, 'member-slides');
 const liveQuizRoot = path.join(uploadsRoot, 'live-quiz');
-const liveQuizAvatarRoot = path.join(liveQuizRoot, 'avatars');
 
 const normalizePath = (value: string) => value.replace(/\\/g, '/');
 
@@ -286,54 +285,6 @@ export const examAssetUpload = multer({
   },
   limits: {
     fileSize: 5 * 1024 * 1024,
-  },
-});
-
-/** Avatar kartun pemain: square 256px WebP. Hanya hasil akhir, bukan selfie asli. */
-export async function optimizeLivePlayerAvatar(req: Request, _res: Response, next: NextFunction) {
-  const file = (req as Request & { file?: Express.Multer.File }).file;
-  if (!file) return next();
-  try {
-    fs.mkdirSync(liveQuizAvatarRoot, { recursive: true });
-    const outName = `av-${Date.now()}-${Math.round(Math.random() * 1e9)}.webp`;
-    const outPath = path.join(liveQuizAvatarRoot, outName);
-    await sharp(file.path)
-      .rotate()
-      .resize(256, 256, { fit: 'cover', position: 'attention' })
-      .webp({ quality: 78 })
-      .toFile(outPath);
-    await fs.promises.unlink(file.path).catch(() => undefined);
-    file.path = outPath;
-    file.filename = outName;
-    file.mimetype = 'image/webp';
-    return next();
-  } catch (error) {
-    await fs.promises.unlink(file.path).catch(() => undefined);
-    return next(error);
-  }
-}
-
-export const livePlayerAvatarUpload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => {
-      fs.mkdirSync(liveQuizAvatarRoot, { recursive: true });
-      cb(null, liveQuizAvatarRoot);
-    },
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
-      cb(null, `tmp-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
-    },
-  }),
-  fileFilter: (_req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
-    if (allowed.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new HttpError('Gunakan gambar JPG, PNG, atau WEBP.', 400));
-    }
-  },
-  limits: {
-    fileSize: 2 * 1024 * 1024,
   },
 });
 

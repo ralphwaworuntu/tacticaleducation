@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, Clock, Loader2, Medal, Pencil, Send, Trophy, X } from 'lucide-react';
@@ -27,10 +27,7 @@ import {
   fireConfetti,
   useRemainingMs,
 } from '../ui/shared';
-import { uploadLivePlayerAvatar } from '../selfie/uploadAvatar';
 import { avatarPreference, playerStorage } from './storage';
-
-const SelfieAvatarStudio = lazy(() => import('../selfie/SelfieAvatarStudio').then((m) => ({ default: m.SelfieAvatarStudio })));
 
 /* ------------------------------------------------------------------ */
 /* Tahap-tahap layar pemain                                             */
@@ -43,23 +40,18 @@ function PlayerLobby({
   view,
   setAvatar,
   sfx,
-  sessionId,
-  playerToken,
 }: {
   state: LiveState;
   view: View;
   setAvatar: (id: string) => Promise<{ ok: boolean; message?: string; code?: string }>;
   sfx: (n: Sfx) => void;
-  sessionId: string;
-  playerToken: string;
 }) {
   const [picking, setPicking] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [studioOpen, setStudioOpen] = useState(false);
   const canChange = state.settings?.allowAvatarChange !== false;
 
   const choose = async (id: string) => {
-    if (saving || (id === state.me?.avatarId && !state.me?.avatarUrl)) return;
+    if (saving || id === state.me?.avatarId) return;
     liveAudio.unlock();
     setSaving(true);
     const result = await setAvatar(id);
@@ -77,12 +69,12 @@ function PlayerLobby({
     <div className="flex flex-1 flex-col items-center justify-center gap-5 text-center text-white">
       <p className="text-sm font-black uppercase tracking-[0.3em] text-amber-300">Kamu sudah masuk!</p>
       <motion.div
-        key={`${state.me?.avatarId}-${state.me?.avatarUrl ?? ''}`}
+        key={state.me?.avatarId}
         initial={view.animate ? { scale: 0.6, rotate: -8, opacity: 0 } : false}
         animate={{ scale: 1, rotate: 0, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 240, damping: 14 }}
       >
-        <PlayerAvatar avatarId={state.me?.avatarId} src={state.me?.avatarUrl} seed={state.me?.id ?? ''} size={150} ring idle={view.animate} />
+        <PlayerAvatar avatarId={state.me?.avatarId} seed={state.me?.id ?? ''} size={150} ring idle={view.animate} />
       </motion.div>
       <p className="max-w-full break-words text-4xl font-black">{state.me?.name}</p>
       <p className="max-w-xs text-sky-100">Lihat karaktermu di layar tutor. Permainan segera dimulai!</p>
@@ -104,39 +96,10 @@ function PlayerLobby({
             transition={{ duration: 0.2 }}
             className="lq-card-light w-full rounded-3xl p-4"
           >
-            <AvatarPicker
-              value={state.me?.avatarId ?? null}
-              customSrc={state.me?.avatarUrl ?? null}
-              onChange={(id) => void choose(id)}
-              onSelfie={() => {
-                liveAudio.unlock();
-                setStudioOpen(true);
-              }}
-              disabled={saving}
-            />
+            <AvatarPicker value={state.me?.avatarId ?? null} onChange={(id) => void choose(id)} disabled={saving} />
           </motion.div>
         )}
       </AnimatePresence>
-      {studioOpen && (
-        <Suspense fallback={null}>
-          <SelfieAvatarStudio
-            onClose={() => setStudioOpen(false)}
-            onUse={async (result) => {
-              setStudioOpen(false);
-              setSaving(true);
-              try {
-                await uploadLivePlayerAvatar(sessionId, playerToken, result.blob);
-                sfx('avatarPick');
-                setPicking(false);
-              } catch {
-                toast.error('Gagal menyimpan avatar kartun. Karakter bawaan tetap bisa dipakai.');
-              } finally {
-                setSaving(false);
-              }
-            }}
-          />
-        </Suspense>
-      )}
     </div>
   );
 }
@@ -326,7 +289,7 @@ function PlayerResult({ state, view }: { state: LiveState; view: View }) {
         }
         transition={{ duration: 0.7 }}
       >
-        <PlayerAvatar avatarId={state.me?.avatarId} src={state.me?.avatarUrl} seed={state.me?.id ?? ''} size={104} ring />
+        <PlayerAvatar avatarId={state.me?.avatarId} seed={state.me?.id ?? ''} size={104} ring />
       </motion.div>
       <span className="mt-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/25">
         {!answered ? <Clock className="h-9 w-9" /> : correct ? <Check className="h-10 w-10" strokeWidth={3.5} /> : <X className="h-10 w-10" strokeWidth={3.5} />}
@@ -361,7 +324,7 @@ function PlayerScore({ state, view, sfx }: { state: LiveState; view: View; sfx: 
   const earned = score.earned ?? 0;
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-5 text-center text-white">
-      <PlayerAvatar avatarId={state.me?.avatarId} src={state.me?.avatarUrl} seed={state.me?.id ?? ''} size={92} ring idle={view.animate} />
+      <PlayerAvatar avatarId={state.me?.avatarId} seed={state.me?.id ?? ''} size={92} ring idle={view.animate} />
       <p className="text-sm font-black uppercase tracking-[0.25em] text-sky-200">Poin soal ini</p>
       <motion.p
         initial={view.animate ? { scale: 0.4, opacity: 0 } : false}
@@ -390,7 +353,7 @@ function PlayerLeaderboard({ state, view }: { state: LiveState; view: View }) {
   return (
     <div className="flex flex-1 flex-col items-center gap-4 text-white">
       <div className="lq-glass flex w-full items-center gap-4 rounded-3xl p-4">
-        <PlayerAvatar avatarId={me?.avatarId} src={me?.avatarUrl} seed={me?.id ?? ''} size={72} ring />
+        <PlayerAvatar avatarId={me?.avatarId} seed={me?.id ?? ''} size={72} ring />
         <div className="min-w-0 flex-1 text-left">
           <p className="text-xs font-bold uppercase tracking-widest text-sky-200">Peringkatmu</p>
           <p className="flex items-center gap-2 text-5xl font-black text-amber-300">
@@ -433,7 +396,7 @@ function PlayerFinal({ state, view, onLeave }: { state: LiveState; view: View; o
         transition={{ type: 'spring', stiffness: 200, damping: 14 }}
         className="lq-glass relative w-full overflow-hidden rounded-[2rem] p-6"
       >
-        <PlayerAvatar avatarId={state.me?.avatarId} src={state.me?.avatarUrl} seed={state.me?.id ?? ''} size={104} ring idle={view.animate} className="mx-auto" />
+        <PlayerAvatar avatarId={state.me?.avatarId} seed={state.me?.id ?? ''} size={104} ring idle={view.animate} className="mx-auto" />
         <div className="mt-3 flex items-center justify-center gap-2">
           {final.medal ? <Medal className={cn('h-9 w-9', medalColor)} /> : <Trophy className="h-8 w-8 text-sky-200" />}
           <p className="text-3xl font-black">{headline}</p>
@@ -570,7 +533,7 @@ function PlayView({ sessionId, playerToken }: { sessionId: string; playerToken: 
   } else {
     switch (status) {
       case 'LOBBY':
-        body = <PlayerLobby state={state} view={view} setAvatar={setAvatar} sfx={sfx} sessionId={sessionId} playerToken={playerToken} />;
+        body = <PlayerLobby state={state} view={view} setAvatar={setAvatar} sfx={sfx} />;
         break;
       case 'COUNTDOWN':
         body = <PlayerCountdown state={state} serverNow={serverNow} sfx={sfx} view={view} />;
@@ -614,7 +577,7 @@ function PlayView({ sessionId, playerToken }: { sessionId: string; playerToken: 
       <ReconnectBanner show={state.hasSynced && state.connection === 'reconnecting'} />
       <header className="flex items-center justify-between gap-3 text-white">
         <div className="flex min-w-0 items-center gap-2.5">
-          <PlayerAvatar avatarId={state.me?.avatarId} src={state.me?.avatarUrl} seed={state.me?.id ?? ''} size={40} ring />
+          <PlayerAvatar avatarId={state.me?.avatarId} seed={state.me?.id ?? ''} size={40} ring />
           <div className="min-w-0">
             <p className="truncate text-base font-black leading-tight">{state.me?.name ?? '…'}</p>
             <p className="truncate text-xs text-sky-200">{state.session?.title}</p>

@@ -4,7 +4,7 @@ import { REACTION_EMOJI, type ReactionItem } from '../types';
 
 export type ReactionLaneHandle = { push: (items: ReactionItem[]) => void; clear: () => void };
 
-type Active = { id: number; slot: number; emoji: ReactionItem['emoji']; avatarId: string; avatarUrl?: string | null; playerId: string; name: string; count: number };
+type Active = { id: number; slot: number; emoji: ReactionItem['emoji']; avatarId: string; playerId: string; name: string; count: number };
 
 const MAX_ACTIVE = 4;
 const SLOT_STEP = 66;
@@ -51,7 +51,7 @@ export const ReactionLane = forwardRef<ReactionLaneHandle, { lite?: boolean }>(f
             setActive((list) => list.filter((a) => a.id !== id));
           }, lifetimeMs);
           timers.current.set(id, timer);
-          next = [...next, { id, slot, emoji: item.emoji, avatarId: item.avatarId, avatarUrl: item.avatarUrl, playerId: item.playerId, name: item.name, count: 1 }];
+          next = [...next, { id, slot, emoji: item.emoji, avatarId: item.avatarId, playerId: item.playerId, name: item.name, count: 1 }];
         }
         return next;
       });
@@ -82,7 +82,7 @@ export const ReactionLane = forwardRef<ReactionLaneHandle, { lite?: boolean }>(f
           <span className="relative flex h-14 w-14 items-center justify-center rounded-full border border-white/25 bg-[#102a43]/80 text-[30px] shadow-lg">
             {REACTION_EMOJI[reaction.emoji]}
             <span className="absolute -bottom-1 -right-1 overflow-hidden rounded-full ring-2 ring-[#102a43]">
-              <PlayerAvatar avatarId={reaction.avatarId} src={reaction.avatarUrl} seed={reaction.playerId} size={24} />
+              <PlayerAvatar avatarId={reaction.avatarId} seed={reaction.playerId} size={24} />
             </span>
             {reaction.count > 1 && (
               <span className="absolute -left-1 -top-1 rounded-full bg-amber-300 px-1.5 text-xs font-black text-slate-900">×{reaction.count}</span>
