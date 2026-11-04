@@ -7,6 +7,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const appName = env.VITE_APP_NAME || 'TACTICAL EDUCATION';
+  // Opsional: arahkan proxy dev ke backend lain (mis. backend uji di port 5001). Default tetap 5000.
+  const proxyTarget = process.env.DEV_PROXY_TARGET || 'http://127.0.0.1:5000';
 
   return {
     plugins: [
@@ -47,16 +49,16 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:5000',
+          target: proxyTarget,
           changeOrigin: true,
         },
         '/uploads': {
-          target: 'http://127.0.0.1:5000',
+          target: proxyTarget,
           changeOrigin: true,
         },
         // Live Quiz (Socket.IO) -- WebSocket harus ikut di-proxy agar HP bisa memakai satu origin.
         '/socket.io': {
-          target: 'http://127.0.0.1:5000',
+          target: proxyTarget,
           changeOrigin: true,
           ws: true,
           // Tab ditutup/di-refresh memutus socket secara kasar; itu normal, jangan penuhi log dengan stack trace.

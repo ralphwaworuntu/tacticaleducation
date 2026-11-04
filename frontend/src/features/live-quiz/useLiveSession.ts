@@ -9,6 +9,9 @@ import type {
   LeaderboardPayload,
   LivePhase,
   LobbyPayload,
+  LobbyPlayer,
+  ReactionId,
+  ReactionSettingsPayload,
   QuestionPayload,
   PublicQuestion,
   ResultPayload,
@@ -155,6 +158,34 @@ function reduce(state: LiveState, action: Action): LiveState {
     case 'pause_changed':
       return { ...state, paused: Boolean(data.paused) };
 
+    case 'player_avatar_updated': {
+      // Pemain: { avatarId } untuk dirinya sendiri. Host: { player } -> perbarui kartu di lobby.
+      const hostPlayer = (data as { player?: LobbyPlayer }).player;
+      if (hostPlayer && state.lobby) {
+        return {
+          ...state,
+          lobby: { ...state.lobby, players: state.lobby.players.map((p) => (p.id === hostPlayer.id ? { ...p, ...hostPlayer } : p)) },
+        };
+      }
+      const avatarId = (data as { avatarId?: string }).avatarId;
+      if (avatarId && state.me) return { ...state, me: { ...state.me, avatarId } };
+      return state;
+    }
+
+    case 'reactions_enabled_changed': {
+      if (!state.settings) return state;
+      const next = payload as unknown as ReactionSettingsPayload;
+      return {
+        ...state,
+        settings: {
+          ...state.settings,
+          reactionsEnabled: next.reactionsEnabled,
+          reactionsAfterSubmit: next.reactionsAfterSubmit,
+          reactionsOnProjector: next.reactionsOnProjector,
+        },
+      };
+    }
+
     case 'kicked':
       return { ...state, kicked: String(data.reason ?? 'Anda dikeluarkan oleh tutor.') };
 
@@ -281,6 +312,9 @@ const SERVER_EVENTS = [
   'session_ended',
   'pause_changed',
   'kicked',
+  'player_avatar_updated',
+  'reactions_enabled_changed',
+  'live_reaction_broadcast',
 ] as const;
 
 export type HostAction =
@@ -290,10 +324,11 @@ export type HostAction =
   | { type: 'resume' }
   | { type: 'lock'; locked: boolean }
   | { type: 'kick'; playerId: string }
+  | { type: 'set_reactions'; enabled?: boolean; afterSubmit?: boolean; onProjector?: boolean }
   | { type: 'end' }
   | { type: 'cancel' };
 
-export type AckResult = { ok: boolean; code?: string; message?: string; ignored?: boolean };
+export type AckResult = { ok: boolean; code?: string; message?: string; ignored?: boolean; retryAfterMs?: number };
 export type SubmitResult = 'ok' | 'duplicate' | 'late' | 'error';
 
 type Options =
@@ -452,6 +487,32 @@ export function useLiveSession(options: Options) {
     return 'error';
   }, []);
 
+  /** Ganti karakter sendiri di lobby (server menolak di luar lobby / bila host melarang). */
+  const setAvatar = useCallback((avatarId: string): Promise<AckResult> => {
+    const socket = socketRef.current;
+    if (!socket || !socket.connected) return Promise.resolve({ ok: false, code: 'offline', message: 'Tidak terhubung ke server.' });
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve({ ok: false, code: 'timeout' }), 6000);
+      socket.emit('set_avatar', { avatarId }, (response: AckResult) => {
+        clearTimeout(timer);
+        resolve(response);
+      });
+    });
+  }, []);
+
+  /** Kirim reaksi emoji (server yang memutuskan fase, cooldown, dan rate limit). */
+  const sendReaction = useCallback((emoji: ReactionId): Promise<AckResult> => {
+    const socket = socketRef.current;
+    if (!socket || !socket.connected) return Promise.resolve({ ok: false, code: 'offline', message: 'Tidak terhubung ke server.' });
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => resolve({ ok: false, code: 'timeout' }), 4000);
+      socket.emit('player_reaction_sent', { emoji }, (response: AckResult) => {
+        clearTimeout(timer);
+        resolve(response);
+      });
+    });
+  }, []);
+
   const requestSync = useCallback(() => {
     socketRef.current?.emit('request_sync', null, () => undefined);
   }, []);
@@ -460,7 +521,7 @@ export function useLiveSession(options: Options) {
   const serverNow = useCallback(() => Date.now() + stateRef.current.offsetMs, []);
 
   return useMemo(
-    () => ({ state, hostAction, submit, requestSync, serverNow }),
-    [state, hostAction, submit, requestSync, serverNow],
+    () => ({ state, hostAction, submit, requestSync, serverNow, setAvatar, sendReaction }),
+    [state, hostAction, submit, requestSync, serverNow, setAvatar, sendReaction],
   );
 }

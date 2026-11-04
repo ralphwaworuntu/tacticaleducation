@@ -1,29 +1,44 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Loader2, LogIn } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { ArrowLeft, ArrowRight, Loader2, LogIn, Rocket } from 'lucide-react';
 import { apiGet, apiPost, getApiErrorMessage } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { liveAudio } from '../audio';
-import { liveBackground } from '../ui/shared';
-import { playerStorage } from './storage';
+import { AVATARS, PlayerAvatar } from '../avatars';
+import { useMotionLevel } from '../useMotionLevel';
+import { AvatarPicker } from '../ui/AvatarPicker';
+import { GameStage, LiveBrand } from '../ui/GameStage';
+import { avatarPreference, playerStorage } from './storage';
 
 type JoinResult = {
   sessionId: string;
   playerId: string;
   playerToken: string;
   displayName: string;
+  avatarId?: string;
   rejoined: boolean;
 };
 
 type PinInfo = { title: string; joinable: boolean; reason: string | null };
 
+/**
+ * Alur gabung: (QR / PIN) -> isi nama -> PILIH KARAKTER -> JOIN THE GAME -> lobby.
+ * Tautan QR sudah membawa PIN, jadi pemain biasanya hanya mengisi nama lalu memilih karakter.
+ */
 export function LiveJoinPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const { user } = useAuth();
+  const { animate, level } = useMotionLevel(true);
+  const [step, setStep] = useState<1 | 2>(1);
   const [pin, setPin] = useState((params.get('pin') ?? '').replace(/\D/g, '').slice(0, 6));
   const [name, setName] = useState('');
+  const [avatarId, setAvatarId] = useState<string>(() => {
+    const saved = avatarPreference.load();
+    return saved && AVATARS.some((a) => a.id === saved) ? saved : AVATARS[Math.floor(Math.random() * AVATARS.length)]!.id;
+  });
   const [info, setInfo] = useState<PinInfo | null>(null);
   const [pinError, setPinError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,19 +72,30 @@ export function LiveJoinPage() {
     };
   }, [pin]);
 
-  const submit = async (event: FormEvent) => {
+  const step1Ready = pin.length === 6 && name.trim().length > 0 && info?.joinable !== false;
+  const chosen = useMemo(() => AVATARS.find((a) => a.id === avatarId) ?? null, [avatarId]);
+
+  const goNext = (event: FormEvent) => {
     event.preventDefault();
-    if (submitting) return;
     liveAudio.unlock();
     setError(null);
     if (pin.length !== 6) return setError('PIN harus 6 digit.');
     if (!name.trim()) return setError('Nama wajib diisi.');
+    if (!step1Ready) return;
+    setStep(2);
+  };
+
+  const join = async () => {
+    if (submitting) return;
+    liveAudio.unlock();
+    setError(null);
     setSubmitting(true);
     try {
       const stored = playerStorage.loadLast();
       const result = await apiPost<JoinResult, Record<string, unknown>>('/live/join', {
         pin,
         name: name.trim(),
+        avatarId,
         ...(stored && stored.pin === pin ? { rejoinToken: stored.playerToken } : {}),
       });
       playerStorage.save({
@@ -77,32 +103,46 @@ export function LiveJoinPage() {
         playerId: result.playerId,
         playerToken: result.playerToken,
         name: result.displayName,
+        ...(result.avatarId ? { avatarId: result.avatarId } : {}),
         pin,
       });
+      avatarPreference.save(avatarId);
       liveAudio.play('join');
       navigate(`/live/play/${result.sessionId}`, { replace: true });
     } catch (e) {
-      setError(getApiErrorMessage(e, 'Gagal bergabung. Coba lagi.'));
+      const message = getApiErrorMessage(e, 'Gagal bergabung. Coba lagi.');
+      setError(message);
+      // Nama bentrok / PIN salah: kembali ke langkah 1 supaya bisa diperbaiki.
+      if (/nama|pin|sesi/i.test(message)) setStep(1);
       setSubmitting(false);
     }
   };
 
+  const slide = { initial: animate ? { opacity: 0, x: 24 } : false, animate: { opacity: 1, x: 0 }, exit: animate ? { opacity: 0, x: -24 } : { opacity: 0 }, transition: { duration: 0.22 } } as const;
+
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center px-5 py-10" style={liveBackground}>
+    <GameStage level={level} className="flex min-h-[100dvh] flex-col items-center justify-center px-5 py-8">
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex flex-col items-center text-center text-white">
-          <img src="/Logo_tactical.png" alt="Tactical Education" className="mb-3 h-16 w-16 rounded-2xl bg-white/90 object-contain p-2" />
-          <p className="text-xs font-bold uppercase tracking-[0.3em] text-amber-300">Tactical Live Quiz</p>
-          <h1 className="mt-1 text-2xl font-black">Gabung Kuis</h1>
+        <div className="mb-5 flex flex-col items-center text-center">
+          <LiveBrand />
+          <p className="mt-3 text-sm font-semibold text-sky-100">
+            {step === 1 ? 'Masukkan PIN dan namamu' : 'Pilih karakter jagoanmu'}
+          </p>
+          <div className="mt-3 flex items-center gap-2" aria-label={`Langkah ${step} dari 2`}>
+            {[1, 2].map((n) => (
+              <span key={n} className={`h-2 rounded-full transition-all ${n === step ? 'w-8 bg-amber-300' : 'w-2 bg-white/30'}`} />
+            ))}
+          </div>
         </div>
 
-        {last && (
+        {last && step === 1 && (
           <button
             type="button"
             onClick={() => navigate(`/live/play/${last.sessionId}`)}
-            className="mb-4 flex w-full items-center justify-between gap-3 rounded-2xl bg-amber-400/20 px-4 py-3 text-left text-white ring-1 ring-amber-300/50"
+            className="lq-glass mb-4 flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left text-white"
           >
-            <span className="min-w-0">
+            <PlayerAvatar avatarId={last.avatarId} seed={last.playerId} size={40} />
+            <span className="min-w-0 flex-1">
               <span className="block text-xs text-amber-200">Lanjutkan sesi sebelumnya</span>
               <span className="block truncate font-bold">{last.name}</span>
             </span>
@@ -110,61 +150,100 @@ export function LiveJoinPage() {
           </button>
         )}
 
-        <form onSubmit={submit} className="space-y-4 rounded-3xl bg-white p-6 shadow-2xl">
-          <div>
-            <label htmlFor="live-pin" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              PIN Game
-            </label>
-            <input
-              id="live-pin"
-              inputMode="numeric"
-              autoComplete="off"
-              pattern="\d{6}"
-              maxLength={6}
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              placeholder="123456"
-              className="h-14 w-full rounded-2xl border border-slate-200 text-center text-3xl font-black tracking-[0.4em] text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
-            />
-            {info && (
-              <p className={`mt-2 text-sm ${info.joinable ? 'text-emerald-600' : 'text-red-600'}`}>
-                {info.title}
-                {!info.joinable && info.reason ? ` — ${info.reason}` : ''}
-              </p>
+        <div className="lq-card-light overflow-hidden rounded-[2rem] p-6">
+          <AnimatePresence mode="wait" initial={false}>
+            {step === 1 ? (
+              <motion.form key="s1" onSubmit={goNext} className="space-y-4" {...slide}>
+                <div>
+                  <label htmlFor="live-pin" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    PIN Game
+                  </label>
+                  <input
+                    id="live-pin"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    pattern="\d{6}"
+                    maxLength={6}
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="123456"
+                    className="h-14 w-full rounded-2xl border-2 border-slate-200 bg-white text-center text-3xl font-black tracking-[0.4em] text-slate-900 focus:border-blue-500 focus:outline-none"
+                  />
+                  {info && (
+                    <p className={`mt-2 text-sm font-semibold ${info.joinable ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {info.title}
+                      {!info.joinable && info.reason ? ` — ${info.reason}` : ''}
+                    </p>
+                  )}
+                  {pinError && <p className="mt-2 text-sm font-semibold text-red-600">{pinError}</p>}
+                </div>
+                <div>
+                  <label htmlFor="live-name" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Nama kamu
+                  </label>
+                  <input
+                    id="live-name"
+                    autoComplete="nickname"
+                    maxLength={20}
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Nama panggilan"
+                    className="h-12 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 text-lg font-semibold text-slate-900 focus:border-blue-500 focus:outline-none"
+                  />
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    {user ? `Login sebagai ${user.name}. Hasil tercatat di akunmu.` : 'Tanpa login pun bisa. Maksimal 20 karakter.'}
+                  </p>
+                </div>
+                {error && (
+                  <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                    {error}
+                  </p>
+                )}
+                <button type="submit" disabled={!step1Ready} className="lq-btn lq-btn-electric h-14 w-full text-lg">
+                  Pilih karakter <ArrowRight className="h-5 w-5" />
+                </button>
+              </motion.form>
+            ) : (
+              <motion.div key="s2" className="space-y-4" {...slide}>
+                <div className="flex items-center gap-4 rounded-2xl bg-slate-50 p-3">
+                  <PlayerAvatar avatarId={avatarId} size={72} ring idle={animate} />
+                  <div className="min-w-0">
+                    <p className="truncate text-xl font-black text-slate-900">{name.trim()}</p>
+                    <p className="text-sm font-semibold text-slate-500">{chosen?.name ?? 'Pilih karakter'}</p>
+                  </div>
+                </div>
+                <AvatarPicker
+                  value={avatarId}
+                  onChange={(id) => {
+                    liveAudio.unlock();
+                    liveAudio.play('avatarPick');
+                    setAvatarId(id);
+                  }}
+                />
+                {error && (
+                  <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                    {error}
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStep(1)}
+                    disabled={submitting}
+                    className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-700 transition active:scale-95"
+                    aria-label="Kembali"
+                  >
+                    <ArrowLeft className="h-5 w-5" />
+                  </button>
+                  <button type="button" onClick={() => void join()} disabled={submitting} className="lq-btn lq-btn-gold h-14 flex-1 text-lg">
+                    {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Rocket className="h-5 w-5" />}
+                    JOIN THE GAME
+                  </button>
+                </div>
+              </motion.div>
             )}
-            {pinError && <p className="mt-2 text-sm text-red-600">{pinError}</p>}
-          </div>
-          <div>
-            <label htmlFor="live-name" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Nama kamu
-            </label>
-            <input
-              id="live-name"
-              autoComplete="nickname"
-              maxLength={20}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Nama panggilan"
-              className="h-12 w-full rounded-2xl border border-slate-200 px-4 text-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
-            />
-            <p className="mt-1.5 text-xs text-slate-500">
-              {user ? `Login sebagai ${user.name}. Hasil tercatat di akunmu.` : 'Tanpa login pun bisa. Maksimal 20 karakter.'}
-            </p>
-          </div>
-          {error && (
-            <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </p>
-          )}
-          <button
-            type="submit"
-            disabled={submitting || pin.length !== 6 || !name.trim() || info?.joinable === false}
-            className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-b from-brand-500 to-brand-700 text-lg font-bold text-white shadow-lg transition active:scale-[0.98] disabled:opacity-50"
-          >
-            {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
-            Masuk
-          </button>
-        </form>
+          </AnimatePresence>
+        </div>
 
         <p className="mt-5 text-center text-sm text-sky-100/80">
           <Link to="/" className="underline underline-offset-2">
@@ -172,6 +251,6 @@ export function LiveJoinPage() {
           </Link>
         </p>
       </div>
-    </div>
+    </GameStage>
   );
 }

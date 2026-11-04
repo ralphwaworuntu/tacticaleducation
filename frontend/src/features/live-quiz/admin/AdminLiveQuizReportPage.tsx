@@ -13,6 +13,7 @@ import { cn } from '@/utils/cn';
 import { liveQuizApi } from '../api';
 import { formatDateTime, formatPoints, formatSeconds, phaseLabel } from '../format';
 import { RichText } from '../ui/shared';
+import { PlayerAvatar } from '../avatars';
 
 function PlayerDetailRow({ sessionId, playerId }: { sessionId: string; playerId: string }) {
   const { data, isLoading } = useQuery({
@@ -152,7 +153,10 @@ export function AdminLiveQuizReportPage() {
                     >
                       <td className="font-bold">{row.rank}</td>
                       <td className="font-semibold text-slate-900">
-                        {row.name}
+                        <span className="inline-flex items-center gap-2 align-middle">
+                          <PlayerAvatar avatarId={row.avatarId} seed={row.playerId} size={28} />
+                          {row.name}
+                        </span>
                         {row.userId && (
                           <Badge variant="outline" className="ml-2">
                             Akun

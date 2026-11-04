@@ -155,6 +155,36 @@ export function SettingsForm({ value, onChange, compact }: Props) {
           onChange={(v) => set('projectorMode', v)}
         />
       </div>
+
+      <div>
+        <span className="admin-field-label">Avatar &amp; reaksi emoji</span>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Toggle
+            label="Izinkan peserta mengganti avatar di lobby"
+            hint="Peserta hanya bisa mengganti avatarnya sendiri, dan hanya sebelum permainan dimulai."
+            checked={value.allowAvatarChange}
+            onChange={(v) => set('allowAvatarChange', v)}
+          />
+          <Toggle
+            label="Aktifkan reaksi emoji"
+            hint="Peserta bisa mengirim 🔥 ❤️ 😂 👏 🎉 😮 😎 🚀. Tutor bisa mematikannya kapan saja saat sesi."
+            checked={value.reactionsEnabled}
+            onChange={(v) => set('reactionsEnabled', v)}
+          />
+          <Toggle
+            label="Izinkan reaksi setelah peserta menjawab"
+            hint="Saat soal aktif, reaksi hanya terbuka bagi peserta yang sudah mengirim jawaban."
+            checked={value.reactionsAfterSubmit}
+            onChange={(v) => set('reactionsAfterSubmit', v)}
+          />
+          <Toggle
+            label="Tampilkan reaksi di layar proyektor"
+            hint="Reaksi muncul di tepi layar tutor, tidak menutupi soal atau jawaban."
+            checked={value.reactionsOnProjector}
+            onChange={(v) => set('reactionsOnProjector', v)}
+          />
+        </div>
+      </div>
     </div>
   );
 }

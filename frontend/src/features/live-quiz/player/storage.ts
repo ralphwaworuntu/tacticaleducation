@@ -3,6 +3,7 @@ export type StoredPlayer = {
   playerId: string;
   playerToken: string;
   name: string;
+  avatarId?: string;
   pin: string;
   savedAt: number;
 };
@@ -48,6 +49,25 @@ export const playerStorage = {
       localStorage.removeItem(`${KEY_PREFIX}${sessionId}`);
       const last = read(LAST_KEY);
       if (last?.sessionId === sessionId) localStorage.removeItem(LAST_KEY);
+    } catch {
+      // abaikan
+    }
+  },
+};
+
+/** Karakter terakhir yang dipakai di perangkat ini (hanya kenyamanan; server tetap pemegang data resmi). */
+const AVATAR_KEY = 'tactical-live-avatar';
+export const avatarPreference = {
+  load(): string | null {
+    try {
+      return localStorage.getItem(AVATAR_KEY);
+    } catch {
+      return null;
+    }
+  },
+  save(avatarId: string) {
+    try {
+      localStorage.setItem(AVATAR_KEY, avatarId);
     } catch {
       // abaikan
     }

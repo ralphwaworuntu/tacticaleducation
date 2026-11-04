@@ -1,15 +1,13 @@
 import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import katex from 'katex';
 import confetti from 'canvas-confetti';
-import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowDown, ArrowUp, Anchor, Crosshair, Crown, Flag, Hexagon, Medal, Minus, Shield, Star, Volume2, VolumeX, Zap } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { ArrowDown, ArrowUp, Minus, Music2, Volume2, VolumeX, Wifi } from 'lucide-react';
 import { getAssetUrl } from '@/lib/media';
 import { cn } from '@/utils/cn';
 import { liveAudio } from '../audio';
-import type { LeaderboardEntry, PodiumRow } from '../types';
 import 'katex/dist/katex.min.css';
+import '../live-quiz.css';
 
 /* ------------------------------------------------------------------ */
 /* Teks soal: teks biasa + rumus KaTeX ($...$ / $$...$$)                */
@@ -60,19 +58,6 @@ export function RichText({ text, className }: { text: string; className?: string
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Gaya pilihan jawaban (warna + huruf + ikon agar tidak bergantung warna) */
-/* ------------------------------------------------------------------ */
-
-export const OPTION_STYLES: Array<{ bg: string; ring: string; icon: LucideIcon; letter: string }> = [
-  { bg: 'bg-blue-600', ring: 'ring-blue-300', icon: Shield, letter: 'A' },
-  { bg: 'bg-emerald-600', ring: 'ring-emerald-300', icon: Star, letter: 'B' },
-  { bg: 'bg-amber-600', ring: 'ring-amber-300', icon: Crosshair, letter: 'C' },
-  { bg: 'bg-rose-600', ring: 'ring-rose-300', icon: Flag, letter: 'D' },
-  { bg: 'bg-violet-600', ring: 'ring-violet-300', icon: Zap, letter: 'E' },
-  { bg: 'bg-cyan-700', ring: 'ring-cyan-300', icon: Anchor, letter: 'F' },
-];
-
 export function OptionContent({ label, imageUrl, className }: { label: string | null; imageUrl: string | null; className?: string }) {
   return (
     <span className={cn('flex min-w-0 flex-1 flex-col gap-2 text-left', className)}>
@@ -83,8 +68,6 @@ export function OptionContent({ label, imageUrl, className }: { label: string | 
     </span>
   );
 }
-
-export { Hexagon };
 
 /* ------------------------------------------------------------------ */
 /* Waktu berbasis jam server                                            */
@@ -109,21 +92,42 @@ export function useRemainingMs(deadlineAt: number | null | undefined, getNow: ()
   return remaining;
 }
 
-export function TimerRing({ remainingMs, totalMs, size = 96, className }: { remainingMs: number; totalMs: number; size?: number; className?: string }) {
+/** Timer lingkaran: emas -> oranye -> merah, berdenyut saat <= 5 detik. */
+export function TimerRing({
+  remainingMs,
+  totalMs,
+  size = 96,
+  className,
+  pulse = true,
+}: {
+  remainingMs: number;
+  totalMs: number;
+  size?: number;
+  className?: string;
+  pulse?: boolean;
+}) {
   const fraction = totalMs > 0 ? Math.min(1, remainingMs / totalMs) : 0;
-  const radius = (size - 12) / 2;
+  const stroke = Math.max(6, size / 11);
+  const radius = (size - stroke - 4) / 2;
   const circumference = 2 * Math.PI * radius;
   const urgent = remainingMs <= 5000;
+  const warn = remainingMs <= 10000;
+  const color = urgent ? '#EF476F' : warn ? '#FF9F43' : '#FFD166';
   return (
-    <div className={cn('relative shrink-0', className)} style={{ width: size, height: size }} role="timer" aria-label={`Sisa waktu ${Math.ceil(remainingMs / 1000)} detik`}>
+    <div
+      className={cn('relative shrink-0', urgent && pulse && 'lq-pulse', className)}
+      style={{ width: size, height: size }}
+      role="timer"
+      aria-label={`Sisa waktu ${Math.ceil(remainingMs / 1000)} detik`}
+    >
       <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={radius} stroke="rgba(255,255,255,0.15)" strokeWidth={8} fill="none" />
+        <circle cx={size / 2} cy={size / 2} r={radius} stroke="rgba(255,255,255,0.16)" strokeWidth={stroke} fill="rgba(8,27,51,0.55)" />
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={urgent ? '#f87171' : '#fbbf24'}
-          strokeWidth={8}
+          stroke={color}
+          strokeWidth={stroke}
           strokeLinecap="round"
           fill="none"
           strokeDasharray={circumference}
@@ -131,7 +135,10 @@ export function TimerRing({ remainingMs, totalMs, size = 96, className }: { rema
           style={{ transition: 'stroke-dashoffset 120ms linear, stroke 200ms' }}
         />
       </svg>
-      <span className={cn('absolute inset-0 flex items-center justify-center text-3xl font-black tabular-nums text-white', urgent && 'text-red-300')}>
+      <span
+        className="absolute inset-0 flex items-center justify-center font-black tabular-nums text-white"
+        style={{ fontSize: size * 0.36, color: urgent ? '#FFB3C4' : '#fff' }}
+      >
         {Math.ceil(remainingMs / 1000)}
       </span>
     </div>
@@ -142,7 +149,19 @@ export function TimerRing({ remainingMs, totalMs, size = 96, className }: { rema
 /* Angka beranimasi                                                      */
 /* ------------------------------------------------------------------ */
 
-export function AnimatedNumber({ value, from = 0, durationMs = 900, animate = true, className }: { value: number; from?: number; durationMs?: number; animate?: boolean; className?: string }) {
+export function AnimatedNumber({
+  value,
+  from = 0,
+  durationMs = 900,
+  animate = true,
+  className,
+}: {
+  value: number;
+  from?: number;
+  durationMs?: number;
+  animate?: boolean;
+  className?: string;
+}) {
   const [display, setDisplay] = useState(animate ? from : value);
   useEffect(() => {
     if (!animate) {
@@ -164,21 +183,22 @@ export function AnimatedNumber({ value, from = 0, durationMs = 900, animate = tr
 }
 
 /* ------------------------------------------------------------------ */
-/* Kontrol suara                                                         */
+/* Kontrol suara (musik & efek terpisah)                                  */
 /* ------------------------------------------------------------------ */
 
 export function useAudioPrefs() {
   return useSyncExternalStore(
     (listener) => liveAudio.subscribe(listener),
-    () => `${liveAudio.muted}:${liveAudio.volume}`,
+    () => liveAudio.getSnapshot(),
   );
 }
 
 export function SoundToggle({ className, showVolume = false }: { className?: string; showVolume?: boolean }) {
   useAudioPrefs();
+  const [open, setOpen] = useState(false);
   const muted = liveAudio.muted;
   return (
-    <div className={cn('flex items-center gap-2', className)}>
+    <div className={cn('relative flex items-center gap-2', className)}>
       <button
         type="button"
         onClick={() => {
@@ -192,27 +212,82 @@ export function SoundToggle({ className, showVolume = false }: { className?: str
         {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
       </button>
       {showVolume && (
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.05}
-          value={liveAudio.volume}
-          onChange={(event) => {
-            liveAudio.unlock();
-            liveAudio.setVolume(Number(event.target.value));
-            if (liveAudio.muted) liveAudio.setMuted(false);
-          }}
-          className="w-24 accent-amber-400"
-          aria-label="Volume"
-        />
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+            aria-label="Atur volume musik dan efek"
+            aria-expanded={open}
+          >
+            <Music2 className="h-5 w-5" />
+          </button>
+          {open && (
+            <div className="lq-glass absolute right-0 top-12 z-40 w-56 space-y-3 rounded-2xl bg-[#081b33]/95 p-4 text-sm text-white">
+              <label className="block">
+                <span className="mb-1 flex justify-between font-semibold">
+                  Musik <span className="tabular-nums text-white/70">{Math.round(liveAudio.musicVolume * 100)}%</span>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={liveAudio.musicVolume}
+                  onChange={(event) => {
+                    liveAudio.unlock();
+                    liveAudio.setMusicVolume(Number(event.target.value));
+                    if (liveAudio.muted) liveAudio.setMuted(false);
+                  }}
+                  className="w-full accent-amber-300"
+                  aria-label="Volume musik"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 flex justify-between font-semibold">
+                  Efek suara <span className="tabular-nums text-white/70">{Math.round(liveAudio.sfxVolume * 100)}%</span>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={liveAudio.sfxVolume}
+                  onChange={(event) => {
+                    liveAudio.unlock();
+                    liveAudio.setSfxVolume(Number(event.target.value));
+                    if (liveAudio.muted) liveAudio.setMuted(false);
+                  }}
+                  onPointerUp={() => liveAudio.play('select')}
+                  className="w-full accent-amber-300"
+                  aria-label="Volume efek suara"
+                />
+              </label>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 }
 
+/** Browser memblokir audio sebelum ada interaksi; tombol ini membukanya dengan satu ketukan. */
+export function AudioUnlockHint({ enabled = true, className }: { enabled?: boolean; className?: string }) {
+  useAudioPrefs();
+  if (!enabled || liveAudio.isUnlocked || liveAudio.muted) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => liveAudio.unlock()}
+      className={cn('lq-btn lq-btn-gold px-4 py-2 text-sm', className)}
+    >
+      <Volume2 className="h-4 w-4" /> Ketuk untuk aktifkan suara
+    </button>
+  );
+}
+
 /* ------------------------------------------------------------------ */
-/* Delta peringkat & leaderboard                                          */
+/* Delta peringkat                                                        */
 /* ------------------------------------------------------------------ */
 
 export function RankDelta({ delta }: { delta: number | null | undefined }) {
@@ -220,71 +295,15 @@ export function RankDelta({ delta }: { delta: number | null | undefined }) {
     return <Minus className="h-4 w-4 text-white/40" aria-label="Tidak berubah" />;
   }
   return delta > 0 ? (
-    <span className="inline-flex items-center gap-0.5 text-sm font-bold text-emerald-300" aria-label={`Naik ${delta}`}>
+    <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-400/20 px-1.5 text-sm font-bold text-emerald-300" aria-label={`Naik ${delta}`}>
       <ArrowUp className="h-4 w-4" />
       {delta}
     </span>
   ) : (
-    <span className="inline-flex items-center gap-0.5 text-sm font-bold text-rose-300" aria-label={`Turun ${Math.abs(delta)}`}>
+    <span className="inline-flex items-center gap-0.5 rounded-full bg-rose-400/20 px-1.5 text-sm font-bold text-rose-300" aria-label={`Turun ${Math.abs(delta)}`}>
       <ArrowDown className="h-4 w-4" />
       {Math.abs(delta)}
     </span>
-  );
-}
-
-export function Leaderboard({
-  entries,
-  animate,
-  highlightId,
-  large = false,
-}: {
-  entries: LeaderboardEntry[];
-  animate: boolean;
-  highlightId?: string | null;
-  large?: boolean;
-}) {
-  // Mulai dari urutan sebelumnya (rank + delta) lalu pindah ke urutan baru agar perubahan posisi terlihat.
-  const previousOrder = useMemo(
-    () => [...entries].sort((a, b) => (a.rank + (a.delta ?? 0)) - (b.rank + (b.delta ?? 0)) || a.rank - b.rank),
-    [entries],
-  );
-  const [showFinal, setShowFinal] = useState(!animate);
-  useEffect(() => {
-    if (!animate) {
-      setShowFinal(true);
-      return;
-    }
-    setShowFinal(false);
-    const timer = window.setTimeout(() => setShowFinal(true), 900);
-    return () => window.clearTimeout(timer);
-  }, [entries, animate]);
-
-  const ordered = showFinal ? entries : previousOrder;
-  return (
-    <ol className={cn('mx-auto w-full space-y-2', large ? 'max-w-3xl' : 'max-w-xl')}>
-      {ordered.map((entry, index) => {
-        const shownRank = showFinal ? entry.rank : (entry.delta !== null ? entry.rank + entry.delta : index + 1);
-        return (
-          <motion.li
-            key={entry.playerId}
-            layout={animate}
-            transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-            className={cn(
-              'flex items-center gap-4 rounded-2xl px-5 py-3 text-white shadow-lg',
-              large ? 'text-2xl' : 'text-lg',
-              entry.playerId === highlightId ? 'bg-amber-500/90 text-slate-900' : 'bg-white/10 backdrop-blur',
-            )}
-          >
-            <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-black', shownRank <= 3 ? 'bg-amber-400 text-slate-900' : 'bg-white/15')}>
-              {shownRank}
-            </span>
-            <span className="min-w-0 flex-1 truncate font-bold">{entry.name}</span>
-            <RankDelta delta={showFinal ? entry.delta : null} />
-            <span className="w-28 text-right font-black tabular-nums">{entry.totalScore.toLocaleString('id-ID')}</span>
-          </motion.li>
-        );
-      })}
-    </ol>
   );
 }
 
@@ -292,128 +311,37 @@ export function Leaderboard({
 /* Confetti                                                               */
 /* ------------------------------------------------------------------ */
 
+const CONFETTI_COLORS = ['#FFD166', '#2575FC', '#2DD4A7', '#F36FB6', '#8056ED', '#19C6E6', '#FFFFFF'];
+
 export function fireConfetti(options: { enabled: boolean; intensity?: 'big' | 'small' }) {
   if (!options.enabled) return;
   const big = options.intensity !== 'small';
-  const colors = ['#fbbf24', '#38bdf8', '#34d399', '#f472b6', '#ffffff'];
-  confetti({ particleCount: big ? 140 : 60, spread: 80, origin: { y: 0.65 }, colors });
+  const colors = CONFETTI_COLORS;
+  confetti({ particleCount: big ? 140 : 60, spread: 80, origin: { y: 0.65 }, colors, disableForReducedMotion: true });
   if (big) {
-    window.setTimeout(() => confetti({ particleCount: 90, angle: 60, spread: 70, origin: { x: 0, y: 0.7 }, colors }), 250);
-    window.setTimeout(() => confetti({ particleCount: 90, angle: 120, spread: 70, origin: { x: 1, y: 0.7 }, colors }), 450);
+    window.setTimeout(() => confetti({ particleCount: 90, angle: 60, spread: 70, origin: { x: 0, y: 0.7 }, colors, disableForReducedMotion: true }), 250);
+    window.setTimeout(() => confetti({ particleCount: 90, angle: 120, spread: 70, origin: { x: 1, y: 0.7 }, colors, disableForReducedMotion: true }), 450);
   }
 }
 
 /* ------------------------------------------------------------------ */
-/* Podium 3 - 2 - 1                                                       */
+/* Kerangka layar                                                         */
 /* ------------------------------------------------------------------ */
-
-const PODIUM_HEIGHT: Record<number, string> = { 1: 'h-64', 2: 'h-48', 3: 'h-36' };
-const PODIUM_COLOR: Record<number, string> = {
-  1: 'from-amber-300 to-amber-500',
-  2: 'from-slate-200 to-slate-400',
-  3: 'from-orange-300 to-orange-500',
-};
-
-export function Podium({
-  podium,
-  animate,
-  confettiEnabled,
-  onDrumroll,
-  onReveal,
-}: {
-  podium: PodiumRow[];
-  animate: boolean;
-  confettiEnabled: boolean;
-  onDrumroll?: () => void;
-  onReveal?: (rank: number) => void;
-}) {
-  // Urutan pengungkapan: peringkat terendah dulu (3 -> 2 -> 1).
-  const revealOrder = useMemo(() => [...podium].sort((a, b) => b.rank - a.rank), [podium]);
-  const [revealed, setRevealed] = useState(animate ? 0 : revealOrder.length);
-  const callbacks = useRef({ onDrumroll, onReveal });
-  callbacks.current = { onDrumroll, onReveal };
-
-  useEffect(() => {
-    if (!animate) {
-      setRevealed(revealOrder.length);
-      return;
-    }
-    setRevealed(0);
-    callbacks.current.onDrumroll?.();
-    const timers: number[] = [];
-    revealOrder.forEach((row, index) => {
-      timers.push(
-        window.setTimeout(() => {
-          setRevealed(index + 1);
-          callbacks.current.onReveal?.(row.rank);
-          if (row.rank === 1) fireConfetti({ enabled: confettiEnabled });
-        }, 1800 + index * 2200),
-      );
-    });
-    return () => timers.forEach((t) => window.clearTimeout(t));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [animate, revealOrder.length]);
-
-  // Tata letak visual: 2 - 1 - 3
-  const slots = [2, 1, 3].map((rank) => podium.find((p) => p.rank === rank)).filter(Boolean) as PodiumRow[];
-  const isRevealed = (row: PodiumRow) => revealOrder.findIndex((r) => r.playerId === row.playerId) < revealed;
-
-  if (!podium.length) return null;
-  return (
-    <div className="mx-auto flex w-full max-w-4xl items-end justify-center gap-3 px-2 sm:gap-6" aria-label="Podium pemenang">
-      {slots.map((row) => (
-        <div key={row.playerId} className="flex w-1/3 max-w-[16rem] flex-col items-center">
-          <AnimatePresence>
-            {isRevealed(row) && (
-              <motion.div
-                initial={animate ? { opacity: 0, y: 40, scale: 0.8 } : false}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ type: 'spring', stiffness: 220, damping: 18 }}
-                className="mb-3 w-full text-center text-white"
-              >
-                {row.rank === 1 ? <Crown className="mx-auto mb-1 h-10 w-10 text-amber-300" /> : <Medal className={cn('mx-auto mb-1 h-8 w-8', row.rank === 2 ? 'text-slate-200' : 'text-orange-300')} />}
-                <p className="truncate text-lg font-black sm:text-2xl">{row.name}</p>
-                <p className="text-base font-bold text-amber-200 sm:text-xl">
-                  <AnimatedNumber value={row.totalScore} animate={animate} durationMs={1200} />
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <motion.div
-            initial={false}
-            animate={{ opacity: isRevealed(row) ? 1 : 0.25 }}
-            className={cn('flex w-full items-start justify-center rounded-t-2xl bg-gradient-to-b pt-3 text-5xl font-black text-slate-900 shadow-2xl', PODIUM_HEIGHT[row.rank] ?? 'h-32', PODIUM_COLOR[row.rank] ?? 'from-slate-300 to-slate-500')}
-          >
-            {row.rank}
-          </motion.div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Latar & kerangka layar                                                 */
-/* ------------------------------------------------------------------ */
-
-export const liveBackground: CSSProperties = {
-  background:
-    'radial-gradient(1200px 600px at 15% -10%, rgba(56,189,248,0.18), transparent 60%), radial-gradient(900px 500px at 100% 0%, rgba(251,191,36,0.14), transparent 55%), linear-gradient(160deg, #0b1a45 0%, #0f255c 55%, #081133 100%)',
-};
 
 export function ReconnectBanner({ show, text = 'Menghubungkan ulang…' }: { show: boolean; text?: string }) {
   if (!show) return null;
   return (
-    <div role="status" className="fixed inset-x-0 top-0 z-50 bg-amber-400 px-4 py-2 text-center text-sm font-bold text-slate-900">
-      {text}
+    <div
+      role="status"
+      className="fixed inset-x-0 top-0 z-50 flex items-center justify-center gap-2 bg-gradient-to-r from-amber-300 to-orange-400 px-4 py-2 text-center text-sm font-black text-slate-900"
+    >
+      <Wifi className="h-4 w-4 animate-pulse" /> {text}
     </div>
   );
 }
 
 export function CenterCard({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn('mx-auto w-full max-w-md rounded-3xl bg-white/10 p-8 text-center text-white shadow-2xl backdrop-blur', className)}>
-      {children}
-    </div>
+    <div className={cn('lq-glass mx-auto w-full max-w-md rounded-[2rem] p-8 text-center text-white', className)}>{children}</div>
   );
 }

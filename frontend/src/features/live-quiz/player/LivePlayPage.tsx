@@ -1,48 +1,110 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, Clock, Loader2, Medal, Send, Trophy, X } from 'lucide-react';
+import { Check, Clock, Loader2, Medal, Pencil, Send, Trophy, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { getAssetUrl } from '@/lib/media';
 import { cn } from '@/utils/cn';
 import { liveAudio, type Sfx } from '../audio';
+import { PlayerAvatar } from '../avatars';
 import type { ClientSettings, PublicQuestion } from '../types';
 import { useLiveSession, type LiveState } from '../useLiveSession';
-import { usePrefersReducedMotion } from '../useReducedMotion';
+import { useMotionLevel } from '../useMotionLevel';
+import { AnswerCard, themeFor } from '../ui/AnswerCard';
+import { AvatarPicker } from '../ui/AvatarPicker';
+import { GameCountdown } from '../ui/Countdown';
+import { GameStage } from '../ui/GameStage';
+import { Leaderboard } from '../ui/Leaderboard';
+import { ReactionPicker } from '../ui/ReactionPicker';
 import {
   AnimatedNumber,
+  AudioUnlockHint,
   CenterCard,
-  Leaderboard,
-  OPTION_STYLES,
-  OptionContent,
   RankDelta,
   ReconnectBanner,
   RichText,
   SoundToggle,
   fireConfetti,
-  liveBackground,
   useRemainingMs,
 } from '../ui/shared';
-import { playerStorage } from './storage';
+import { avatarPreference, playerStorage } from './storage';
 
 /* ------------------------------------------------------------------ */
 /* Tahap-tahap layar pemain                                             */
 /* ------------------------------------------------------------------ */
 
-function PlayerLobby({ state }: { state: LiveState }) {
+type View = { animate: boolean; fancy: boolean };
+
+function PlayerLobby({
+  state,
+  view,
+  setAvatar,
+  sfx,
+}: {
+  state: LiveState;
+  view: View;
+  setAvatar: (id: string) => Promise<{ ok: boolean; message?: string; code?: string }>;
+  sfx: (n: Sfx) => void;
+}) {
+  const [picking, setPicking] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const canChange = state.settings?.allowAvatarChange !== false;
+
+  const choose = async (id: string) => {
+    if (saving || id === state.me?.avatarId) return;
+    liveAudio.unlock();
+    setSaving(true);
+    const result = await setAvatar(id);
+    setSaving(false);
+    if (result.ok) {
+      sfx('avatarPick');
+      avatarPreference.save(id);
+      setPicking(false);
+    } else {
+      toast.error(result.code === 'avatar_locked' ? 'Tutor tidak mengizinkan ganti karakter.' : (result.message ?? 'Gagal mengganti karakter.'));
+    }
+  };
+
   return (
-    <CenterCard>
-      <p className="text-sm font-semibold uppercase tracking-widest text-amber-300">Kamu sudah masuk</p>
-      <p className="mt-3 break-words text-4xl font-black">{state.me?.name}</p>
-      <p className="mt-5 text-sky-100">Lihat namamu di layar tutor. Permainan segera dimulai.</p>
-      <p className="mt-6 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold">
+    <div className="flex flex-1 flex-col items-center justify-center gap-5 text-center text-white">
+      <p className="text-sm font-black uppercase tracking-[0.3em] text-amber-300">Kamu sudah masuk!</p>
+      <motion.div
+        key={state.me?.avatarId}
+        initial={view.animate ? { scale: 0.6, rotate: -8, opacity: 0 } : false}
+        animate={{ scale: 1, rotate: 0, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 240, damping: 14 }}
+      >
+        <PlayerAvatar avatarId={state.me?.avatarId} seed={state.me?.id ?? ''} size={150} ring idle={view.animate} />
+      </motion.div>
+      <p className="max-w-full break-words text-4xl font-black">{state.me?.name}</p>
+      <p className="max-w-xs text-sky-100">Lihat karaktermu di layar tutor. Permainan segera dimulai!</p>
+      <p className="lq-glass inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold">
         <Loader2 className="h-4 w-4 animate-spin" /> {state.playerCount} peserta di lobby
       </p>
-      {state.lobbyLocked && <p className="mt-3 text-xs text-amber-200">Lobby dikunci tutor.</p>}
-    </CenterCard>
+      {state.lobbyLocked && <p className="text-xs text-amber-200">Lobby dikunci tutor.</p>}
+      {canChange && (
+        <button type="button" onClick={() => setPicking((v) => !v)} className="lq-btn lq-btn-ghost px-5 py-2.5 text-sm">
+          <Pencil className="h-4 w-4" /> {picking ? 'Tutup' : 'Ganti karakter'}
+        </button>
+      )}
+      <AnimatePresence>
+        {picking && canChange && (
+          <motion.div
+            initial={view.animate ? { opacity: 0, y: 16 } : false}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="lq-card-light w-full rounded-3xl p-4"
+          >
+            <AvatarPicker value={state.me?.avatarId ?? null} onChange={(id) => void choose(id)} disabled={saving} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
-function PlayerCountdown({ state, serverNow, sfx }: { state: LiveState; serverNow: () => number; sfx: (n: Sfx) => void }) {
+function PlayerCountdown({ state, serverNow, sfx, view }: { state: LiveState; serverNow: () => number; sfx: (n: Sfx) => void; view: View }) {
   const remaining = useRemainingMs(state.countdown?.deadlineAt, serverNow, true);
   const seconds = Math.max(1, Math.ceil(remaining / 1000));
   const last = useRef<number | null>(null);
@@ -52,22 +114,7 @@ function PlayerCountdown({ state, serverNow, sfx }: { state: LiveState; serverNo
       sfx('countdown');
     }
   }, [seconds, sfx]);
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center text-white">
-      <p className="mb-4 text-xl font-semibold text-sky-100">Bersiap…</p>
-      <AnimatePresence mode="popLayout">
-        <motion.span
-          key={seconds}
-          initial={{ scale: 2, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.5, opacity: 0 }}
-          className="text-[9rem] font-black leading-none text-amber-300"
-        >
-          {seconds}
-        </motion.span>
-      </AnimatePresence>
-    </div>
-  );
+  return <GameCountdown seconds={seconds} animate={view.animate} fancy={view.fancy} compact />;
 }
 
 function PlayerQuestion({
@@ -75,11 +122,13 @@ function PlayerQuestion({
   serverNow,
   submit,
   sfx,
+  view,
 }: {
   state: LiveState;
   serverNow: () => number;
   submit: (optionIds: string[]) => Promise<'ok' | 'duplicate' | 'late' | 'error'>;
   sfx: (n: Sfx) => void;
+  view: View;
 }) {
   const payload = state.question;
   const questionIndex = payload?.questionIndex ?? -1;
@@ -127,85 +176,78 @@ function PlayerQuestion({
 
   const fraction = Math.min(1, remaining / payload.durationMs);
   const hidden = question.prompt === null && question.options.every((o) => o.label === null);
+  const urgent = remaining <= 5000 && !state.questionClosed;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 text-white">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 text-white">
       <div>
-        <div className="mb-1 flex items-center justify-between text-sm font-semibold text-sky-100">
-          <span>
+        <div className="mb-1.5 flex items-center justify-between text-sm font-bold text-sky-100">
+          <span className="rounded-full bg-white/10 px-3 py-1">
             Soal {question.index + 1}/{question.total}
           </span>
-          <span className={cn('inline-flex items-center gap-1 tabular-nums', remaining <= 5000 && !state.questionClosed && 'text-rose-300')}>
+          <span className={cn('inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 tabular-nums', urgent && 'bg-rose-500/30 text-rose-200')}>
             <Clock className="h-4 w-4" /> {Math.ceil(remaining / 1000)} dtk
           </span>
         </div>
-        <div className="h-3 overflow-hidden rounded-full bg-white/15" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(fraction * 100)}>
+        <div className="h-3.5 overflow-hidden rounded-full bg-white/15" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(fraction * 100)}>
           <div
-            className={cn('h-full rounded-full transition-[width] duration-100 ease-linear', remaining <= 5000 ? 'bg-rose-400' : 'bg-amber-400')}
-            style={{ width: `${fraction * 100}%` }}
+            className="h-full rounded-full transition-[width] duration-100 ease-linear"
+            style={{
+              width: `${fraction * 100}%`,
+              background: urgent ? 'linear-gradient(90deg,#FF6B8A,#EF476F)' : 'linear-gradient(90deg,#19C6E6,#FFD166)',
+            }}
           />
         </div>
       </div>
 
       {!hidden && (question.prompt || question.imageUrl) && (
-        <div className="rounded-2xl bg-white/10 p-4 text-lg font-bold leading-snug">
+        <div className="lq-glass rounded-3xl p-4 text-lg font-extrabold leading-snug">
           {question.prompt && <RichText text={question.prompt} />}
           {question.imageUrl && (
             <img src={getAssetUrl(question.imageUrl)} alt="" className="mt-3 max-h-48 max-w-full rounded-xl bg-white/10 object-contain" />
           )}
         </div>
       )}
-      {multi && !locked && !timeIsUp && <p className="text-center text-sm text-sky-100">Pilih semua jawaban yang benar, lalu kirim.</p>}
+      {multi && !locked && !timeIsUp && <p className="text-center text-sm font-semibold text-sky-100">Pilih semua jawaban yang benar, lalu kirim.</p>}
 
       <div className={cn('grid flex-1 content-start gap-3', hidden && question.options.length <= 4 ? 'grid-cols-2 content-stretch' : 'grid-cols-1')}>
         {question.options.map((option, index) => {
-          const style = OPTION_STYLES[index % OPTION_STYLES.length]!;
-          const Icon = style.icon;
           const isChosen = chosen.includes(option.id);
           const dim = (locked || timeIsUp) && !isChosen;
           return (
-            <button
+            <motion.div
               key={option.id}
-              type="button"
-              disabled={locked || timeIsUp}
-              onClick={() => tap(option.id)}
-              aria-pressed={isChosen}
-              className={cn(
-                'relative flex min-h-[4.25rem] items-center gap-3 rounded-2xl px-4 py-3 text-left text-lg font-bold shadow-lg transition active:scale-[0.97]',
-                hidden && 'min-h-[7rem] flex-col justify-center text-center',
-                style.bg,
-                isChosen && 'ring-4 ring-white',
-                dim && 'opacity-35',
-              )}
+              initial={view.animate ? { opacity: 0, y: 18 } : false}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: view.animate ? index * 0.05 : 0, duration: 0.28 }}
+              className="contents"
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-black/20">
-                <Icon className="h-6 w-6" aria-hidden />
-              </span>
-              {option.label !== null || option.imageUrl ? (
-                <OptionContent label={option.label} imageUrl={option.imageUrl} />
-              ) : (
-                <span className="text-3xl font-black">{style.letter}</span>
-              )}
-              {isChosen && <Check className="h-6 w-6 shrink-0" aria-label="Dipilih" />}
-            </button>
+              <AnswerCard
+                option={option}
+                index={index}
+                state={isChosen ? 'picked' : dim ? 'dim' : 'idle'}
+                disabled={locked || timeIsUp}
+                onClick={() => tap(option.id)}
+                hideContent={hidden}
+              />
+            </motion.div>
           );
         })}
       </div>
 
       {multi && !locked && !timeIsUp && (
-        <button
-          type="button"
-          disabled={!selected.length}
-          onClick={() => void send(selected)}
-          className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-amber-400 text-lg font-black text-slate-900 shadow-lg disabled:opacity-40"
-        >
+        <button type="button" disabled={!selected.length} onClick={() => void send(selected)} className="lq-btn lq-btn-gold h-14 text-lg">
           <Send className="h-5 w-5" /> Kirim jawaban
         </button>
       )}
 
-      <div className="min-h-[2.5rem] text-center text-base font-semibold" aria-live="polite">
-        {sending && <span className="inline-flex items-center gap-2 text-sky-100"><Loader2 className="h-4 w-4 animate-spin" /> Mengirim…</span>}
-        {!sending && state.myAnswer !== null && <span className="text-emerald-300">Jawaban terkirim. Menunggu yang lain…</span>}
+      <div className="min-h-[2.5rem] text-center text-base font-bold" aria-live="polite">
+        {sending && (
+          <span className="inline-flex items-center gap-2 text-sky-100">
+            <Loader2 className="h-4 w-4 animate-spin" /> Mengirim…
+          </span>
+        )}
+        {!sending && state.myAnswer !== null && <span className="text-emerald-300">✓ Jawaban terkirim. Menunggu yang lain…</span>}
         {!sending && state.myAnswer === null && timeIsUp && <span className="text-rose-300">Waktu habis</span>}
         {problem && <span className="text-rose-300">{problem}</span>}
       </div>
@@ -218,36 +260,44 @@ function optionLetters(question: PublicQuestion | null, ids: string[] | null) {
   return question.options
     .map((option, index) => ({ option, index }))
     .filter(({ option }) => ids.includes(option.id))
-    .map(({ option, index }) => ({
-      letter: OPTION_STYLES[index % OPTION_STYLES.length]!.letter,
-      label: option.label,
-    }));
+    .map(({ option, index }) => ({ letter: themeFor(index).letter, label: option.label }));
 }
 
-function PlayerResult({ state, animate }: { state: LiveState; animate: boolean }) {
+function PlayerResult({ state, view }: { state: LiveState; view: View }) {
   const result = state.result;
   const question = state.question?.question ?? state.replayQuestion;
   if (!result) return null;
   const answered = result.answered ?? false;
   const correct = result.correct ?? false;
   const correctOnes = optionLetters(question, result.correctOptionIds);
+  const bg = !answered
+    ? 'linear-gradient(160deg,#5b6b82,#3a475b)'
+    : correct
+      ? 'linear-gradient(160deg,#2DD4A7,#0f9e78)'
+      : 'linear-gradient(160deg,#F0627F,#bd2a4b)';
   return (
     <motion.div
-      initial={animate ? { scale: 0.8, opacity: 0 } : false}
+      initial={view.animate ? { scale: 0.85, opacity: 0 } : false}
       animate={{ scale: 1, opacity: 1 }}
       transition={{ type: 'spring', stiffness: 260, damping: 18 }}
-      className={cn(
-        'flex flex-1 flex-col items-center justify-center rounded-3xl p-8 text-center text-white shadow-2xl',
-        !answered ? 'bg-slate-600/70' : correct ? 'bg-emerald-600' : 'bg-rose-600',
-      )}
+      className="relative flex flex-1 flex-col items-center justify-center overflow-hidden rounded-[2rem] p-8 text-center text-white shadow-2xl"
+      style={{ background: bg }}
     >
-      <span className="flex h-24 w-24 items-center justify-center rounded-full bg-white/20">
-        {!answered ? <Clock className="h-12 w-12" /> : correct ? <Check className="h-14 w-14" /> : <X className="h-14 w-14" />}
+      <motion.div
+        animate={
+          view.animate ? (correct ? { y: [0, -14, 0, -8, 0] } : answered ? { x: [0, -8, 8, -6, 6, 0] } : {}) : {}
+        }
+        transition={{ duration: 0.7 }}
+      >
+        <PlayerAvatar avatarId={state.me?.avatarId} seed={state.me?.id ?? ''} size={104} ring />
+      </motion.div>
+      <span className="mt-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/25">
+        {!answered ? <Clock className="h-9 w-9" /> : correct ? <Check className="h-10 w-10" strokeWidth={3.5} /> : <X className="h-10 w-10" strokeWidth={3.5} />}
       </span>
-      <p className="mt-5 text-4xl font-black">{!answered ? 'Tidak menjawab' : correct ? 'Benar!' : 'Salah'}</p>
+      <p className="mt-3 text-5xl font-black drop-shadow">{!answered ? 'Tidak menjawab' : correct ? 'BENAR!' : 'SALAH'}</p>
       {correctOnes.length > 0 && !correct && (
         <div className="mt-5 rounded-2xl bg-black/20 px-5 py-3 text-base">
-          <p className="text-xs uppercase tracking-widest text-white/70">Jawaban benar</p>
+          <p className="text-xs uppercase tracking-widest text-white/75">Jawaban benar</p>
           <p className="mt-1 text-xl font-bold">
             {correctOnes.map((c, i) => (
               <span key={c.letter}>
@@ -268,114 +318,113 @@ function PlayerResult({ state, animate }: { state: LiveState; animate: boolean }
   );
 }
 
-function PlayerScore({ state, animate, sfx }: { state: LiveState; animate: boolean; sfx: (n: Sfx) => void }) {
+function PlayerScore({ state, view, sfx }: { state: LiveState; view: View; sfx: (n: Sfx) => void }) {
   const score = state.score;
   if (!score) return null;
   const earned = score.earned ?? 0;
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-5 text-center text-white">
-      <p className="text-sm font-semibold uppercase tracking-widest text-sky-200">Poin soal ini</p>
+      <PlayerAvatar avatarId={state.me?.avatarId} seed={state.me?.id ?? ''} size={92} ring idle={view.animate} />
+      <p className="text-sm font-black uppercase tracking-[0.25em] text-sky-200">Poin soal ini</p>
       <motion.p
-        initial={animate ? { scale: 0.4, opacity: 0 } : false}
+        initial={view.animate ? { scale: 0.4, opacity: 0 } : false}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 220, damping: 14 }}
-        className={cn('text-7xl font-black', earned > 0 ? 'text-emerald-300' : 'text-white/60')}
+        className={cn('text-7xl font-black drop-shadow', earned > 0 ? 'text-emerald-300' : 'text-white/60')}
         onAnimationStart={() => earned > 0 && sfx('points')}
       >
-        +<AnimatedNumber value={earned} animate={animate} durationMs={800} />
+        +<AnimatedNumber value={earned} animate={view.animate} durationMs={800} />
       </motion.p>
-      <div className="rounded-2xl bg-white/10 px-8 py-4">
-        <p className="text-sm text-sky-200">Total poin</p>
+      <div className="lq-glass rounded-3xl px-8 py-4">
+        <p className="text-sm font-semibold text-sky-200">Total poin</p>
         <p className="text-4xl font-black text-amber-300">
-          <AnimatedNumber value={score.totalScore ?? 0} from={score.previousScore ?? 0} animate={animate} durationMs={1100} />
+          <AnimatedNumber value={score.totalScore ?? 0} from={score.previousScore ?? 0} animate={view.animate} durationMs={1100} />
         </p>
       </div>
     </div>
   );
 }
 
-function PlayerLeaderboard({ state, animate }: { state: LiveState; animate: boolean }) {
+function PlayerLeaderboard({ state, view }: { state: LiveState; view: View }) {
   const lb = state.leaderboard;
   if (!lb) return null;
   const top = lb.top ?? [];
   const me = state.me;
   return (
-    <div className="flex flex-1 flex-col items-center gap-5 text-white">
-      <div className="w-full rounded-3xl bg-white/10 p-6 text-center">
-        <p className="text-sm font-semibold uppercase tracking-widest text-sky-200">Peringkatmu</p>
-        <p className="mt-1 flex items-center justify-center gap-3 text-6xl font-black text-amber-300">
-          #{lb.rank ?? '-'}
-          <RankDelta delta={lb.delta} />
-        </p>
-        <p className="mt-1 text-lg font-semibold">
-          {(lb.totalScore ?? 0).toLocaleString('id-ID')} poin · dari {lb.totalPlayers} peserta
-        </p>
+    <div className="flex flex-1 flex-col items-center gap-4 text-white">
+      <div className="lq-glass flex w-full items-center gap-4 rounded-3xl p-4">
+        <PlayerAvatar avatarId={me?.avatarId} seed={me?.id ?? ''} size={72} ring />
+        <div className="min-w-0 flex-1 text-left">
+          <p className="text-xs font-bold uppercase tracking-widest text-sky-200">Peringkatmu</p>
+          <p className="flex items-center gap-2 text-5xl font-black text-amber-300">
+            #{lb.rank ?? '-'}
+            <RankDelta delta={lb.delta} />
+          </p>
+          <p className="text-sm font-semibold">
+            {(lb.totalScore ?? 0).toLocaleString('id-ID')} poin · dari {lb.totalPlayers} peserta
+          </p>
+        </div>
       </div>
       {lb.visible && top.length > 0 && (
         <div className="w-full">
-          <Leaderboard entries={top} animate={animate} highlightId={me?.id ?? null} />
-          {!lb.inTop && (
-            <p className="mt-3 text-center text-sm text-sky-100">… kamu berada di peringkat #{lb.rank}</p>
-          )}
+          <Leaderboard entries={top} animate={view.animate} highlightId={me?.id ?? null} />
+          {!lb.inTop && <p className="mt-3 text-center text-sm font-semibold text-sky-100">… kamu berada di peringkat #{lb.rank}</p>}
         </div>
       )}
-      <p className="mt-auto text-sm text-sky-100">{lb.isLast ? 'Menunggu podium…' : 'Bersiap untuk soal berikutnya'}</p>
+      <p className="mt-auto text-sm font-semibold text-sky-100">{lb.isLast ? 'Menunggu podium…' : 'Bersiap untuk soal berikutnya'}</p>
     </div>
   );
 }
 
-function PlayerFinal({ state, animate, onLeave }: { state: LiveState; animate: boolean; onLeave: () => void }) {
+function PlayerFinal({ state, view, onLeave }: { state: LiveState; view: View; onLeave: () => void }) {
   const final = state.final;
   const firedRef = useRef(false);
   useEffect(() => {
     if (final?.medal && !firedRef.current) {
       firedRef.current = true;
-      fireConfetti({ enabled: animate, intensity: final.medal === 'GOLD' ? 'big' : 'small' });
+      fireConfetti({ enabled: view.fancy, intensity: final.medal === 'GOLD' ? 'big' : 'small' });
     }
-  }, [final?.medal, animate]);
+  }, [final?.medal, view.fancy]);
   if (!final) return null;
   const medalColor = final.medal === 'GOLD' ? 'text-amber-300' : final.medal === 'SILVER' ? 'text-slate-200' : 'text-orange-300';
   const headline = final.rank === 1 ? 'Juara 1!' : final.rank === 2 ? 'Juara 2!' : final.rank === 3 ? 'Juara 3!' : 'Permainan selesai';
   return (
-    <div className="flex flex-1 flex-col items-center gap-5 text-center text-white">
+    <div className="flex flex-1 flex-col items-center gap-4 text-center text-white">
       <motion.div
-        initial={animate ? { scale: 0.5, opacity: 0 } : false}
+        initial={view.animate ? { scale: 0.6, opacity: 0 } : false}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 200, damping: 14 }}
-        className="w-full rounded-3xl bg-white/10 p-6"
+        className="lq-glass relative w-full overflow-hidden rounded-[2rem] p-6"
       >
-        {final.medal ? <Medal className={cn('mx-auto h-14 w-14', medalColor)} /> : <Trophy className="mx-auto h-12 w-12 text-sky-200" />}
-        <p className="mt-2 text-3xl font-black">{headline}</p>
-        <p className="mt-3 text-sm uppercase tracking-widest text-sky-200">Peringkat akhir</p>
+        <PlayerAvatar avatarId={state.me?.avatarId} seed={state.me?.id ?? ''} size={104} ring idle={view.animate} className="mx-auto" />
+        <div className="mt-3 flex items-center justify-center gap-2">
+          {final.medal ? <Medal className={cn('h-9 w-9', medalColor)} /> : <Trophy className="h-8 w-8 text-sky-200" />}
+          <p className="text-3xl font-black">{headline}</p>
+        </div>
+        <p className="mt-2 text-xs font-bold uppercase tracking-widest text-sky-200">Peringkat akhir</p>
         <p className="text-6xl font-black text-amber-300">#{final.rank ?? '-'}</p>
-        <p className="text-sm text-sky-100">dari {final.totalPlayers} peserta</p>
+        <p className="text-sm font-semibold text-sky-100">dari {final.totalPlayers} peserta</p>
       </motion.div>
       <div className="grid w-full grid-cols-2 gap-3">
-        <div className="rounded-2xl bg-white/10 p-4">
+        <div className="lq-glass rounded-2xl p-4">
           <p className="text-3xl font-black text-amber-300">{(final.totalScore ?? 0).toLocaleString('id-ID')}</p>
-          <p className="text-xs text-sky-200">Total poin</p>
+          <p className="text-xs font-semibold text-sky-200">Total poin</p>
         </div>
-        <div className="rounded-2xl bg-white/10 p-4">
+        <div className="lq-glass rounded-2xl p-4">
           <p className="text-3xl font-black">{final.accuracy ?? 0}%</p>
-          <p className="text-xs text-sky-200">Akurasi</p>
+          <p className="text-xs font-semibold text-sky-200">Akurasi</p>
         </div>
         <div className="rounded-2xl bg-emerald-500/25 p-4">
           <p className="text-3xl font-black">{final.correctCount ?? 0}</p>
-          <p className="text-xs text-emerald-100">Benar</p>
+          <p className="text-xs font-semibold text-emerald-100">Benar</p>
         </div>
         <div className="rounded-2xl bg-rose-500/25 p-4">
           <p className="text-3xl font-black">{final.incorrectCount ?? 0}</p>
-          <p className="text-xs text-rose-100">Salah</p>
+          <p className="text-xs font-semibold text-rose-100">Salah</p>
         </div>
       </div>
-      {(final.unansweredCount ?? 0) > 0 && (
-        <p className="text-sm text-sky-100">{final.unansweredCount} soal tidak dijawab</p>
-      )}
-      <button
-        type="button"
-        onClick={onLeave}
-        className="mt-auto h-14 w-full rounded-2xl bg-amber-400 text-lg font-black text-slate-900 shadow-lg"
-      >
+      {(final.unansweredCount ?? 0) > 0 && <p className="text-sm text-sky-100">{final.unansweredCount} soal tidak dijawab</p>}
+      <button type="button" onClick={onLeave} className="lq-btn lq-btn-gold mt-auto h-14 w-full text-lg">
         Gabung kuis lain
       </button>
     </div>
@@ -388,8 +437,10 @@ function PlayerFinal({ state, animate, onLeave }: { state: LiveState; animate: b
 
 function PlayView({ sessionId, playerToken }: { sessionId: string; playerToken: string }) {
   const navigate = useNavigate();
-  const reducedMotion = usePrefersReducedMotion();
   const settingsRef = useRef<ClientSettings | null>(null);
+  const [settingsForMotion, setSettingsForMotion] = useState(true);
+  const mo = useMotionLevel(settingsForMotion);
+  const view: View = { animate: mo.animate, fancy: mo.fancy };
 
   const sfx = useCallback((name: Sfx) => {
     if (settingsRef.current?.soundEnabled === false) return;
@@ -421,9 +472,11 @@ function PlayView({ sessionId, playerToken }: { sessionId: string; playerToken: 
     [sfx],
   );
 
-  const { state, submit, serverNow } = useLiveSession({ role: 'player', sessionId, playerToken, onEvent });
+  const { state, submit, serverNow, setAvatar, sendReaction } = useLiveSession({ role: 'player', sessionId, playerToken, onEvent });
   settingsRef.current = state.settings;
-  const animate = (state.settings?.animationsEnabled ?? true) && !reducedMotion;
+  useEffect(() => {
+    setSettingsForMotion(state.settings?.animationsEnabled ?? true);
+  }, [state.settings?.animationsEnabled]);
   const status = state.status;
 
   const leave = useCallback(() => {
@@ -438,13 +491,26 @@ function PlayView({ sessionId, playerToken }: { sessionId: string; playerToken: 
 
   const score = useMemo(() => state.me?.totalScore ?? 0, [state.me?.totalScore]);
 
+  // Aturan tampil tombol REACT (server tetap memvalidasi ulang).
+  const reactions = state.settings;
+  const canReact =
+    state.hasSynced &&
+    !state.kicked &&
+    reactions?.reactionsEnabled !== false &&
+    (status === 'LOBBY' ||
+      status === 'QUESTION_RESULT' ||
+      status === 'SCORE_RESULT' ||
+      status === 'LEADERBOARD' ||
+      status === 'FINISHED' ||
+      (status === 'QUESTION_ACTIVE' && reactions?.reactionsAfterSubmit !== false && state.myAnswer !== null));
+
   let body: React.ReactNode = null;
   if (state.kicked) {
     body = (
       <CenterCard>
         <p className="text-2xl font-black">Kamu dikeluarkan</p>
         <p className="mt-3 text-sky-100">{state.kicked}</p>
-        <button type="button" onClick={leave} className="mt-6 rounded-full bg-amber-400 px-6 py-3 font-bold text-slate-900">
+        <button type="button" onClick={leave} className="lq-btn lq-btn-gold mt-6 px-6 py-3">
           Kembali
         </button>
       </CenterCard>
@@ -453,7 +519,7 @@ function PlayView({ sessionId, playerToken }: { sessionId: string; playerToken: 
     body = (
       <CenterCard>
         <p className="text-xl font-bold">{state.deniedReason}</p>
-        <button type="button" onClick={leave} className="mt-6 rounded-full bg-amber-400 px-6 py-3 font-bold text-slate-900">
+        <button type="button" onClick={leave} className="lq-btn lq-btn-gold mt-6 px-6 py-3">
           Masukkan PIN lagi
         </button>
       </CenterCard>
@@ -467,32 +533,32 @@ function PlayView({ sessionId, playerToken }: { sessionId: string; playerToken: 
   } else {
     switch (status) {
       case 'LOBBY':
-        body = <PlayerLobby state={state} />;
+        body = <PlayerLobby state={state} view={view} setAvatar={setAvatar} sfx={sfx} />;
         break;
       case 'COUNTDOWN':
-        body = <PlayerCountdown state={state} serverNow={serverNow} sfx={sfx} />;
+        body = <PlayerCountdown state={state} serverNow={serverNow} sfx={sfx} view={view} />;
         break;
       case 'QUESTION_ACTIVE':
-        body = <PlayerQuestion state={state} serverNow={serverNow} submit={submit} sfx={sfx} />;
+        body = <PlayerQuestion state={state} serverNow={serverNow} submit={submit} sfx={sfx} view={view} />;
         break;
       case 'QUESTION_RESULT':
-        body = <PlayerResult state={state} animate={animate} />;
+        body = <PlayerResult state={state} view={view} />;
         break;
       case 'SCORE_RESULT':
-        body = <PlayerScore state={state} animate={animate} sfx={sfx} />;
+        body = <PlayerScore state={state} view={view} sfx={sfx} />;
         break;
       case 'LEADERBOARD':
-        body = <PlayerLeaderboard state={state} animate={animate} />;
+        body = <PlayerLeaderboard state={state} view={view} />;
         break;
       case 'FINISHED':
-        body = <PlayerFinal state={state} animate={animate} onLeave={leave} />;
+        body = <PlayerFinal state={state} view={view} onLeave={leave} />;
         break;
       case 'CANCELLED':
         body = (
           <CenterCard>
             <p className="text-2xl font-black">Sesi dibatalkan</p>
             <p className="mt-3 text-sky-100">Tutor membatalkan sesi ini.</p>
-            <button type="button" onClick={leave} className="mt-6 rounded-full bg-amber-400 px-6 py-3 font-bold text-slate-900">
+            <button type="button" onClick={leave} className="lq-btn lq-btn-gold mt-6 px-6 py-3">
               Kembali
             </button>
           </CenterCard>
@@ -505,18 +571,21 @@ function PlayView({ sessionId, playerToken }: { sessionId: string; playerToken: 
 
   return (
     <div
-      className="mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col gap-4 px-4 pb-6 pt-4"
+      className="mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col gap-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3"
       onPointerDown={() => liveAudio.unlock()}
     >
       <ReconnectBanner show={state.hasSynced && state.connection === 'reconnecting'} />
       <header className="flex items-center justify-between gap-3 text-white">
-        <div className="min-w-0">
-          <p className="truncate text-base font-black">{state.me?.name ?? '…'}</p>
-          <p className="truncate text-xs text-sky-200">{state.session?.title}</p>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <PlayerAvatar avatarId={state.me?.avatarId} seed={state.me?.id ?? ''} size={40} ring />
+          <div className="min-w-0">
+            <p className="truncate text-base font-black leading-tight">{state.me?.name ?? '…'}</p>
+            <p className="truncate text-xs text-sky-200">{state.session?.title}</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {status && status !== 'LOBBY' && status !== 'COUNTDOWN' && (
-            <span className="rounded-full bg-amber-400 px-3 py-1.5 text-sm font-black tabular-nums text-slate-900">
+            <span className="rounded-full bg-gradient-to-b from-amber-200 to-amber-400 px-3 py-1.5 text-sm font-black tabular-nums text-slate-900 shadow">
               {score.toLocaleString('id-ID')}
             </span>
           )}
@@ -526,7 +595,16 @@ function PlayView({ sessionId, playerToken }: { sessionId: string; playerToken: 
       {state.paused && (
         <p className="rounded-xl bg-amber-400 px-4 py-2 text-center text-sm font-black text-slate-900">Permainan dijeda tutor</p>
       )}
+      <AudioUnlockHint enabled={state.settings?.soundEnabled !== false} className="self-center" />
       <main className="flex min-h-0 flex-1 flex-col">{body}</main>
+      {canReact && (
+        <ReactionPicker
+          send={sendReaction}
+          soundEnabled={state.settings?.soundEnabled !== false}
+          animate={view.animate}
+          className="sticky bottom-2 z-20"
+        />
+      )}
     </div>
   );
 }
@@ -536,11 +614,21 @@ export function LivePlayPage() {
   const stored = playerStorage.load(sessionId);
   if (!stored) return <Navigate to="/live/join" replace />;
   return (
-    <div style={liveBackground} className="min-h-[100dvh]">
+    <PlayShell>
       <PlayView sessionId={sessionId} playerToken={stored.playerToken} />
       <Link to="/live/join" className="sr-only">
         Gabung kuis lain
       </Link>
-    </div>
+    </PlayShell>
+  );
+}
+
+/** Pembungkus latar; mengikuti pengaturan gerak perangkat (lite/reduced) tanpa menunggu data sesi. */
+function PlayShell({ children }: { children: React.ReactNode }) {
+  const { level } = useMotionLevel(true);
+  return (
+    <GameStage level={level} className="min-h-[100dvh]">
+      {children}
+    </GameStage>
   );
 }

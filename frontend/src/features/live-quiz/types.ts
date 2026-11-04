@@ -38,9 +38,13 @@ export type ClientSettings = {
   scoreMode: 'SPEED' | 'ACCURACY';
   lockLobbyOnStart: boolean;
   allowLateJoin: boolean;
+  reactionsEnabled: boolean;
+  reactionsAfterSubmit: boolean;
+  reactionsOnProjector: boolean;
+  allowAvatarChange: boolean;
 };
 
-export type LobbyPlayer = { id: string; name: string; connected: boolean; joinedAt: number };
+export type LobbyPlayer = { id: string; name: string; avatarId: string; connected: boolean; joinedAt: number };
 export type LobbyPayload = {
   version: number;
   players: LobbyPlayer[];
@@ -78,7 +82,7 @@ export type ScorePayload = {
   version: number;
   questionIndex: number;
   // host
-  topGains?: Array<{ name: string; earned: number }>;
+  topGains?: Array<{ name: string; avatarId?: string; earned: number }>;
   answeredCount?: number;
   // player
   correct?: boolean;
@@ -91,6 +95,7 @@ export type ScorePayload = {
 export type LeaderboardEntry = {
   playerId: string;
   name: string;
+  avatarId?: string;
   rank: number;
   totalScore: number;
   correctCount: number;
@@ -118,6 +123,7 @@ export type LeaderboardPayload = {
 export type PodiumRow = {
   playerId: string;
   name: string;
+  avatarId?: string;
   rank: number;
   totalScore: number;
   correctCount: number;
@@ -152,7 +158,7 @@ export type SyncPayload = {
   settings: ClientSettings;
   playerCount: number;
   lobby?: LobbyPayload;
-  me?: { id: string; name: string; totalScore: number; correctCount: number; rank: number | null };
+  me?: { id: string; name: string; avatarId?: string; totalScore: number; correctCount: number; rank: number | null };
   countdown?: { startedAt: number; deadlineAt: number; countdownMs: number; version: number } | null;
   question?: QuestionPayload | PublicQuestion | null;
   myAnswer?: { optionIds: string[] } | null;
@@ -194,6 +200,10 @@ export type QuizSettings = {
   leaderboardSize: number;
   maxPoints: number;
   maxPlayers: number;
+  reactionsEnabled: boolean;
+  reactionsAfterSubmit: boolean;
+  reactionsOnProjector: boolean;
+  allowAvatarChange: boolean;
 };
 
 export const TIME_LIMIT_OPTIONS = [5, 10, 20, 30, 60, 90, 120] as const;
@@ -295,6 +305,7 @@ export type ReportData = {
     rank: number;
     playerId: string;
     name: string;
+    avatarId?: string;
     userId: string | null;
     totalPoints: number;
     correctCount: number;
@@ -319,7 +330,7 @@ export type ReportData = {
 };
 
 export type PlayerDetail = {
-  player: { id: string; name: string; totalScore: number; correctCount: number; rank: number | null; kicked: boolean };
+  player: { id: string; name: string; avatarId?: string; totalScore: number; correctCount: number; rank: number | null; kicked: boolean };
   answers: Array<{
     number: number;
     prompt: string;
@@ -338,3 +349,37 @@ export type BankQuestionsResult = {
   questions: Array<Omit<EditorQuestion, 'key'>>;
   skipped: Array<{ number: number; reason: string }>;
 };
+
+/* ---- Live Quiz 2.0: reaksi emoji ---- */
+
+export const REACTION_IDS = ['fire', 'heart', 'laugh', 'clap', 'party', 'wow', 'cool', 'rocket'] as const;
+export type ReactionId = (typeof REACTION_IDS)[number];
+
+/** Pemetaan ID -> emoji (urutan sama dengan spesifikasi: 🔥 ❤️ 😂 👏 🎉 😮 😎 🚀). */
+export const REACTION_EMOJI: Record<ReactionId, string> = {
+  fire: '🔥',
+  heart: '❤️',
+  laugh: '😂',
+  clap: '👏',
+  party: '🎉',
+  wow: '😮',
+  cool: '😎',
+  rocket: '🚀',
+};
+
+/** Nama aksesibel (pembaca layar) untuk tiap reaksi. */
+export const REACTION_LABEL: Record<ReactionId, string> = {
+  fire: 'Api',
+  heart: 'Hati',
+  laugh: 'Tertawa',
+  clap: 'Tepuk tangan',
+  party: 'Perayaan',
+  wow: 'Kaget',
+  cool: 'Keren',
+  rocket: 'Roket',
+};
+
+export type ReactionItem = { playerId: string; name: string; avatarId: string; emoji: ReactionId; at: number };
+export type ReactionBatchHost = { items: ReactionItem[]; counts: Partial<Record<ReactionId, number>>; total: number; serverNow: number };
+export type ReactionBatchPlayer = { counts: Partial<Record<ReactionId, number>>; total: number; serverNow: number };
+export type ReactionSettingsPayload = { reactionsEnabled: boolean; reactionsAfterSubmit: boolean; reactionsOnProjector: boolean };

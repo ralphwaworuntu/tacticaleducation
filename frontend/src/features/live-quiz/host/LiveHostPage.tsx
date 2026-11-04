@@ -4,41 +4,31 @@ import { useQuery } from '@tanstack/react-query';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
-import {
-  BarChart3,
-  Check,
-  Expand,
-  Lock,
-  LogOut,
-  Pause,
-  Play,
-  SkipForward,
-  Trophy,
-  Unlock,
-  Users,
-  X,
-} from 'lucide-react';
+import { BarChart3, Check, Expand, Lock, LogOut, Pause, Play, SkipForward, SmilePlus, Trophy, Unlock, Users, X } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { getAssetUrl } from '@/lib/media';
 import { cn } from '@/utils/cn';
 import { liveQuizApi } from '../api';
 import { liveAudio, type Sfx } from '../audio';
+import { PlayerAvatar } from '../avatars';
 import { formatPin } from '../format';
-import type { ClientSettings, JoinInfo, LobbyPlayer } from '../types';
+import type { ClientSettings, JoinInfo, LobbyPlayer, ReactionBatchHost } from '../types';
 import { useLiveSession, type HostAction, type LiveState } from '../useLiveSession';
-import { usePrefersReducedMotion } from '../useReducedMotion';
+import { useMotionLevel } from '../useMotionLevel';
+import { AnswerCard, themeFor } from '../ui/AnswerCard';
+import { GameCountdown } from '../ui/Countdown';
+import { GameStage, LiveBrand } from '../ui/GameStage';
+import { Leaderboard } from '../ui/Leaderboard';
+import { PodiumStage, type PodiumEvent } from '../ui/PodiumStage';
+import { ReactionLane, type ReactionLaneHandle } from '../ui/ReactionLane';
 import {
   AnimatedNumber,
+  AudioUnlockHint,
   CenterCard,
-  Leaderboard,
-  OPTION_STYLES,
-  OptionContent,
-  Podium,
   ReconnectBanner,
   RichText,
   SoundToggle,
   TimerRing,
-  liveBackground,
   useRemainingMs,
 } from '../ui/shared';
 
@@ -54,53 +44,107 @@ function buildJoinUrl(join: JoinInfo): string {
 
 const stripProtocol = (url: string) => url.replace(/^https?:\/\//, '').replace(/\?.*$/, '');
 
+type View = { animate: boolean; fancy: boolean };
+
+/* ------------------------------------------------------------------ */
+/* Kontrol reaksi host                                                  */
+/* ------------------------------------------------------------------ */
+
+function SwitchRow({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (value: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="flex w-full items-center justify-between gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-white/10"
+    >
+      <span>
+        <span className="block text-sm font-bold">{label}</span>
+        {hint && <span className="block text-xs text-sky-200">{hint}</span>}
+      </span>
+      <span className={cn('relative h-6 w-11 shrink-0 rounded-full transition-colors', checked ? 'bg-emerald-400' : 'bg-white/25')}>
+        <span className={cn('absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform', checked ? 'translate-x-[22px]' : 'translate-x-0.5')} />
+      </span>
+    </button>
+  );
+}
+
+function ReactionControls({ settings, onChange }: { settings: ClientSettings | null; onChange: (patch: { enabled?: boolean; afterSubmit?: boolean; onProjector?: boolean }) => void }) {
+  const [open, setOpen] = useState(false);
+  if (!settings) return null;
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-label="Pengaturan reaksi emoji"
+        className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+      >
+        <SmilePlus className="h-5 w-5" />
+        <span className={cn('absolute right-0 top-0 h-3 w-3 rounded-full ring-2 ring-[#0b2240]', settings.reactionsEnabled ? 'bg-emerald-400' : 'bg-rose-500')} />
+      </button>
+      {open && (
+        <div className="lq-glass absolute right-0 top-12 z-40 w-72 rounded-2xl bg-[#081b33]/95 p-3 text-white">
+          <p className="px-2 pb-1 text-xs font-black uppercase tracking-widest text-amber-300">Reaksi emoji</p>
+          <SwitchRow label="Aktifkan reaksi" hint="Matikan untuk semua peserta" checked={settings.reactionsEnabled} onChange={(v) => onChange({ enabled: v })} />
+          <SwitchRow
+            label="Boleh saat soal berlangsung"
+            hint="Hanya setelah peserta menjawab"
+            checked={settings.reactionsAfterSubmit}
+            onChange={(v) => onChange({ afterSubmit: v })}
+          />
+          <SwitchRow label="Tampilkan di layar" hint="Sembunyikan dari proyektor" checked={settings.reactionsOnProjector} onChange={(v) => onChange({ onProjector: v })} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Tahap-tahap layar                                                    */
 /* ------------------------------------------------------------------ */
 
-function HostLobby({
-  state,
-  join,
-  onKick,
-}: {
-  state: LiveState;
-  join: JoinInfo | null;
-  onKick: (player: LobbyPlayer) => void;
-}) {
+function HostLobby({ state, join, onKick, view }: { state: LiveState; join: JoinInfo | null; onKick: (player: LobbyPlayer) => void; view: View }) {
   const players = state.lobby?.players ?? [];
   const url = join ? buildJoinUrl(join) : null;
   const isLocalOnly = url ? /\/\/(localhost|127\.0\.0\.1)/.test(url) : false;
-  const animate = state.settings?.animationsEnabled !== false;
+  const dense = players.length > 24;
+  const avatarSize = dense ? 56 : players.length > 12 ? 68 : 84;
 
   return (
-    <div className="grid h-full min-h-0 gap-6 lg:grid-cols-[minmax(320px,440px)_1fr]">
-      <div className="flex flex-col items-center justify-center gap-5 rounded-3xl bg-white/10 p-6 text-center text-white backdrop-blur">
+    <div className="grid h-full min-h-0 gap-5 lg:grid-cols-[minmax(300px,420px)_1fr]">
+      <div className="lq-glass flex min-h-0 flex-col items-center justify-center gap-3 overflow-y-auto rounded-[2rem] p-5 text-center text-white">
         <p className="text-lg font-semibold text-sky-100">
           Buka <span className="font-black text-white">{url ? stripProtocol(url) : '…'}</span>
         </p>
-        <p className="text-sm uppercase tracking-[0.3em] text-sky-200">PIN Game</p>
-        <p className="text-6xl font-black tracking-widest text-amber-300 sm:text-7xl" aria-label={`PIN ${state.session?.pin ?? ''}`}>
+        <p className="text-xs font-black uppercase tracking-[0.35em] text-sky-200">PIN Game</p>
+        <p
+          className="rounded-2xl bg-white/10 px-5 py-1 text-6xl font-black tracking-widest text-amber-300 sm:text-7xl"
+          aria-label={`PIN ${state.session?.pin ?? ''}`}
+        >
           {state.session?.pin ? formatPin(state.session.pin) : '------'}
         </p>
         {url && (
-          <div className="rounded-2xl bg-white p-4 shadow-xl">
-            <QRCodeSVG value={url} size={200} level="M" marginSize={0} />
+          <div className="rounded-3xl bg-white p-4 shadow-2xl">
+            <QRCodeSVG value={url} size={190} level="M" marginSize={0} fgColor="#102A43" />
           </div>
         )}
-        <p className="text-sm text-sky-100">Scan QR dengan kamera HP atau masukkan PIN.</p>
+        <p className="text-sm font-semibold text-sky-100">Scan QR dengan kamera HP atau masukkan PIN.</p>
         {isLocalOnly && (
           <p className="rounded-xl bg-amber-400/20 px-3 py-2 text-xs text-amber-100">
-            Alamat masih <strong>localhost</strong> sehingga HP tidak bisa membukanya. Buka halaman ini lewat alamat IP
-            jaringan (mis. http://192.168.x.x:5173) atau isi <code>APP_URL</code> di server.
+            Alamat masih <strong>localhost</strong> sehingga HP tidak bisa membukanya. Buka halaman ini lewat alamat IP jaringan (mis.
+            http://192.168.x.x:5173) atau isi <code>APP_URL</code> di server.
           </p>
         )}
       </div>
 
-      <div className="flex min-h-0 flex-col rounded-3xl bg-white/5 p-6 text-white">
-        <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="flex min-h-0 flex-col rounded-[2rem] bg-white/5 p-5 text-white">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="flex items-center gap-2 text-2xl font-black">
             <Users className="h-6 w-6 text-amber-300" />
-            <AnimatedNumber value={players.length} animate={false} /> peserta
+            <AnimatedNumber value={players.length} animate={false} /> pemain bergabung
           </h2>
           {state.lobbyLocked && (
             <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/30 px-3 py-1 text-sm font-semibold text-rose-100">
@@ -108,37 +152,45 @@ function HostLobby({
             </span>
           )}
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
           {players.length === 0 ? (
-            <p className="flex h-full items-center justify-center text-center text-xl text-sky-100/80">
-              Menunggu peserta bergabung…
-            </p>
+            <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-xl text-sky-100/80">
+              <span className="lq-pulse flex h-24 w-24 items-center justify-center rounded-full bg-white/10">
+                <Users className="h-12 w-12" />
+              </span>
+              Menunggu pemain bergabung…
+            </div>
           ) : (
-            <ul className="flex flex-wrap content-start gap-3">
+            <ul className="grid content-start gap-3" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${avatarSize + 44}px, 1fr))` }}>
               <AnimatePresence initial={false}>
                 {players.map((player) => (
                   <motion.li
                     key={player.id}
-                    layout={animate}
-                    initial={animate ? { opacity: 0, scale: 0.6 } : false}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.6 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-                    className={cn(
-                      'group flex items-center gap-2 rounded-full px-4 py-2 text-lg font-bold shadow',
-                      player.connected ? 'bg-white text-slate-900' : 'bg-white/30 text-white/80',
-                    )}
+                    layout={view.animate}
+                    initial={view.animate ? { opacity: 0, scale: 0.4, y: 20 } : false}
+                    animate={{ opacity: player.connected ? 1 : 0.5, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.5 }}
+                    transition={{ type: 'spring', stiffness: 380, damping: 20 }}
+                    className="group relative flex flex-col items-center gap-1.5 rounded-2xl bg-white/[0.07] px-2 pb-2 pt-3"
                     title={player.connected ? 'Terhubung' : 'Terputus'}
                   >
-                    <span className={cn('h-2.5 w-2.5 rounded-full', player.connected ? 'bg-emerald-500' : 'bg-slate-400')} />
-                    {player.name}
+                    <PlayerAvatar avatarId={player.avatarId} seed={player.id} size={avatarSize} idle={view.fancy && !dense} />
+                    <span
+                      className={cn(
+                        'max-w-full truncate rounded-full px-3 py-0.5 text-center font-extrabold',
+                        dense ? 'text-sm' : 'text-base',
+                        player.connected ? 'bg-white text-slate-900' : 'bg-white/30 text-white/80',
+                      )}
+                    >
+                      {player.name}
+                    </span>
                     <button
                       type="button"
                       onClick={() => onKick(player)}
-                      className="ml-1 hidden rounded-full p-0.5 text-rose-600 hover:bg-rose-100 group-hover:block"
+                      className="absolute right-1 top-1 hidden rounded-full bg-rose-500 p-1 text-white shadow group-hover:block"
                       aria-label={`Keluarkan ${player.name}`}
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-3.5 w-3.5" />
                     </button>
                   </motion.li>
                 ))}
@@ -151,7 +203,7 @@ function HostLobby({
   );
 }
 
-function HostCountdown({ state, serverNow, sfx }: { state: LiveState; serverNow: () => number; sfx: (name: Sfx) => void }) {
+function HostCountdown({ state, serverNow, sfx, view }: { state: LiveState; serverNow: () => number; sfx: (name: Sfx) => void; view: View }) {
   const remaining = useRemainingMs(state.countdown?.deadlineAt, serverNow, true);
   const seconds = Math.max(1, Math.ceil(remaining / 1000));
   const lastRef = useRef<number | null>(null);
@@ -162,25 +214,13 @@ function HostCountdown({ state, serverNow, sfx }: { state: LiveState; serverNow:
     }
   }, [seconds, sfx]);
   return (
-    <div className="flex h-full flex-col items-center justify-center text-white">
-      <p className="mb-6 text-2xl font-semibold text-sky-100">Bersiap…</p>
-      <AnimatePresence mode="popLayout">
-        <motion.span
-          key={seconds}
-          initial={{ scale: 2.2, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.5, opacity: 0 }}
-          transition={{ duration: 0.35 }}
-          className="text-[14rem] font-black leading-none text-amber-300 drop-shadow-2xl"
-        >
-          {seconds}
-        </motion.span>
-      </AnimatePresence>
+    <div className="flex h-full min-h-0 flex-col">
+      <GameCountdown seconds={seconds} animate={view.animate} fancy={view.fancy} />
     </div>
   );
 }
 
-function HostQuestion({ state, serverNow, sfx }: { state: LiveState; serverNow: () => number; sfx: (name: Sfx) => void }) {
+function HostQuestion({ state, serverNow, sfx, view }: { state: LiveState; serverNow: () => number; sfx: (name: Sfx) => void; view: View }) {
   const payload = state.question;
   const remaining = useRemainingMs(payload?.deadlineAt, serverNow, !state.questionClosed);
   const lastTick = useRef<number | null>(null);
@@ -197,53 +237,53 @@ function HostQuestion({ state, serverNow, sfx }: { state: LiveState; serverNow: 
   const multi = question.type === 'MULTIPLE';
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-5 text-white">
-      <div className="flex items-start gap-5">
-        <div className="min-w-0 flex-1 rounded-3xl bg-white/10 p-6 backdrop-blur">
-          <p className="mb-2 text-sm font-semibold uppercase tracking-widest text-sky-200">
+    <div className="flex h-full min-h-0 flex-col gap-4 text-white">
+      <div className="flex items-start gap-4">
+        <motion.div
+          key={question.index}
+          initial={view.animate ? { opacity: 0, y: -16 } : false}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="lq-glass min-w-0 flex-1 rounded-[2rem] p-5"
+        >
+          <p className="mb-2 text-sm font-black uppercase tracking-widest text-sky-200">
             Soal {question.index + 1} dari {question.total}
             {multi ? ' · pilih semua jawaban yang benar' : question.type === 'TRUE_FALSE' ? ' · benar atau salah' : ''}
             {question.weight === 'DOUBLE' ? ' · POIN 2x' : question.weight === 'NONE' ? ' · tanpa poin' : ''}
           </p>
-          <div className="text-3xl font-extrabold leading-snug sm:text-4xl">
-            {question.prompt && <RichText text={question.prompt} />}
-          </div>
-          {question.imageUrl && (
-            <img src={getAssetUrl(question.imageUrl)} alt="" className="mt-4 max-h-64 max-w-full rounded-xl bg-white/10 object-contain" />
-          )}
-        </div>
+          <div className="text-3xl font-extrabold leading-snug xl:text-4xl">{question.prompt && <RichText text={question.prompt} />}</div>
+          {question.imageUrl && <img src={getAssetUrl(question.imageUrl)} alt="" className="mt-4 max-h-56 max-w-full rounded-xl bg-white/10 object-contain" />}
+        </motion.div>
         <div className="flex shrink-0 flex-col items-center gap-3">
-          <TimerRing remainingMs={remaining} totalMs={payload.durationMs} size={112} />
-          <div className="rounded-2xl bg-white/10 px-4 py-2 text-center">
+          <TimerRing remainingMs={remaining} totalMs={payload.durationMs} size={116} pulse={view.fancy} />
+          <div className="lq-glass rounded-2xl px-4 py-2 text-center">
             <p className="text-3xl font-black tabular-nums">
               {state.answeredCount}
               <span className="text-lg text-sky-200">/{state.totalPlayers}</span>
             </p>
-            <p className="text-xs text-sky-200">sudah menjawab</p>
+            <p className="text-xs font-semibold text-sky-200">sudah menjawab</p>
           </div>
         </div>
       </div>
 
-      <div className={cn('grid min-h-0 flex-1 gap-4', question.options.length <= 2 ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2')}>
-        {question.options.map((option, index) => {
-          const style = OPTION_STYLES[index % OPTION_STYLES.length]!;
-          const Icon = style.icon;
-          return (
-            <div key={option.id} className={cn('flex min-h-[5rem] items-center gap-4 rounded-2xl px-6 py-4 text-2xl font-bold shadow-lg sm:text-3xl', style.bg)}>
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-black/20">
-                <Icon className="h-7 w-7" aria-hidden />
-              </span>
-              <span className="w-8 shrink-0 text-center text-3xl font-black text-white/80">{style.letter}</span>
-              <OptionContent label={option.label} imageUrl={option.imageUrl} />
-            </div>
-          );
-        })}
+      <div className={cn('grid min-h-0 flex-1 auto-rows-fr gap-3 lg:gap-4', question.options.length <= 2 ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2')}>
+        {question.options.map((option, index) => (
+          <motion.div
+            key={option.id}
+            initial={view.animate ? { opacity: 0, y: 22 } : false}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: view.animate ? 0.1 + index * 0.06 : 0, duration: 0.3 }}
+            className="contents"
+          >
+            <AnswerCard option={option} index={index} size="host" />
+          </motion.div>
+        ))}
       </div>
     </div>
   );
 }
 
-function HostResult({ state, animate }: { state: LiveState; animate: boolean }) {
+function HostResult({ state, view }: { state: LiveState; view: View }) {
   const result = state.result;
   const question = result?.question ?? state.replayQuestion;
   if (!result || !question) return null;
@@ -253,9 +293,9 @@ function HostResult({ state, animate }: { state: LiveState; animate: boolean }) 
   const counts = result.counts;
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-6 text-white">
-      <div className="rounded-3xl bg-white/10 p-5 backdrop-blur">
-        <p className="text-sm font-semibold uppercase tracking-widest text-sky-200">
+    <div className="flex h-full min-h-0 flex-col gap-5 text-white">
+      <div className="lq-glass rounded-[2rem] p-4">
+        <p className="text-sm font-black uppercase tracking-widest text-sky-200">
           Hasil soal {question.index + 1} dari {question.total}
         </p>
         <div className="mt-1 text-2xl font-extrabold sm:text-3xl">{question.prompt && <RichText text={question.prompt} />}</div>
@@ -263,7 +303,7 @@ function HostResult({ state, animate }: { state: LiveState; animate: boolean }) 
 
       <div className="flex min-h-0 flex-1 items-end justify-center gap-4 sm:gap-8">
         {question.options.map((option, index) => {
-          const style = OPTION_STYLES[index % OPTION_STYLES.length]!;
+          const theme = themeFor(index);
           const count = distribution[option.id] ?? 0;
           const isCorrect = correctIds ? correctIds.includes(option.id) : null;
           const dim = isCorrect === false;
@@ -272,15 +312,19 @@ function HostResult({ state, animate }: { state: LiveState; animate: boolean }) 
               <span className="text-3xl font-black tabular-nums">{count}</span>
               <div className="flex w-full flex-1 items-end">
                 <motion.div
-                  initial={animate ? { height: 0 } : false}
+                  initial={view.animate ? { height: 0 } : false}
                   animate={{ height: `${Math.max(count === 0 ? 2 : 6, (count / max) * 100)}%` }}
                   transition={{ duration: 0.8, ease: 'easeOut' }}
-                  className={cn('relative w-full rounded-t-xl', style.bg, isCorrect && 'ring-4 ring-emerald-300')}
+                  className={cn('relative w-full rounded-t-2xl', isCorrect && 'ring-4 ring-emerald-300')}
+                  style={{ background: `linear-gradient(180deg, ${theme.top}, ${theme.bottom})` }}
                 />
               </div>
-              <div className={cn('flex w-full items-center gap-2 rounded-xl px-3 py-2 text-base font-bold', style.bg)}>
-                {isCorrect && <Check className="h-5 w-5 shrink-0 text-emerald-200" aria-label="Jawaban benar" />}
-                <span className="shrink-0 font-black">{style.letter}</span>
+              <div
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-base font-bold"
+                style={{ background: `linear-gradient(180deg, ${theme.top}, ${theme.bottom})` }}
+              >
+                {isCorrect && <Check className="h-5 w-5 shrink-0 text-emerald-100" aria-label="Jawaban benar" />}
+                <span className="shrink-0 font-black">{theme.letter}</span>
                 <span className="min-w-0 truncate">{option.label ? <RichText text={option.label} /> : '(gambar)'}</span>
               </div>
             </div>
@@ -292,15 +336,15 @@ function HostResult({ state, animate }: { state: LiveState; animate: boolean }) 
         <div className="grid grid-cols-3 gap-4 text-center">
           <div className="rounded-2xl bg-emerald-500/25 p-3">
             <p className="text-3xl font-black">{counts.correct}</p>
-            <p className="text-sm text-emerald-100">Benar</p>
+            <p className="text-sm font-semibold text-emerald-100">Benar</p>
           </div>
           <div className="rounded-2xl bg-rose-500/25 p-3">
             <p className="text-3xl font-black">{counts.wrong}</p>
-            <p className="text-sm text-rose-100">Salah</p>
+            <p className="text-sm font-semibold text-rose-100">Salah</p>
           </div>
-          <div className="rounded-2xl bg-white/10 p-3">
+          <div className="lq-glass rounded-2xl p-3">
             <p className="text-3xl font-black">{counts.unanswered}</p>
-            <p className="text-sm text-sky-100">Tidak menjawab</p>
+            <p className="text-sm font-semibold text-sky-100">Tidak menjawab</p>
           </div>
         </div>
       )}
@@ -308,7 +352,7 @@ function HostResult({ state, animate }: { state: LiveState; animate: boolean }) 
   );
 }
 
-function HostScore({ state }: { state: LiveState }) {
+function HostScore({ state, view }: { state: LiveState; view: View }) {
   const gains = state.score?.topGains ?? [];
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6 text-white">
@@ -316,17 +360,18 @@ function HostScore({ state }: { state: LiveState }) {
         <BarChart3 className="h-10 w-10 text-amber-300" /> Poin soal ini
       </h2>
       {gains.length ? (
-        <ol className="w-full max-w-xl space-y-3">
+        <ol className="w-full max-w-2xl space-y-3">
           {gains.map((gain, index) => (
             <motion.li
               key={`${gain.name}-${index}`}
-              initial={{ opacity: 0, x: -40 }}
+              initial={view.animate ? { opacity: 0, x: -40 } : false}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.12 }}
-              className="flex items-center justify-between rounded-2xl bg-white/10 px-6 py-3 text-2xl font-bold"
+              transition={{ delay: view.animate ? index * 0.12 : 0 }}
+              className="lq-glass flex items-center gap-4 rounded-2xl px-5 py-3 text-2xl font-bold"
             >
-              <span className="truncate">{gain.name}</span>
-              <span className="text-emerald-300">+{gain.earned.toLocaleString('id-ID')}</span>
+              <PlayerAvatar avatarId={gain.avatarId} seed={gain.name} size={52} />
+              <span className="min-w-0 flex-1 truncate">{gain.name}</span>
+              <span className="font-black text-emerald-300">+{gain.earned.toLocaleString('id-ID')}</span>
             </motion.li>
           ))}
         </ol>
@@ -337,67 +382,62 @@ function HostScore({ state }: { state: LiveState }) {
   );
 }
 
-function HostLeaderboard({ state, animate }: { state: LiveState; animate: boolean }) {
+function HostLeaderboard({ state, view }: { state: LiveState; view: View }) {
   const lb = state.leaderboard;
   if (!lb) return null;
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 text-white">
-      <h2 className="flex items-center gap-3 text-4xl font-black">
-        <Trophy className="h-10 w-10 text-amber-300" /> Leaderboard
+    <div className="flex h-full min-h-0 flex-col items-center gap-4 overflow-y-auto text-white">
+      <h2 className="flex items-center gap-3 text-4xl font-black tracking-wide">
+        <Trophy className="h-10 w-10 text-amber-300" /> TACTICAL LEADERBOARD
       </h2>
       {lb.visible === false ? (
-        <p className="text-2xl text-sky-100">Leaderboard disembunyikan oleh pengaturan sesi.</p>
+        <p className="mt-10 text-2xl text-sky-100">Leaderboard disembunyikan oleh pengaturan sesi.</p>
       ) : (
-        <Leaderboard entries={lb.entries ?? []} animate={animate} large />
+        <Leaderboard entries={lb.entries ?? []} animate={view.animate} large />
       )}
     </div>
   );
 }
 
-function HostFinal({
-  state,
-  animate,
-  sfx,
-  sessionId,
-}: {
-  state: LiveState;
-  animate: boolean;
-  sfx: (name: Sfx) => void;
-  sessionId: string;
-}) {
+function HostFinal({ state, view, sfx, sessionId }: { state: LiveState; view: View; sfx: (name: Sfx) => void; sessionId: string }) {
   const final = state.final;
-  const confettiEnabled = animate;
+  const rest = useMemo(() => (final?.standings ?? []).filter((row) => row.rank > 3).slice(0, 6), [final?.standings]);
+  const onEvent = useCallback(
+    (event: PodiumEvent) => {
+      switch (event) {
+        case 'lights':
+          sfx('whoosh');
+          break;
+        case 'podium':
+          sfx('podiumRise');
+          break;
+        case 'avatar':
+          sfx('reveal');
+          break;
+        case 'winner':
+          sfx('drumroll');
+          window.setTimeout(() => sfx('fanfare'), 1100);
+          break;
+        case 'trophy':
+          sfx('trophy');
+          if (liveAudio.currentMusic !== 'victory') liveAudio.startMusic('victory');
+          break;
+        default:
+          break;
+      }
+    },
+    [sfx],
+  );
   if (!final) return null;
-  const rest = (final.standings ?? []).filter((row) => row.rank > 3).slice(0, 5);
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-8 text-white">
-      <h2 className="text-5xl font-black">{final.early ? 'Sesi Dihentikan' : 'Pemenang!'}</h2>
+    <div className="relative flex h-full min-h-0 flex-col items-center gap-3 overflow-y-auto text-white">
+      <h2 className="text-5xl font-black tracking-wide">{final.early ? 'SESI DIHENTIKAN' : 'FINAL CHAMPIONS'}</h2>
       {final.podium.length ? (
-        <Podium
-          podium={final.podium}
-          animate={animate}
-          confettiEnabled={confettiEnabled}
-          onDrumroll={() => sfx('drumroll')}
-          onReveal={(rank) => sfx(rank === 1 ? 'fanfare' : 'reveal')}
-        />
+        <PodiumStage podium={final.podium} rest={rest} animate={view.animate} fancy={view.fancy} onEvent={onEvent} />
       ) : (
         <p className="text-xl text-sky-100">Tidak ada peserta.</p>
       )}
-      {rest.length > 0 && (
-        <ol className="grid w-full max-w-3xl gap-2 sm:grid-cols-2">
-          {rest.map((row) => (
-            <li key={row.playerId} className="flex items-center gap-3 rounded-xl bg-white/10 px-4 py-2 text-lg font-semibold">
-              <span className="w-8 text-center font-black text-amber-300">{row.rank}</span>
-              <span className="min-w-0 flex-1 truncate">{row.name}</span>
-              <span className="tabular-nums">{row.totalScore.toLocaleString('id-ID')}</span>
-            </li>
-          ))}
-        </ol>
-      )}
-      <Link
-        to={`/admin/live-quiz/laporan/${sessionId}`}
-        className="rounded-full bg-amber-400 px-8 py-3 text-lg font-bold text-slate-900 shadow-lg transition hover:bg-amber-300"
-      >
+      <Link to={`/admin/live-quiz/laporan/${sessionId}`} className="lq-btn lq-btn-gold shrink-0 px-8 py-3 text-lg">
         Lihat laporan lengkap
       </Link>
     </div>
@@ -411,11 +451,15 @@ function HostFinal({
 export function LiveHostPage() {
   const { sessionId = '' } = useParams();
   const navigate = useNavigate();
-  const reducedMotion = usePrefersReducedMotion();
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<'end' | 'cancel' | null>(null);
   const [kickTarget, setKickTarget] = useState<LobbyPlayer | null>(null);
   const settingsRef = useRef<ClientSettings | null>(null);
+  const laneRef = useRef<ReactionLaneHandle | null>(null);
+  const lastReactionSfx = useRef(0);
+  const [animationsAllowed, setAnimationsAllowed] = useState(true);
+  const mo = useMotionLevel(animationsAllowed);
+  const view: View = { animate: mo.animate, fancy: mo.fancy };
 
   const meta = useQuery({
     queryKey: ['live-quiz', 'session-meta', sessionId],
@@ -440,6 +484,7 @@ export function LiveHostPage() {
           break;
         case 'question_started':
           sfx('go');
+          laneRef.current?.clear();
           break;
         case 'question_ended':
           sfx('timeUp');
@@ -453,20 +498,33 @@ export function LiveHostPage() {
         case 'leaderboard_updated':
           sfx('rankUp');
           break;
+        case 'live_reaction_broadcast': {
+          const batch = payload as ReactionBatchHost;
+          if (batch.items?.length) {
+            laneRef.current?.push(batch.items);
+            const now = Date.now();
+            if (now - lastReactionSfx.current > 900) {
+              lastReactionSfx.current = now;
+              sfx('reaction');
+            }
+          }
+          break;
+        }
         default:
           break;
       }
-      void payload;
     },
     [sfx],
   );
 
   const { state, hostAction, serverNow } = useLiveSession({ role: 'host', sessionId, onEvent });
   settingsRef.current = state.settings;
-  const animate = state.settings ? state.settings.animationsEnabled && !reducedMotion : !reducedMotion;
+  useEffect(() => {
+    setAnimationsAllowed(state.settings?.animationsEnabled ?? true);
+  }, [state.settings?.animationsEnabled]);
   const status = state.status;
 
-  // Musik latar mengikuti tahap permainan.
+  // Musik latar mengikuti tahap permainan (musik kemenangan dimulai oleh animasi podium).
   useEffect(() => {
     if (state.settings?.soundEnabled === false) {
       liveAudio.stopMusic();
@@ -474,6 +532,8 @@ export function LiveHostPage() {
     }
     if (status === 'LOBBY') liveAudio.startMusic('lobby');
     else if (status === 'QUESTION_ACTIVE' && !state.questionClosed) liveAudio.startMusic('question');
+    else if (status === 'SCORE_RESULT' || status === 'LEADERBOARD') liveAudio.startMusic('leaderboard');
+    else if (status === 'FINISHED' && liveAudio.currentMusic === 'victory') return;
     else liveAudio.stopMusic();
   }, [status, state.questionClosed, state.settings?.soundEnabled]);
   useEffect(() => () => liveAudio.stopMusic(), []);
@@ -487,13 +547,23 @@ export function LiveHostPage() {
     if (!result.ok) toast.error(result.message ?? 'Aksi gagal. Coba lagi.');
   };
 
+  const setReactions = (patch: { enabled?: boolean; afterSubmit?: boolean; onProjector?: boolean }) => {
+    liveAudio.unlock();
+    void hostAction({ type: 'set_reactions', ...patch }).then((result) => {
+      if (!result.ok) toast.error(result.message ?? 'Gagal mengubah pengaturan reaksi.');
+    });
+  };
+
   const toggleFullscreen = () => {
     if (document.fullscreenElement) void document.exitFullscreen();
     else void document.documentElement.requestFullscreen?.().catch(() => undefined);
   };
 
   const pin = state.session?.pin ?? meta.data?.pin ?? null;
-  const join = useMemo(() => (meta.data?.join ? meta.data.join : pin ? { pin, joinPath: `/live/join?pin=${pin}`, joinBaseUrl: null, lanHosts: [] } : null), [meta.data, pin]);
+  const join = useMemo(
+    () => (meta.data?.join ? meta.data.join : pin ? { pin, joinPath: `/live/join?pin=${pin}`, joinBaseUrl: null, lanHosts: [] } : null),
+    [meta.data, pin],
+  );
 
   const nextLabel =
     status === 'QUESTION_ACTIVE'
@@ -514,7 +584,7 @@ export function LiveHostPage() {
     body = (
       <CenterCard>
         <p className="text-xl font-bold">{state.deniedReason}</p>
-        <Link to="/admin/live-quiz" className="mt-6 inline-block rounded-full bg-amber-400 px-6 py-2 font-bold text-slate-900">
+        <Link to="/admin/live-quiz" className="lq-btn lq-btn-gold mt-6 px-6 py-2">
           Kembali ke Live Quiz
         </Link>
       </CenterCard>
@@ -524,31 +594,31 @@ export function LiveHostPage() {
   } else {
     switch (status) {
       case 'LOBBY':
-        body = <HostLobby state={state} join={join} onKick={setKickTarget} />;
+        body = <HostLobby state={state} join={join} onKick={setKickTarget} view={view} />;
         break;
       case 'COUNTDOWN':
-        body = <HostCountdown state={state} serverNow={serverNow} sfx={sfx} />;
+        body = <HostCountdown state={state} serverNow={serverNow} sfx={sfx} view={view} />;
         break;
       case 'QUESTION_ACTIVE':
-        body = <HostQuestion state={state} serverNow={serverNow} sfx={sfx} />;
+        body = <HostQuestion state={state} serverNow={serverNow} sfx={sfx} view={view} />;
         break;
       case 'QUESTION_RESULT':
-        body = <HostResult state={state} animate={animate} />;
+        body = <HostResult state={state} view={view} />;
         break;
       case 'SCORE_RESULT':
-        body = <HostScore state={state} />;
+        body = <HostScore state={state} view={view} />;
         break;
       case 'LEADERBOARD':
-        body = <HostLeaderboard state={state} animate={animate} />;
+        body = <HostLeaderboard state={state} view={view} />;
         break;
       case 'FINISHED':
-        body = <HostFinal state={state} animate={animate} sfx={sfx} sessionId={sessionId} />;
+        body = <HostFinal state={state} view={view} sfx={sfx} sessionId={sessionId} />;
         break;
       case 'CANCELLED':
         body = (
           <CenterCard>
             <p className="text-2xl font-bold">Sesi dibatalkan</p>
-            <Link to="/admin/live-quiz" className="mt-6 inline-block rounded-full bg-amber-400 px-6 py-2 font-bold text-slate-900">
+            <Link to="/admin/live-quiz" className="lq-btn lq-btn-gold mt-6 px-6 py-2">
               Kembali ke Live Quiz
             </Link>
           </CenterCard>
@@ -560,104 +630,103 @@ export function LiveHostPage() {
   }
 
   const ended = status === 'FINISHED' || status === 'CANCELLED';
+  const laneVisible = Boolean(state.settings?.reactionsEnabled && state.settings?.reactionsOnProjector) && !ended;
 
   return (
-    <div
-      className="relative flex h-[100dvh] flex-col overflow-hidden"
-      style={liveBackground}
-      onPointerDown={() => liveAudio.unlock()}
-    >
-      <ReconnectBanner show={state.hasSynced && state.connection === 'reconnecting'} />
+    <GameStage level={mo.level} className="flex h-[100dvh] flex-col overflow-hidden">
+      <div className="contents" onPointerDown={() => liveAudio.unlock()}>
+        <ReconnectBanner show={state.hasSynced && state.connection === 'reconnecting'} />
 
-      <header className="flex shrink-0 items-center justify-between gap-4 px-6 py-4 text-white">
-        <div className="flex min-w-0 items-center gap-4">
-          <img src="/Logo_tactical.png" alt="" className="h-10 w-10 rounded-lg bg-white/90 object-contain p-1" />
-          <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.25em] text-amber-300">Tactical Live Quiz</p>
-            <p className="truncate text-lg font-bold">{state.session?.title ?? meta.data?.title ?? '…'}</p>
+        <header className="flex shrink-0 items-center justify-between gap-4 px-6 py-3 text-white">
+          <div className="flex min-w-0 items-center gap-4">
+            <LiveBrand compact />
+            <p className="hidden min-w-0 truncate border-l border-white/20 pl-4 text-lg font-bold md:block">
+              {state.session?.title ?? meta.data?.title ?? '…'}
+            </p>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          {pin && !ended && status !== 'LOBBY' && (
-            <span className="hidden rounded-full bg-white/10 px-4 py-2 text-sm font-bold sm:inline">PIN {formatPin(pin)}</span>
-          )}
-          {!ended && (
-            <span className="hidden items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-bold sm:inline-flex">
-              <Users className="h-4 w-4" /> {state.playerCount}
-            </span>
-          )}
-          {state.paused && <span className="rounded-full bg-amber-400 px-4 py-2 text-sm font-black text-slate-900">JEDA</span>}
-          <SoundToggle showVolume />
-          <button
-            type="button"
-            onClick={toggleFullscreen}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
-            aria-label="Layar penuh"
-          >
-            <Expand className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => (ended ? navigate('/admin/live-quiz') : setConfirm('end'))}
-            className="flex h-10 items-center gap-2 rounded-full bg-rose-600 px-4 text-sm font-bold text-white hover:bg-rose-500"
-          >
-            <LogOut className="h-4 w-4" />
-            {ended ? 'Keluar' : status === 'LOBBY' ? 'Batalkan' : 'Akhiri'}
-          </button>
-        </div>
-      </header>
-
-      <main className="min-h-0 flex-1 px-6 pb-4">{body}</main>
-
-      {state.hasSynced && !ended && (
-        <footer className="flex shrink-0 flex-wrap items-center justify-center gap-3 px-6 pb-5">
-          {status === 'LOBBY' && (
-            <>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void act({ type: 'lock', locked: !state.lobbyLocked })}
-                className="inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-3 font-bold text-white hover:bg-white/20"
-              >
-                {state.lobbyLocked ? <Unlock className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
-                {state.lobbyLocked ? 'Buka lobby' : 'Kunci lobby'}
-              </button>
-              <button
-                type="button"
-                disabled={busy || state.playerCount < 1 || state.connection !== 'connected'}
-                onClick={() => void act({ type: 'start' })}
-                className="inline-flex items-center gap-2 rounded-full bg-amber-400 px-10 py-4 text-xl font-black text-slate-900 shadow-xl transition hover:bg-amber-300 disabled:opacity-40"
-              >
-                <Play className="h-6 w-6" /> Mulai
-              </button>
-            </>
-          )}
-          {nextLabel && (
+          <div className="flex items-center gap-3">
+            <AudioUnlockHint enabled={state.settings?.soundEnabled !== false} />
+            {pin && !ended && status !== 'LOBBY' && (
+              <span className="lq-glass hidden rounded-full px-4 py-2 text-sm font-black sm:inline">PIN {formatPin(pin)}</span>
+            )}
+            {!ended && (
+              <span className="lq-glass hidden items-center gap-2 rounded-full px-4 py-2 text-sm font-black sm:inline-flex">
+                <Users className="h-4 w-4" /> {state.playerCount}
+              </span>
+            )}
+            {state.paused && <span className="rounded-full bg-amber-400 px-4 py-2 text-sm font-black text-slate-900">JEDA</span>}
+            {!ended && <ReactionControls settings={state.settings} onChange={setReactions} />}
+            <SoundToggle showVolume />
             <button
               type="button"
-              disabled={busy || state.connection !== 'connected'}
-              onClick={() => void act({ type: 'next', version: state.version })}
-              className="inline-flex items-center gap-2 rounded-full bg-amber-400 px-8 py-3 text-lg font-black text-slate-900 shadow-xl transition hover:bg-amber-300 disabled:opacity-40"
+              onClick={toggleFullscreen}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+              aria-label="Layar penuh"
             >
-              <SkipForward className="h-5 w-5" /> {nextLabel}
+              <Expand className="h-5 w-5" />
             </button>
-          )}
-          {canPause && (
             <button
               type="button"
-              disabled={busy}
-              onClick={() => void act({ type: state.paused ? 'resume' : 'pause' })}
-              className="inline-flex items-center gap-2 rounded-full bg-white/10 px-5 py-3 font-bold text-white hover:bg-white/20"
+              onClick={() => (ended ? navigate('/admin/live-quiz') : setConfirm('end'))}
+              className="lq-btn lq-btn-danger h-10 px-4 text-sm"
             >
-              {state.paused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
-              {state.paused ? 'Lanjutkan' : 'Jeda'}
+              <LogOut className="h-4 w-4" />
+              {ended ? 'Keluar' : status === 'LOBBY' ? 'Batalkan' : 'Akhiri'}
             </button>
-          )}
-          {state.settings?.advanceMode === 'AUTO' && status === 'LEADERBOARD' && !state.paused && (
-            <span className="text-sm text-sky-100">Otomatis lanjut ke soal berikutnya…</span>
-          )}
-        </footer>
-      )}
+          </div>
+        </header>
+
+        {/* Konten + kolom khusus reaksi (reaksi tidak pernah menimpa konten) */}
+        <div className="flex min-h-0 flex-1 gap-2 px-6 pb-3">
+          <main className="min-h-0 min-w-0 flex-1">{body}</main>
+          {laneVisible && <ReactionLane ref={laneRef} lite={!view.fancy} />}
+        </div>
+
+        {state.hasSynced && !ended && (
+          <footer className="flex shrink-0 flex-wrap items-center justify-center gap-3 px-6 pb-4">
+            {status === 'LOBBY' && (
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void act({ type: 'lock', locked: !state.lobbyLocked })}
+                  className="lq-btn lq-btn-ghost px-5 py-3"
+                >
+                  {state.lobbyLocked ? <Unlock className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
+                  {state.lobbyLocked ? 'Buka lobby' : 'Kunci lobby'}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || state.playerCount < 1 || state.connection !== 'connected'}
+                  onClick={() => void act({ type: 'start' })}
+                  className="lq-btn lq-btn-gold px-12 py-4 text-xl"
+                >
+                  <Play className="h-6 w-6" /> MULAI
+                </button>
+              </>
+            )}
+            {nextLabel && (
+              <button
+                type="button"
+                disabled={busy || state.connection !== 'connected'}
+                onClick={() => void act({ type: 'next', version: state.version })}
+                className="lq-btn lq-btn-gold px-8 py-3 text-lg"
+              >
+                <SkipForward className="h-5 w-5" /> {nextLabel}
+              </button>
+            )}
+            {canPause && (
+              <button type="button" disabled={busy} onClick={() => void act({ type: state.paused ? 'resume' : 'pause' })} className="lq-btn lq-btn-ghost px-5 py-3">
+                {state.paused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
+                {state.paused ? 'Lanjutkan' : 'Jeda'}
+              </button>
+            )}
+            {state.settings?.advanceMode === 'AUTO' && status === 'LEADERBOARD' && !state.paused && (
+              <span className="text-sm font-semibold text-sky-100">Otomatis lanjut ke soal berikutnya…</span>
+            )}
+          </footer>
+        )}
+      </div>
 
       <ConfirmDialog
         open={confirm !== null}
@@ -685,6 +754,6 @@ export function LiveHostPage() {
         }}
         onCancel={() => setKickTarget(null)}
       />
-    </div>
+    </GameStage>
   );
 }

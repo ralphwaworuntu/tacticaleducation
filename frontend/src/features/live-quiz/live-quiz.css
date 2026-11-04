@@ -1,0 +1,305 @@
+/* Tactical Live Quiz 2.0 -- design tokens & animasi.
+   Aturan performa: animasi hanya memakai transform/opacity. Mode "lite" (.lq-lite) dan
+   prefers-reduced-motion mematikan animasi dekoratif, blur, dan bayangan berat. */
+
+.lq-root {
+  --lq-navy: #102a43;
+  --lq-dark: #081b33;
+  --lq-electric: #2575fc;
+  --lq-gold: #ffd166;
+  --lq-white: #ffffff;
+  --lq-purple: #8056ed;
+  --lq-cyan: #19c6e6;
+  --lq-pink: #f36fb6;
+  --lq-green: #2dd4a7;
+  --lq-orange: #ff9f43;
+  --lq-red: #ef476f;
+
+  --lq-glass: rgba(255, 255, 255, 0.09);
+  --lq-glass-strong: rgba(255, 255, 255, 0.16);
+  --lq-border: rgba(255, 255, 255, 0.16);
+  --lq-shadow: 0 10px 30px -10px rgba(2, 10, 30, 0.6);
+
+  --lq-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --lq-micro: 160ms;
+  --lq-enter: 360ms;
+}
+
+/* ---------- Latar panggung ---------- */
+.lq-stage {
+  position: relative;
+  isolation: isolate;
+  color: #fff;
+  background:
+    radial-gradient(900px 520px at 12% -8%, rgba(37, 117, 252, 0.45), transparent 62%),
+    radial-gradient(760px 480px at 100% 4%, rgba(128, 86, 237, 0.34), transparent 60%),
+    radial-gradient(700px 520px at 50% 118%, rgba(25, 198, 230, 0.22), transparent 62%),
+    linear-gradient(165deg, #102a43 0%, #0b2240 48%, #081b33 100%);
+}
+
+.lq-shapes {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.lq-shape {
+  position: absolute;
+  opacity: 0.5;
+  will-change: transform;
+  animation: lq-float var(--lq-dur, 14s) ease-in-out infinite;
+  animation-delay: var(--lq-delay, 0s);
+}
+
+@keyframes lq-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(var(--lq-dx, 14px), var(--lq-dy, -26px), 0) rotate(var(--lq-rot, 14deg));
+  }
+}
+
+/* ---------- Kartu & permukaan ---------- */
+.lq-glass {
+  background: var(--lq-glass);
+  border: 1px solid var(--lq-border);
+  box-shadow: var(--lq-shadow);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.lq-card-light {
+  background: linear-gradient(180deg, #ffffff 0%, #eef4ff 100%);
+  color: var(--lq-navy);
+  box-shadow: 0 18px 40px -16px rgba(2, 10, 30, 0.55);
+}
+
+/* ---------- Tombol ---------- */
+.lq-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 800;
+  border-radius: 9999px;
+  transition:
+    transform var(--lq-micro) var(--lq-ease-spring),
+    filter var(--lq-micro) ease,
+    box-shadow var(--lq-micro) ease;
+}
+.lq-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: brightness(1.06);
+}
+.lq-btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.97);
+}
+.lq-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.lq-btn-gold {
+  color: #2b1a00;
+  background: linear-gradient(180deg, #ffe08a 0%, var(--lq-gold) 55%, #f5b83d 100%);
+  box-shadow:
+    0 6px 0 #b9852a,
+    0 14px 24px -8px rgba(255, 209, 102, 0.55);
+}
+.lq-btn-electric {
+  color: #fff;
+  background: linear-gradient(180deg, #5b9bff 0%, var(--lq-electric) 60%, #1b57c9 100%);
+  box-shadow:
+    0 6px 0 #123f94,
+    0 14px 24px -8px rgba(37, 117, 252, 0.6);
+}
+.lq-btn-ghost {
+  color: #fff;
+  background: var(--lq-glass-strong);
+  border: 1px solid var(--lq-border);
+}
+.lq-btn-danger {
+  color: #fff;
+  background: linear-gradient(180deg, #ff6b8a 0%, var(--lq-red) 100%);
+  box-shadow: 0 5px 0 #a82846;
+}
+
+/* ---------- Kartu jawaban ---------- */
+.lq-answer {
+  position: relative;
+  transition:
+    transform var(--lq-micro) var(--lq-ease-spring),
+    opacity 200ms ease,
+    filter 200ms ease;
+  box-shadow:
+    inset 0 -6px 0 rgba(0, 0, 0, 0.22),
+    0 10px 18px -10px rgba(2, 10, 30, 0.7);
+}
+.lq-answer:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+.lq-answer:active:not(:disabled) {
+  transform: translateY(2px) scale(0.98);
+}
+.lq-answer-picked {
+  outline: 4px solid #fff;
+  outline-offset: 2px;
+}
+
+/* ---------- Animasi bantu ---------- */
+@keyframes lq-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+.lq-avatar-idle {
+  animation: lq-bob 3.2s ease-in-out infinite;
+}
+
+@keyframes lq-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+.lq-pulse {
+  animation: lq-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes lq-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.lq-rays {
+  animation: lq-spin 28s linear infinite;
+  will-change: transform;
+}
+
+@keyframes lq-shine {
+  0% {
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  60%,
+  100% {
+    transform: translateX(260%) skewX(-18deg);
+  }
+}
+.lq-shine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: lq-shine 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes lq-beam {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: rotate(var(--lq-beam-from, -8deg));
+  }
+  50% {
+    opacity: 0.6;
+    transform: rotate(var(--lq-beam-to, 8deg));
+  }
+}
+.lq-beam {
+  position: absolute;
+  top: -10%;
+  width: 22%;
+  height: 120%;
+  transform-origin: 50% 0;
+  background: linear-gradient(180deg, rgba(255, 233, 160, 0.55), transparent 85%);
+  clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%);
+  animation: lq-beam 5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Reaksi melayang (lajur tepi). Hanya transform + opacity. */
+@keyframes lq-reaction-rise {
+  0% {
+    transform: translate3d(0, 24px, 0) scale(0.5);
+    opacity: 0;
+  }
+  15% {
+    transform: translate3d(0, 0, 0) scale(1.15);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--lq-sway, 0px), -260px, 0) scale(1);
+    opacity: 0;
+  }
+}
+.lq-reaction {
+  animation: lq-reaction-rise var(--lq-reaction-ms, 2600ms) cubic-bezier(0.22, 0.7, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+/* ---------- Mode lite & reduced motion ---------- */
+.lq-lite .lq-shape,
+.lq-lite .lq-rays,
+.lq-lite .lq-pulse,
+.lq-lite .lq-avatar-idle,
+.lq-lite .lq-beam {
+  animation: none !important;
+}
+.lq-lite .lq-shine::after {
+  display: none;
+}
+.lq-lite .lq-glass {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: rgba(16, 42, 67, 0.82);
+}
+.lq-lite .lq-shapes {
+  display: none;
+}
+.lq-lite .lq-btn,
+.lq-lite .lq-answer {
+  transition-duration: 0ms;
+}
+.lq-lite .lq-reaction {
+  animation-duration: 1400ms !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lq-root .lq-shape,
+  .lq-root .lq-rays,
+  .lq-root .lq-pulse,
+  .lq-root .lq-avatar-idle,
+  .lq-root .lq-beam {
+    animation: none !important;
+  }
+  .lq-root .lq-shine::after {
+    display: none;
+  }
+  .lq-root .lq-btn,
+  .lq-root .lq-answer {
+    transition-duration: 0ms;
+  }
+}
+
+/* ---------- Fokus keyboard ---------- */
+.lq-root :focus-visible {
+  outline: 3px solid var(--lq-gold);
+  outline-offset: 3px;
+}
