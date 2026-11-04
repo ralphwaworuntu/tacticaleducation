@@ -49,7 +49,8 @@ type CermatModePreviewProps = {
 export function CermatModePreview({ mode, className }: CermatModePreviewProps) {
   const data = PREVIEW_DATA[mode];
   const accent = MODE_ACCENT[mode];
-  const labels = ['A', 'B', 'C', 'D', 'E'];
+  const labels = data.baseSet.map((_, index) => String.fromCharCode(65 + index));
+  const gridClass = data.baseSet.length >= 6 ? 'grid-cols-6' : 'grid-cols-5';
 
   return (
     <div
@@ -71,7 +72,7 @@ export function CermatModePreview({ mode, className }: CermatModePreviewProps) {
         <div className="border-b border-slate-100 bg-slate-50 px-2 py-1 text-center">
           <p className="text-[8px] font-semibold uppercase tracking-[0.15em] text-slate-500">Kunci Referensi</p>
         </div>
-        <div className="grid grid-cols-5 divide-x divide-slate-100">
+        <div className={cn('grid divide-x divide-slate-100', gridClass)}>
           {data.baseSet.map((token, index) => (
             <div
               key={`${token}-${index}`}
@@ -119,7 +120,7 @@ export function CermatModePreview({ mode, className }: CermatModePreviewProps) {
         </div>
       </div>
 
-      <div className="mt-2 grid grid-cols-5 gap-1">
+      <div className={cn('mt-2 grid gap-1', gridClass)}>
         {labels.map((label, index) => (
           <span
             key={label}

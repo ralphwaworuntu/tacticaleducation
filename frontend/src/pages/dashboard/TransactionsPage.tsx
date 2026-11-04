@@ -68,13 +68,13 @@ export function TransactionsPage() {
                 <td className="px-4 py-3 text-slate-600">{formatDate(trx.createdAt)}</td>
                 <td className="px-4 py-3">
                   <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    className={
                       trx.status === 'PAID'
-                        ? 'bg-emerald-50 text-emerald-600'
-                        : trx.status === 'PENDING'
-                        ? 'bg-brand-50 text-brand-600'
-                        : 'bg-rose-50 text-rose-600'
-                    }`}
+                        ? 'status-chip status-chip-success'
+                        : trx.status === 'REJECTED'
+                          ? 'status-chip status-chip-danger'
+                          : 'status-chip status-chip-warning'
+                    }
                   >
                     {trx.status}
                   </span>

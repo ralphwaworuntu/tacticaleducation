@@ -25,6 +25,10 @@ function formatTimer(seconds: number) {
   return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
+function optionGridClass(count: number) {
+  return count >= 6 ? 'grid-cols-6' : 'grid-cols-5';
+}
+
 function StatPill({ label, value, urgent }: { label: string; value: string; urgent?: boolean }) {
   return (
     <div
@@ -93,6 +97,8 @@ function ImageExamContent({
   onAnswer: (value?: string | null) => void;
 }) {
   const timerUrgent = timeLeft <= 10;
+  const optionCount = baseSet.length;
+  const wide = optionCount >= 6;
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 sm:gap-5 lg:max-w-5xl lg:flex-1 lg:justify-between lg:gap-3 xl:max-w-6xl">
@@ -106,7 +112,7 @@ function ImageExamContent({
         <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-center lg:py-2.5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 lg:text-xs">Kunci Referensi</p>
         </div>
-        <div className="grid grid-cols-5 divide-x divide-slate-200">
+        <div className={cn('grid divide-x divide-slate-200', optionGridClass(optionCount))}>
           {baseSet.map((token, index) => {
             const label = String.fromCharCode(65 + index);
             return (
@@ -117,10 +123,24 @@ function ImageExamContent({
                   index % 2 === 0 ? 'bg-white' : 'bg-slate-50/80',
                 )}
               >
-                <div className="flex aspect-square h-16 w-16 items-center justify-center rounded-xl border border-slate-100 bg-white p-1 shadow-sm sm:h-20 sm:w-20 lg:h-28 lg:w-28 xl:h-32 xl:w-32">
+                <div
+                  className={cn(
+                    'flex aspect-square items-center justify-center rounded-xl border border-slate-100 bg-white p-1 shadow-sm',
+                    wide
+                      ? 'h-12 w-12 sm:h-16 sm:w-16 lg:h-24 lg:w-24 xl:h-28 xl:w-28'
+                      : 'h-16 w-16 sm:h-20 sm:w-20 lg:h-28 lg:w-28 xl:h-32 xl:w-32',
+                  )}
+                >
                   <CermatIcon name={token} strokeWidth={3.5} className="h-full w-full" />
                 </div>
-                <span className="flex h-7 w-7 items-center justify-center rounded-md bg-slate-900 text-xs font-bold text-white sm:h-8 sm:w-8 sm:text-sm lg:h-9 lg:w-9 lg:text-base xl:h-10 xl:w-10">
+                <span
+                  className={cn(
+                    'flex items-center justify-center rounded-md bg-slate-900 font-bold text-white',
+                    wide
+                      ? 'h-6 w-6 text-[10px] sm:h-7 sm:w-7 sm:text-xs lg:h-8 lg:w-8 lg:text-sm'
+                      : 'h-7 w-7 text-xs sm:h-8 sm:w-8 sm:text-sm lg:h-9 lg:w-9 lg:text-base xl:h-10 xl:w-10',
+                  )}
+                >
                   {label}
                 </span>
               </div>
@@ -133,11 +153,21 @@ function ImageExamContent({
         <p className="mb-4 text-center text-xs font-medium text-slate-600 sm:mb-5 sm:text-sm lg:mb-6 lg:text-base">
           Pilih huruf gambar yang <span className="font-semibold text-brand-700">tidak muncul</span>
         </p>
-        <div className="flex items-center justify-center gap-3 sm:gap-6 lg:gap-10 xl:gap-12">
+        <div
+          className={cn(
+            'flex items-center justify-center',
+            wide ? 'gap-1.5 sm:gap-3 lg:gap-6 xl:gap-8' : 'gap-3 sm:gap-6 lg:gap-10 xl:gap-12',
+          )}
+        >
           {sequence.map((token, idx) => (
             <div
               key={`${token}-${idx}`}
-              className="flex aspect-square h-[4.25rem] w-[4.25rem] shrink-0 items-center justify-center rounded-2xl border-2 border-white bg-white p-1.5 shadow-md sm:h-24 sm:w-24 lg:h-32 lg:w-32 xl:h-36 xl:w-36"
+              className={cn(
+                'flex aspect-square shrink-0 items-center justify-center rounded-2xl border-2 border-white bg-white shadow-md',
+                wide
+                  ? 'h-12 w-12 p-1 sm:h-[4.5rem] sm:w-[4.5rem] lg:h-28 lg:w-28 lg:p-1.5 xl:h-32 xl:w-32'
+                  : 'h-[4.25rem] w-[4.25rem] p-1.5 sm:h-24 sm:w-24 lg:h-32 lg:w-32 xl:h-36 xl:w-36',
+              )}
             >
               <CermatIcon name={token} strokeWidth={3.5} className="h-full w-full" />
             </div>
@@ -145,7 +175,7 @@ function ImageExamContent({
         </div>
       </section>
 
-      <section className="grid grid-cols-5 gap-1.5 sm:gap-2.5 lg:gap-3">
+      <section className={cn('grid gap-1.5 sm:gap-2.5 lg:gap-3', optionGridClass(optionCount))}>
         {baseSet.map((option, index) => {
           const label = String.fromCharCode(65 + index);
           const selected = answers[questionOrder] === option;
@@ -156,7 +186,10 @@ function ImageExamContent({
               disabled={submitPending}
               onClick={() => onAnswer(option)}
               className={cn(
-                'rounded-xl border-2 py-3 text-lg font-bold transition sm:py-4 sm:text-xl lg:rounded-2xl lg:py-5 lg:text-2xl xl:py-6 xl:text-3xl',
+                'rounded-xl border-2 font-bold transition lg:rounded-2xl',
+                wide
+                  ? 'py-2.5 text-base sm:py-3.5 sm:text-lg lg:py-4 lg:text-2xl xl:py-5 xl:text-3xl'
+                  : 'py-3 text-lg sm:py-4 sm:text-xl lg:py-5 lg:text-2xl xl:py-6 xl:text-3xl',
                 selected
                   ? 'border-brand-600 bg-brand-600 text-white shadow-md'
                   : 'border-slate-300 bg-white text-slate-900 hover:border-brand-300 hover:bg-brand-50/50',

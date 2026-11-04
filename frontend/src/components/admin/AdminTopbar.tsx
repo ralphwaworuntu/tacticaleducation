@@ -1,11 +1,12 @@
 import { LogOut, LayoutDashboard } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { SidebarToggleButton } from '@/components/dashboard/SidebarToggleButton';
 import { BrandMark } from '@/components/common/BrandMark';
 import { parseNameInitials } from '@/utils/format';
 import { useAdminSidebarStore } from '@/store/adminSidebar';
+import { adminMenu, findNavLabel } from '@/constants/navigation';
 import { cn } from '@/utils/cn';
 
 export function AdminTopbar() {
@@ -14,14 +15,16 @@ export function AdminTopbar() {
   const toggleSidebar = useAdminSidebarStore((state) => state.toggle);
   const toggleMobileSidebar = useAdminSidebarStore((state) => state.toggleMobile);
   const showBrandInTopbar = !sidebarOpen;
+  const location = useLocation();
+  const pageTitle = findNavLabel(location.pathname, adminMenu) ?? 'Admin Panel';
 
   return (
-    <div className="relative z-20 shrink-0 border-b border-slate-200/80">
+    <header className="relative z-20 h-16 shrink-0 border-b border-slate-200/80">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-white/90 shadow-sm supports-[backdrop-filter]:bg-white/75 supports-[backdrop-filter]:backdrop-blur-md"
+        className="pointer-events-none absolute inset-0 bg-white/90 shadow-sm supports-[backdrop-filter]:bg-white/80 supports-[backdrop-filter]:backdrop-blur-md"
       />
-      <div className="relative flex items-center justify-between gap-2 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3.5">
+      <div className="relative flex h-full items-center justify-between gap-2 px-3 sm:gap-3 sm:px-6">
         <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           <SidebarToggleButton
             onClick={toggleMobileSidebar}
@@ -52,13 +55,8 @@ export function AdminTopbar() {
           ) : null}
 
           <div className="min-w-0 flex-1">
-            <p className="hidden text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-500 sm:block">
-              Admin Panel
-            </p>
-            <h1 className="truncate text-sm font-semibold tracking-tight text-slate-900 sm:hidden">Admin</h1>
-            <h1 className="hidden truncate text-sm font-semibold tracking-tight text-slate-900 sm:block sm:text-base">
-              Mengelola Tactical Education
-            </h1>
+            <p className="hidden text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-500 sm:block">Admin</p>
+            <h1 className="truncate text-base font-semibold tracking-tight text-slate-900 sm:text-lg">{pageTitle}</h1>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
@@ -67,7 +65,11 @@ export function AdminTopbar() {
               <LayoutDashboard className="mr-2 h-4 w-4" /> Member Area
             </Link>
           </Button>
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-50 to-slate-100 text-xs font-bold text-brand-700 ring-1 ring-brand-100 sm:h-11 sm:w-11 sm:rounded-2xl sm:text-sm">
+          <div className="hidden min-w-0 text-right lg:block">
+            <p className="truncate text-sm font-semibold text-slate-900">{user?.name}</p>
+            <p className="text-xs text-slate-500">Administrator</p>
+          </div>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-xs font-bold text-brand-700 ring-1 ring-brand-100 sm:h-10 sm:w-10">
             {parseNameInitials(user?.name)}
           </div>
           <Button variant="ghost" size="sm" onClick={logout} className="hidden lg:inline-flex">
@@ -77,13 +79,13 @@ export function AdminTopbar() {
             variant="ghost"
             size="icon"
             onClick={logout}
-            className="h-9 w-9 text-slate-600 lg:hidden"
+            className="h-10 w-10 text-slate-600 lg:hidden"
             aria-label="Keluar"
           >
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
       </div>
-    </div>
+    </header>
   );
 }

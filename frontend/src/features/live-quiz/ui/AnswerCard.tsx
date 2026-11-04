@@ -60,13 +60,24 @@ export function AnswerCard({
   const host = size === 'host';
   const interactive = Boolean(onClick);
   const Tag = interactive ? 'button' : 'div';
+  const empty = hideContent || (option.label === null && !option.imageUrl);
+  const label = option.label?.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
   return (
     <Tag
-      {...(interactive ? { type: 'button' as const, disabled, onClick, 'aria-pressed': state === 'picked' } : {})}
+      {...(interactive
+        ? {
+            type: 'button' as const,
+            disabled,
+            onClick,
+            'aria-pressed': state === 'picked',
+            'aria-label': `${theme.letter}${label ? `. ${label}` : ''}`,
+          }
+        : {})}
       className={cn(
-        'lq-answer relative flex items-center gap-3 overflow-hidden text-left font-bold text-white',
-        host ? 'min-h-[5.5rem] gap-5 rounded-3xl px-6 py-4 text-2xl xl:text-3xl' : 'min-h-[4.5rem] rounded-2xl px-4 py-3 text-lg',
-        hideContent && 'min-h-[7rem] flex-col justify-center text-center',
+        'lq-answer font-bold text-white',
+        host ? 'lq-answer-host' : 'lq-answer-player',
+        empty && 'lq-answer-symbol',
         state === 'picked' && 'lq-answer-picked',
         state === 'dim' && 'opacity-35 saturate-50',
         state === 'wrong' && 'opacity-60',
@@ -74,25 +85,30 @@ export function AnswerCard({
       )}
       style={{ background: `linear-gradient(180deg, ${theme.top} 0%, ${theme.bottom} 100%)` }}
     >
-      <span className={cn('flex shrink-0 items-center justify-center rounded-xl bg-black/20', host ? 'h-14 w-14' : 'h-11 w-11')}>
-        <ShapeIcon shape={theme.shape} className={host ? 'h-8 w-8' : 'h-6 w-6'} />
-      </span>
-      {hideContent || (option.label === null && !option.imageUrl) ? (
-        <span className={cn('font-black text-white', host ? 'text-4xl' : 'text-3xl')}>{theme.letter}</span>
+      {empty ? (
+        <span className="lq-answer-symbol-stack">
+          <ShapeIcon shape={theme.shape} className={host ? 'h-12 w-12' : 'h-8 w-8'} />
+          <span>{theme.letter}</span>
+        </span>
       ) : (
         <>
-          <span className={cn('shrink-0 text-center font-black text-white/70', host ? 'w-8 text-3xl' : 'w-5 text-xl')}>{theme.letter}</span>
-          <OptionContent label={option.label} imageUrl={option.imageUrl} />
+          <span className="lq-answer-badge">
+            <ShapeIcon shape={theme.shape} />
+            <span>{theme.letter}</span>
+          </span>
+          <span className="lq-answer-body">
+            <OptionContent label={option.label} imageUrl={option.imageUrl} />
+          </span>
         </>
       )}
-      {state === 'picked' && <Check className="h-6 w-6 shrink-0" aria-label="Dipilih" />}
+      {state === 'picked' && <Check className="lq-answer-mark h-6 w-6 shrink-0" aria-label="Dipilih" />}
       {state === 'correct' && (
-        <span className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-400 text-emerald-950">
+        <span className="lq-answer-mark flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400 text-emerald-950">
           <Check className="h-6 w-6" aria-label="Jawaban benar" />
         </span>
       )}
       {state === 'wrong' && (
-        <span className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-500 text-white">
+        <span className="lq-answer-mark flex h-9 w-9 items-center justify-center rounded-full bg-rose-500 text-white">
           <X className="h-6 w-6" aria-label="Jawabanmu salah" />
         </span>
       )}

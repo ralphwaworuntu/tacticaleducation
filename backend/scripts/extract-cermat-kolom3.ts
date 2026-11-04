@@ -11,7 +11,7 @@ type Rect = { left: number; top: number; width: number; height: number };
 type Bounds = { minX: number; maxX: number; minY: number; maxY: number };
 type IconPad = Partial<{ left: number; top: number; right: number; bottom: number }>;
 
-/** Grid 2×3 — lewati emoji senyum sederhana duplikat (bawah kiri) */
+/** Grid 2×3 — 6 ikon, termasuk emoji senyum sederhana */
 const KOLOM3_ICONS: ReadonlyArray<{
   key: string;
   row: number;
@@ -23,6 +23,7 @@ const KOLOM3_ICONS: ReadonlyArray<{
   { key: 'emoji-lidah', row: 0, col: 0, marginRatio: 0.12 },
   { key: 'emoji-kacamata', row: 0, col: 1, marginRatio: 0.12 },
   { key: 'emoji-baik', row: 0, col: 2, marginPad: { left: 0.12, top: 0.16, right: 0.12, bottom: 0.12 } },
+  { key: 'emoji-senyum', row: 1, col: 0, marginRatio: 0.12 },
   { key: 'emoji-datar', row: 1, col: 1, marginRatio: 0.12 },
   { key: 'emoji-senang', row: 1, col: 2, marginRatio: 0.12 },
 ];

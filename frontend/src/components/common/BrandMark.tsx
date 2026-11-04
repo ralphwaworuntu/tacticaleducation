@@ -17,9 +17,9 @@ type BrandMarkProps = {
 };
 
 const nameStyles: Record<BrandMarkSize, string> = {
-  sm: 'text-sm font-bold leading-tight tracking-tight text-slate-900',
-  md: 'text-sm font-bold leading-tight tracking-tight text-slate-900 sm:text-base',
-  lg: 'text-base font-bold leading-tight tracking-tight text-slate-900 sm:text-lg',
+  sm: 'text-[11px] font-extrabold uppercase leading-tight tracking-[0.04em] text-brand-500 sm:text-xs',
+  md: 'text-xs font-extrabold uppercase leading-tight tracking-[0.04em] text-brand-500 sm:text-sm',
+  lg: 'text-sm font-extrabold uppercase leading-tight tracking-[0.04em] text-brand-500 sm:text-base',
 };
 
 const taglineStyles: Record<BrandMarkSize, string> = {
@@ -38,7 +38,7 @@ export function BrandMark({
   className,
   trailing,
 }: BrandMarkProps) {
-  const logoSize = size === 'lg' ? 'lg' : size === 'sm' ? 'sm' : 'md';
+  const logoSize = variant === 'compact' || variant === 'icon' ? 'xs' : size === 'lg' ? 'lg' : size === 'sm' ? 'sm' : 'md';
 
   const content = (
     <div className={cn('flex min-w-0 items-center gap-2.5 sm:gap-3', className)}>
@@ -46,7 +46,7 @@ export function BrandMark({
         className={cn(
           'flex shrink-0 items-center justify-center',
           framed &&
-            'rounded-2xl border border-brand-100/80 bg-white p-1.5 shadow-[0_2px_12px_rgba(30,58,138,0.08)] sm:p-2',
+            'rounded-xl border border-brand-100/80 bg-white p-1 shadow-[0_2px_12px_rgba(23,51,107,0.08)] sm:rounded-2xl sm:p-1.5',
         )}
       >
         <BrandLogo size={logoSize} priority={variant !== 'icon'} />
@@ -55,7 +55,16 @@ export function BrandMark({
       {variant !== 'icon' && (
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className={cn('truncate', nameStyles[size])}>Tactical Education</p>
+            <p className={cn('max-w-full', nameStyles[size], variant === 'compact' ? 'leading-[1.15]' : 'whitespace-normal break-words')}>
+              {variant === 'compact' ? (
+                <>
+                  <span className="block">TACTICAL</span>
+                  <span className="block">EDUKASI</span>
+                </>
+              ) : (
+                'TACTICAL EDUKASI'
+              )}
+            </p>
             {trailing}
           </div>
           {showTagline && variant === 'full' && (

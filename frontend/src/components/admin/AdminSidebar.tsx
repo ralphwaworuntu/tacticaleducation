@@ -1,7 +1,6 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   BarChart3,
@@ -26,8 +25,9 @@ import {
   History,
   Settings2,
 } from 'lucide-react';
-import { adminMenu } from '@/constants/navigation';
+import { adminMenu, sectionContainsPath } from '@/constants/navigation';
 import { BrandMark } from '@/components/common/BrandMark';
+import { CollapsibleNavSection } from '@/components/navigation/CollapsibleNavSection';
 import { SidebarToggleButton } from '@/components/dashboard/SidebarToggleButton';
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/hooks/useAuth';
@@ -100,15 +100,6 @@ function AdminSidebarNavLink({ to, label, end, onNavigate }: AdminSidebarNavLink
   );
 }
 
-function AdminSidebarSection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div>
-      <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">{title}</p>
-      <div className="space-y-0.5">{children}</div>
-    </div>
-  );
-}
-
 type AdminSidebarPanelProps = {
   onNavigate?: () => void;
   showDesktopToggle?: boolean;
@@ -125,6 +116,7 @@ function AdminSidebarPanel({
   showMobileToggle = false,
 }: AdminSidebarPanelProps) {
   const { user } = useAuth();
+  const location = useLocation();
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -157,13 +149,17 @@ function AdminSidebarPanel({
         </span>
       </div>
 
-      <nav className="sidebar-nav min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-3 py-4">
+      <nav className="sidebar-nav min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-3">
         {adminMenu.map((section) => (
-          <AdminSidebarSection key={section.title} title={section.title}>
+          <CollapsibleNavSection
+            key={section.title}
+            title={section.title}
+            active={sectionContainsPath(section, location.pathname)}
+          >
             {section.items.map((item) => (
               <AdminSidebarNavLink key={item.to} to={item.to} label={item.label} end={item.exact} onNavigate={onNavigate} />
             ))}
-          </AdminSidebarSection>
+          </CollapsibleNavSection>
         ))}
       </nav>
 
@@ -198,10 +194,10 @@ export function AdminSidebar() {
       <aside
         className={cn(
           'relative z-10 hidden h-full shrink-0 flex-col border-r border-slate-200/80 bg-white/95 shadow-[4px_0_24px_-12px_rgba(15,23,42,0.12)] backdrop-blur-sm transition-[width] duration-300 ease-in-out lg:flex',
-          isOpen ? 'w-[17.5rem]' : 'w-0 overflow-hidden border-r-0 shadow-none',
+          isOpen ? 'w-64' : 'w-0 overflow-hidden border-r-0 shadow-none',
         )}
       >
-        <div className="flex h-full min-h-0 min-w-[17.5rem] flex-col">
+        <div className="flex h-full min-h-0 min-w-64 flex-col">
           <AdminSidebarPanel showDesktopToggle onToggleDesktop={toggle} />
         </div>
       </aside>

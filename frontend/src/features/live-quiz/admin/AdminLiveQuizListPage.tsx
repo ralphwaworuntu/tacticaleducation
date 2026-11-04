@@ -81,9 +81,9 @@ export function AdminLiveQuizListPage() {
           <Skeleton className="h-36" />
         </div>
       ) : data?.length ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {data.map((quiz) => (
-            <Card key={quiz.id}>
+            <Card key={quiz.id} className="min-h-[11.5rem]">
               <CardContent className="flex h-full flex-col gap-4 py-5">
                 <div className="min-w-0">
                   <h3 className="truncate text-lg font-semibold text-slate-900">{quiz.title}</h3>

@@ -179,7 +179,7 @@ function PlayerQuestion({
   const urgent = remaining <= 5000 && !state.questionClosed;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 text-white">
+    <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden text-white">
       <div>
         <div className="mb-1.5 flex items-center justify-between text-sm font-bold text-sky-100">
           <span className="rounded-full bg-white/10 px-3 py-1">
@@ -201,16 +201,21 @@ function PlayerQuestion({
       </div>
 
       {!hidden && (question.prompt || question.imageUrl) && (
-        <div className="lq-glass rounded-3xl p-4 text-lg font-extrabold leading-snug">
+        <div className="lq-glass shrink-0 rounded-2xl px-3 py-2 text-base font-extrabold leading-snug">
           {question.prompt && <RichText text={question.prompt} />}
           {question.imageUrl && (
-            <img src={getAssetUrl(question.imageUrl)} alt="" className="mt-3 max-h-48 max-w-full rounded-xl bg-white/10 object-contain" />
+            <img src={getAssetUrl(question.imageUrl)} alt="" className="mt-2 max-h-16 max-w-full rounded-lg bg-white/10 object-contain" />
           )}
         </div>
       )}
       {multi && !locked && !timeIsUp && <p className="text-center text-sm font-semibold text-sky-100">Pilih semua jawaban yang benar, lalu kirim.</p>}
 
-      <div className={cn('grid flex-1 content-start gap-3', hidden && question.options.length <= 4 ? 'grid-cols-2 content-stretch' : 'grid-cols-1')}>
+      <div
+        className={cn(
+          'lq-answer-grid lq-answer-grid-player',
+          hidden && question.options.length <= 4 && 'lq-answer-grid-symbols',
+        )}
+      >
         {question.options.map((option, index) => {
           const isChosen = chosen.includes(option.id);
           const dim = (locked || timeIsUp) && !isChosen;
@@ -220,7 +225,7 @@ function PlayerQuestion({
               initial={view.animate ? { opacity: 0, y: 18 } : false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: view.animate ? index * 0.05 : 0, duration: 0.28 }}
-              className="contents"
+              className="flex h-full min-h-0 min-w-0"
             >
               <AnswerCard
                 option={option}
@@ -241,7 +246,7 @@ function PlayerQuestion({
         </button>
       )}
 
-      <div className="min-h-[2.5rem] text-center text-base font-bold" aria-live="polite">
+      <div className="shrink-0 text-center text-sm font-bold" aria-live="polite">
         {sending && (
           <span className="inline-flex items-center gap-2 text-sky-100">
             <Loader2 className="h-4 w-4 animate-spin" /> Mengirim…
@@ -376,7 +381,7 @@ function PlayerLeaderboard({ state, view }: { state: LiveState; view: View }) {
   );
 }
 
-function PlayerFinal({ state, view, onLeave }: { state: LiveState; view: View; onLeave: () => void }) {
+function PlayerFinal({ state, view }: { state: LiveState; view: View }) {
   const final = state.final;
   const firedRef = useRef(false);
   useEffect(() => {
@@ -389,44 +394,41 @@ function PlayerFinal({ state, view, onLeave }: { state: LiveState; view: View; o
   const medalColor = final.medal === 'GOLD' ? 'text-amber-300' : final.medal === 'SILVER' ? 'text-slate-200' : 'text-orange-300';
   const headline = final.rank === 1 ? 'Juara 1!' : final.rank === 2 ? 'Juara 2!' : final.rank === 3 ? 'Juara 3!' : 'Permainan selesai';
   return (
-    <div className="flex flex-1 flex-col items-center gap-4 text-center text-white">
+    <div className="flex min-h-0 flex-1 flex-col items-center gap-2.5 text-center text-white">
       <motion.div
         initial={view.animate ? { scale: 0.6, opacity: 0 } : false}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 200, damping: 14 }}
-        className="lq-glass relative w-full overflow-hidden rounded-[2rem] p-6"
+        className="lq-glass relative w-full overflow-hidden rounded-[1.5rem] px-4 py-4"
       >
-        <PlayerAvatar avatarId={state.me?.avatarId} seed={state.me?.id ?? ''} size={104} ring idle={view.animate} className="mx-auto" />
-        <div className="mt-3 flex items-center justify-center gap-2">
-          {final.medal ? <Medal className={cn('h-9 w-9', medalColor)} /> : <Trophy className="h-8 w-8 text-sky-200" />}
-          <p className="text-3xl font-black">{headline}</p>
+        <PlayerAvatar avatarId={state.me?.avatarId} seed={state.me?.id ?? ''} size={84} ring idle={view.animate} className="mx-auto" />
+        <div className="mt-2 flex items-center justify-center gap-2">
+          {final.medal ? <Medal className={cn('h-7 w-7', medalColor)} /> : <Trophy className="h-7 w-7 text-sky-200" />}
+          <p className="text-2xl font-black">{headline}</p>
         </div>
-        <p className="mt-2 text-xs font-bold uppercase tracking-widest text-sky-200">Peringkat akhir</p>
-        <p className="text-6xl font-black text-amber-300">#{final.rank ?? '-'}</p>
-        <p className="text-sm font-semibold text-sky-100">dari {final.totalPlayers} peserta</p>
+        <p className="mt-1 text-xs font-bold uppercase tracking-widest text-sky-200">Peringkat akhir</p>
+        <p className="text-5xl font-black leading-none text-amber-300">#{final.rank ?? '-'}</p>
+        <p className="mt-1 text-sm font-semibold text-sky-100">dari {final.totalPlayers} peserta</p>
       </motion.div>
-      <div className="grid w-full grid-cols-2 gap-3">
-        <div className="lq-glass rounded-2xl p-4">
-          <p className="text-3xl font-black text-amber-300">{(final.totalScore ?? 0).toLocaleString('id-ID')}</p>
+      <div className="grid w-full shrink-0 grid-cols-2 gap-2">
+        <div className="lq-glass rounded-2xl p-3">
+          <p className="text-2xl font-black text-amber-300">{(final.totalScore ?? 0).toLocaleString('id-ID')}</p>
           <p className="text-xs font-semibold text-sky-200">Total poin</p>
         </div>
-        <div className="lq-glass rounded-2xl p-4">
-          <p className="text-3xl font-black">{final.accuracy ?? 0}%</p>
+        <div className="lq-glass rounded-2xl p-3">
+          <p className="text-2xl font-black">{final.accuracy ?? 0}%</p>
           <p className="text-xs font-semibold text-sky-200">Akurasi</p>
         </div>
-        <div className="rounded-2xl bg-emerald-500/25 p-4">
-          <p className="text-3xl font-black">{final.correctCount ?? 0}</p>
+        <div className="rounded-2xl bg-emerald-500/25 p-3">
+          <p className="text-2xl font-black">{final.correctCount ?? 0}</p>
           <p className="text-xs font-semibold text-emerald-100">Benar</p>
         </div>
-        <div className="rounded-2xl bg-rose-500/25 p-4">
-          <p className="text-3xl font-black">{final.incorrectCount ?? 0}</p>
+        <div className="rounded-2xl bg-rose-500/25 p-3">
+          <p className="text-2xl font-black">{final.incorrectCount ?? 0}</p>
           <p className="text-xs font-semibold text-rose-100">Salah</p>
         </div>
       </div>
-      {(final.unansweredCount ?? 0) > 0 && <p className="text-sm text-sky-100">{final.unansweredCount} soal tidak dijawab</p>}
-      <button type="button" onClick={onLeave} className="lq-btn lq-btn-gold mt-auto h-14 w-full text-lg">
-        Gabung kuis lain
-      </button>
+      {(final.unansweredCount ?? 0) > 0 && <p className="shrink-0 text-sm text-sky-100">{final.unansweredCount} soal tidak dijawab</p>}
     </div>
   );
 }
@@ -551,7 +553,7 @@ function PlayView({ sessionId, playerToken }: { sessionId: string; playerToken: 
         body = <PlayerLeaderboard state={state} view={view} />;
         break;
       case 'FINISHED':
-        body = <PlayerFinal state={state} view={view} onLeave={leave} />;
+        body = <PlayerFinal state={state} view={view} />;
         break;
       case 'CANCELLED':
         body = (
@@ -571,7 +573,7 @@ function PlayView({ sessionId, playerToken }: { sessionId: string; playerToken: 
 
   return (
     <div
-      className="mx-auto flex min-h-[100dvh] w-full max-w-lg flex-col gap-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3"
+      className="mx-auto flex h-[100svh] max-h-[100svh] w-full max-w-lg flex-col overflow-hidden px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3"
       onPointerDown={() => liveAudio.unlock()}
     >
       <ReconnectBanner show={state.hasSynced && state.connection === 'reconnecting'} />
@@ -596,14 +598,23 @@ function PlayView({ sessionId, playerToken }: { sessionId: string; playerToken: 
         <p className="rounded-xl bg-amber-400 px-4 py-2 text-center text-sm font-black text-slate-900">Permainan dijeda tutor</p>
       )}
       <AudioUnlockHint enabled={state.settings?.soundEnabled !== false} className="self-center" />
-      <main className="flex min-h-0 flex-1 flex-col">{body}</main>
-      {canReact && (
-        <ReactionPicker
-          send={sendReaction}
-          soundEnabled={state.settings?.soundEnabled !== false}
-          animate={view.animate}
-          className="sticky bottom-2 z-20"
-        />
+      <main className="mt-2 flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">{body}</main>
+      {(status === 'FINISHED' || canReact) && (
+        <div className="mt-3 flex shrink-0 flex-col gap-4 pb-2">
+          {status === 'FINISHED' && (
+            <button type="button" onClick={leave} className="lq-btn lq-btn-gold h-12 w-full text-base">
+              Gabung kuis lain
+            </button>
+          )}
+          {canReact && (
+            <ReactionPicker
+              send={sendReaction}
+              soundEnabled={state.settings?.soundEnabled !== false}
+              animate={view.animate}
+              className="shrink-0"
+            />
+          )}
+        </div>
       )}
     </div>
   );

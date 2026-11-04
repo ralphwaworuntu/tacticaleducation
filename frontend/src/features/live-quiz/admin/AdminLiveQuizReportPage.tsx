@@ -1,4 +1,4 @@
-﻿import { Fragment, useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -87,10 +87,10 @@ export function AdminLiveQuizReportPage() {
 
   const { session, summary, ranking, questions } = data;
   const cards = [
-    { label: 'Peserta', value: summary.players },
-    { label: 'Rata-rata skor', value: formatPoints(summary.averageScore) },
-    { label: 'Skor tertinggi', value: formatPoints(summary.highestScore) },
-    { label: 'Rata-rata akurasi', value: `${summary.averageAccuracy}%` },
+    { label: 'Peserta', value: summary.players, tone: 'blue' as const },
+    { label: 'Rata-rata skor', value: formatPoints(summary.averageScore), tone: 'purple' as const },
+    { label: 'Skor tertinggi', value: formatPoints(summary.highestScore), tone: 'amber' as const },
+    { label: 'Rata-rata akurasi', value: `${summary.averageAccuracy}%`, tone: 'teal' as const },
   ];
 
   return (
@@ -120,7 +120,7 @@ export function AdminLiveQuizReportPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => (
-          <div key={card.label} className="admin-metric-card">
+          <div key={card.label} className="admin-metric-card" data-tone={card.tone}>
             <p className="text-sm font-medium text-slate-500">{card.label}</p>
             <p className="mt-2 text-3xl font-bold text-slate-900">{card.value}</p>
           </div>

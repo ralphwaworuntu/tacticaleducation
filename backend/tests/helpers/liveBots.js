@@ -72,9 +72,7 @@ async function startBot(name, avatarId, pick, delayMs, reactEvery) {
     await startBot(
       name,
       AVATARS[i % AVATARS.length],
-      i >= total - silent
-        ? () => []
-        : (options) => (options.length ? [options[Math.floor(Math.random() * options.length)].id] : []),
+      (options) => (options.length ? [options[Math.floor(Math.random() * options.length)].id] : []),
       1000 + Math.floor(Math.random() * 6000),
       500 + Math.floor(Math.random() * 2500),
     );

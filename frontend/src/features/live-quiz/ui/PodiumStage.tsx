@@ -10,27 +10,30 @@ export type PodiumEvent = 'lights' | 'podium' | 'avatar' | 'winner' | 'trophy' |
 
 type Step = { at: number; key: string; kind: PodiumEvent; position?: number };
 
-const BLOCK: Record<number, { height: string; gradient: string; label: string; medal: string; width: string }> = {
+const BLOCK: Record<number, { height: string; gradient: string; label: string; medal: string; width: string; avatar: number }> = {
   0: {
-    height: 'clamp(12rem, 34vh, 20rem)',
+    height: 'clamp(14rem, 38vh, 24rem)',
     gradient: 'linear-gradient(180deg,#FFE9A8 0%,#FFD166 42%,#E9A92F 100%)',
     label: '#4a2f00',
     medal: '#FFD166',
-    width: 'w-[38%] max-w-[22rem]',
+    width: 'w-[36%] max-w-[20rem]',
+    avatar: 128,
   },
   1: {
-    height: 'clamp(8.5rem, 25vh, 14.5rem)',
+    height: 'clamp(10.5rem, 29vh, 18rem)',
     gradient: 'linear-gradient(180deg,#F6F9FE 0%,#C8D3E6 50%,#9AA9C2 100%)',
     label: '#1f2d44',
     medal: '#D6DFEE',
-    width: 'w-[31%] max-w-[18rem]',
+    width: 'w-[30%] max-w-[16.5rem]',
+    avatar: 108,
   },
   2: {
-    height: 'clamp(6.75rem, 19vh, 11.5rem)',
+    height: 'clamp(8.75rem, 24vh, 15rem)',
     gradient: 'linear-gradient(180deg,#FFD0A0 0%,#F0A05A 50%,#C9742B 100%)',
     label: '#4a2500',
     medal: '#F0A05A',
-    width: 'w-[31%] max-w-[18rem]',
+    width: 'w-[30%] max-w-[16.5rem]',
+    avatar: 100,
   },
 };
 
@@ -56,15 +59,12 @@ function buildTimeline(count: number): Step[] {
 
 export function PodiumStage({
   podium,
-  rest = [],
   animate,
   fancy,
   onEvent,
   className,
 }: {
   podium: PodiumRow[];
-  /** Peringkat 4 dst. (ditampilkan sebagai "semua juara" setelah podium selesai). */
-  rest?: PodiumRow[];
   animate: boolean;
   /** Efek berat (sinar, konfeti). Dimatikan pada mode lite. */
   fancy: boolean;
@@ -112,12 +112,12 @@ export function PodiumStage({
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
           {fancy ? (
             <>
-              <div className="lq-beam" style={{ left: '12%', ['--lq-beam-from' as string]: '-14deg', ['--lq-beam-to' as string]: '4deg' }} />
-              <div className="lq-beam" style={{ left: '39%', animationDelay: '1.2s', ['--lq-beam-from' as string]: '-6deg', ['--lq-beam-to' as string]: '6deg' }} />
-              <div className="lq-beam" style={{ left: '66%', animationDelay: '2.2s', ['--lq-beam-from' as string]: '4deg', ['--lq-beam-to' as string]: '-14deg' }} />
+              <div className="lq-beam lq-beam-soft" style={{ left: '18%', ['--lq-beam-from' as string]: '-8deg', ['--lq-beam-to' as string]: '3deg' }} />
+              <div className="lq-beam" style={{ left: '42%', animationDelay: '1.2s', ['--lq-beam-from' as string]: '-4deg', ['--lq-beam-to' as string]: '4deg' }} />
+              <div className="lq-beam lq-beam-soft" style={{ left: '66%', animationDelay: '2.2s', ['--lq-beam-from' as string]: '3deg', ['--lq-beam-to' as string]: '-8deg' }} />
             </>
           ) : (
-            <div className="absolute inset-x-0 top-0 h-2/3" style={{ background: 'radial-gradient(60% 80% at 50% 0%, rgba(255,233,160,0.35), transparent 70%)' }} />
+            <div className="absolute inset-x-0 top-0 h-1/2" style={{ background: 'radial-gradient(42% 70% at 50% 0%, rgba(255,233,160,0.22), transparent 72%)' }} />
           )}
         </div>
       )}
@@ -128,19 +128,19 @@ export function PodiumStage({
         </button>
       )}
 
-      <div className="relative mx-auto flex w-full max-w-[min(94%,76rem)] items-end justify-center gap-2 px-1 sm:gap-5">
+      <div className="relative mx-auto flex w-[min(92vw,70rem)] items-end justify-center gap-4 px-2 sm:gap-6">
         {layout.map((position) => {
           const row = rows[position]!;
           const block = BLOCK[position]!;
           const winner = position === 0;
-          const avatarSize = winner ? 176 : 124;
+          const avatarSize = block.avatar;
           const podiumUp = has(`podium-${position}`);
           const avatarIn = has(`avatar-${position}`);
           const trophy = has('trophy');
           return (
             <div key={row.playerId} className={cn('flex flex-col items-center', block.width)}>
               {/* Avatar + nama */}
-              <div className="relative flex min-h-[clamp(10rem,22vh,16rem)] w-full flex-col items-center justify-end pb-2 text-center">
+              <div className="relative flex min-h-[clamp(11rem,24vh,17rem)] w-full flex-col items-center justify-end pb-2 text-center">
                 <AnimatePresence>
                   {avatarIn && (
                     <motion.div
@@ -151,7 +151,7 @@ export function PodiumStage({
                       className="relative flex w-full flex-col items-center"
                     >
                       {winner && fancy && (
-                        <span className="pointer-events-none absolute -top-10 left-1/2 -z-10 h-80 w-80 -translate-x-1/2 opacity-70" aria-hidden>
+                        <span className="pointer-events-none absolute -top-6 left-1/2 -z-10 h-52 w-52 -translate-x-1/2 opacity-45" aria-hidden>
                           <svg viewBox="0 0 100 100" className="lq-rays h-full w-full">
                             {Array.from({ length: 12 }, (_, i) => (
                               <path key={i} d="M50 50 L44 0 L56 0Z" fill="#FFE9A8" opacity={0.55} transform={`rotate(${i * 30} 50 50)`} />
@@ -177,10 +177,10 @@ export function PodiumStage({
                         idle={winner}
                         className={winner ? 'lq-rank-gold' : undefined}
                       />
-                      <p className={cn('mt-2 w-full truncate px-1 font-black text-white drop-shadow', winner ? 'text-3xl sm:text-4xl xl:text-5xl' : 'text-xl sm:text-2xl xl:text-3xl')}>
+                      <p className={cn('mt-2 w-full truncate px-1 font-black text-white drop-shadow', winner ? 'text-[clamp(1.35rem,2.4vw,2.15rem)]' : 'text-[clamp(1.15rem,2vw,1.75rem)]')}>
                         {row.name}
                       </p>
-                      <p className={cn('font-black tabular-nums text-amber-200', winner ? 'text-3xl sm:text-4xl' : 'text-xl sm:text-2xl')}>
+                      <p className={cn('font-black tabular-nums text-amber-200', winner ? 'text-[clamp(1.2rem,2.1vw,1.75rem)]' : 'text-[clamp(1.05rem,1.8vw,1.5rem)]')}>
                         <AnimatedNumber value={row.totalScore} animate={animate} durationMs={1200} />
                       </p>
                     </motion.div>
@@ -199,7 +199,7 @@ export function PodiumStage({
                   winner && 'lq-rank-gold',
                 )}
               >
-                <span className="mt-2 text-6xl font-black sm:text-7xl xl:text-8xl" style={{ color: block.label }}>
+                <span className="mt-2 text-5xl font-black sm:text-6xl xl:text-7xl" style={{ color: block.label }}>
                   {row.rank}
                 </span>
                 <AnimatePresence>
@@ -221,29 +221,6 @@ export function PodiumStage({
         })}
       </div>
 
-      {/* Semua juara */}
-      <AnimatePresence>
-        {finished && rest.length > 0 && (
-          <motion.div
-            initial={animate ? { opacity: 0, y: 24 } : false}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-            className="mt-4 w-full max-w-[min(94%,76rem)] min-h-0"
-          >
-            <p className="mb-2 text-center text-xs font-black uppercase tracking-[0.3em] text-sky-200">Semua juara</p>
-            <ol className="grid max-h-[22vh] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
-              {rest.map((row) => (
-                <li key={row.playerId} className="lq-glass flex items-center gap-3 rounded-2xl px-3 py-2 text-lg font-bold">
-                  <span className="w-8 text-center font-black text-amber-300">{row.rank}</span>
-                  <PlayerAvatar avatarId={row.avatarId} seed={row.playerId} size={40} />
-                  <span className="min-w-0 flex-1 truncate">{row.name}</span>
-                  <span className="tabular-nums text-amber-200">{row.totalScore.toLocaleString('id-ID')}</span>
-                </li>
-              ))}
-            </ol>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

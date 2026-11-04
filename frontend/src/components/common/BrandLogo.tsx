@@ -1,6 +1,6 @@
 import { cn } from '@/utils/cn';
 
-type LogoSize = 'sm' | 'md' | 'lg';
+type LogoSize = 'xs' | 'sm' | 'md' | 'lg';
 
 type BrandLogoProps = {
   className?: string;
@@ -10,6 +10,11 @@ type BrandLogoProps = {
 };
 
 const sizeStyles: Record<LogoSize, { className: string; width: number; height: number }> = {
+  xs: {
+    className: 'h-9 w-auto',
+    width: 36,
+    height: 36,
+  },
   sm: {
     className: 'h-11 w-auto sm:h-12 lg:h-14',
     width: 56,

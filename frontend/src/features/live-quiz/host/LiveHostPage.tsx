@@ -237,24 +237,29 @@ function HostQuestion({ state, serverNow, sfx, view }: { state: LiveState; serve
   const multi = question.type === 'MULTIPLE';
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 text-white">
-      <div className="flex items-start gap-4">
+    <div
+      className="lq-host-board min-h-0 flex-1 text-white"
+      style={{ gridTemplateRows: `minmax(0, 2fr) repeat(${question.options.length}, minmax(0, 1fr))` }}
+    >
+      <div className="flex min-h-0 items-stretch gap-4">
         <motion.div
           key={question.index}
           initial={view.animate ? { opacity: 0, y: -16 } : false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className="lq-glass min-w-0 flex-1 rounded-[2rem] p-5"
+          className="lq-glass flex min-h-0 min-w-0 flex-1 flex-col justify-center overflow-hidden rounded-[1.5rem] px-6 py-4"
         >
-          <p className="mb-2 text-sm font-black uppercase tracking-widest text-sky-200">
+          <p className="mb-2 shrink-0 text-sm font-black uppercase tracking-widest text-sky-200">
             Soal {question.index + 1} dari {question.total}
             {multi ? ' · pilih semua jawaban yang benar' : question.type === 'TRUE_FALSE' ? ' · benar atau salah' : ''}
             {question.weight === 'DOUBLE' ? ' · POIN 2x' : question.weight === 'NONE' ? ' · tanpa poin' : ''}
           </p>
-          <div className="text-3xl font-extrabold leading-snug xl:text-4xl">{question.prompt && <RichText text={question.prompt} />}</div>
-          {question.imageUrl && <img src={getAssetUrl(question.imageUrl)} alt="" className="mt-4 max-h-56 max-w-full rounded-xl bg-white/10 object-contain" />}
+          <div className="text-2xl font-extrabold leading-snug xl:text-4xl">{question.prompt && <RichText text={question.prompt} />}</div>
+          {question.imageUrl && (
+            <img src={getAssetUrl(question.imageUrl)} alt="" className="mt-3 max-h-[42%] max-w-full rounded-xl bg-white/10 object-contain" />
+          )}
         </motion.div>
-        <div className="flex shrink-0 flex-col items-center gap-3">
+        <div className="flex shrink-0 flex-col items-center justify-center gap-3">
           <TimerRing remainingMs={remaining} totalMs={payload.durationMs} size={116} pulse={view.fancy} />
           <div className="lq-glass rounded-2xl px-4 py-2 text-center">
             <p className="text-3xl font-black tabular-nums">
@@ -266,19 +271,17 @@ function HostQuestion({ state, serverNow, sfx, view }: { state: LiveState; serve
         </div>
       </div>
 
-      <div className={cn('grid min-h-0 flex-1 auto-rows-fr gap-3 lg:gap-4', question.options.length <= 2 ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2')}>
-        {question.options.map((option, index) => (
-          <motion.div
-            key={option.id}
-            initial={view.animate ? { opacity: 0, y: 22 } : false}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: view.animate ? 0.1 + index * 0.06 : 0, duration: 0.3 }}
-            className="contents"
-          >
-            <AnswerCard option={option} index={index} size="host" />
-          </motion.div>
-        ))}
-      </div>
+      {question.options.map((option, index) => (
+        <motion.div
+          key={option.id}
+          initial={view.animate ? { opacity: 0, y: 22 } : false}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: view.animate ? 0.1 + index * 0.06 : 0, duration: 0.3 }}
+          className="flex min-h-0 min-w-0"
+        >
+          <AnswerCard option={option} index={index} size="host" />
+        </motion.div>
+      ))}
     </div>
   );
 }
@@ -384,7 +387,7 @@ const REVEAL_STATUS: Record<RevealStatus, { label: string; chip: string; row: st
 
 // Kolom: No | Siswa | Pilihan | Status | Poin (grid yang sama untuk header sticky dan setiap baris).
 const REVEAL_GRID =
-  'grid grid-cols-[clamp(2.25rem,4vw,3.5rem)_minmax(0,1.7fr)_clamp(3.75rem,8vw,6.5rem)_clamp(6.5rem,14vw,12rem)_clamp(4.5rem,9vw,8rem)] items-center gap-2 sm:gap-4';
+  'grid grid-cols-[clamp(2.1rem,3.6vw,3.25rem)_minmax(0,1.8fr)_clamp(3.5rem,7vw,6rem)_clamp(6rem,12vw,11rem)_clamp(4.25rem,8vw,7.5rem)] items-center gap-2 sm:gap-3';
 
 function letterTheme(letter: string) {
   return themeFor(Math.max(0, letter.charCodeAt(0) - 65));
@@ -415,13 +418,14 @@ function HostAnswerDetails({ rows, view }: { rows: RevealRow[]; view: View }) {
   }, [rows, filter]);
 
   const many = visible.length >= 12;
-  const avatarSize = many ? 36 : visible.length <= 6 ? 64 : 48;
-  const rowPad = many ? 'px-2 py-1.5' : visible.length <= 6 ? 'px-3 py-3' : 'px-3 py-2';
+  const dense = visible.length >= 28;
+  const avatarSize = dense ? 32 : many ? 40 : visible.length <= 6 ? 56 : 48;
+  const rowPad = dense ? 'px-2 py-1' : many ? 'px-2 py-1.5' : visible.length <= 6 ? 'px-3 py-2.5' : 'px-3 py-2';
   return (
-    <div className="flex h-full min-h-0 w-full flex-col items-center gap-3 text-white">
-      <div className="flex w-[min(96%,88rem)] flex-wrap items-center justify-between gap-3">
+    <div className="flex h-full min-h-0 w-full flex-col items-center gap-2 text-white">
+      <div className="flex w-[min(98%,96rem)] flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="flex items-center gap-3 text-[clamp(1.75rem,3.6vw,3.25rem)] font-black leading-tight">
+            <h2 className="flex items-center gap-3 text-[clamp(1.75rem,3.6vw,3.25rem)] font-black uppercase leading-tight tracking-wide">
             <BarChart3 className="h-[1.1em] w-[1.1em] text-amber-300" /> Detail Jawaban Siswa
           </h2>
           <p className="mt-1 text-sm font-semibold text-sky-100/80 xl:text-base">Poin soal ini, dari tertinggi ke terendah</p>
@@ -445,7 +449,7 @@ function HostAnswerDetails({ rows, view }: { rows: RevealRow[]; view: View }) {
         </div>
       </div>
 
-      <div className={cn('lq-glass flex w-[min(96%,88rem)] flex-col overflow-hidden rounded-3xl', many || visible.length > 8 ? 'min-h-0 flex-1' : 'max-h-full')}>
+      <div className={cn('lq-glass flex w-[min(98%,96rem)] flex-col overflow-hidden rounded-3xl', many || visible.length > 6 ? 'min-h-0 flex-1' : 'max-h-full')}>
         <div className={cn(REVEAL_GRID, 'sticky top-0 z-10 shrink-0 border-b border-white/15 bg-slate-950/70 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-sky-100/80 backdrop-blur xl:text-sm')}>
           <span className="text-center">No</span>
           <span>Avatar & Nama</span>
@@ -453,7 +457,7 @@ function HostAnswerDetails({ rows, view }: { rows: RevealRow[]; view: View }) {
           <span className="text-center">Status</span>
           <span className="text-right">Poin</span>
         </div>
-        <ol className={cn('min-h-0 space-y-1.5 overflow-y-auto p-2', (many || visible.length > 8) && 'flex-1')} aria-label="Daftar jawaban siswa">
+        <ol className={cn('min-h-0 space-y-1 overflow-y-auto p-2', (many || visible.length > 6) && 'flex-1')} aria-label="Daftar jawaban siswa">
           {visible.length === 0 && (
             <li className="py-10 text-center text-xl text-sky-100">Tidak ada siswa pada filter ini.</li>
           )}
@@ -555,7 +559,7 @@ function HostLeaderboard({ state, view }: { state: LiveState; view: View }) {
   const shown = showAll ? all : top;
   if (!lb) return null;
   return (
-    <div className="flex h-full min-h-0 flex-col items-center gap-3 overflow-hidden text-white">
+    <div className="flex h-full min-h-0 flex-col items-center gap-2 overflow-hidden text-white">
       <h2 className="flex shrink-0 items-center gap-3 text-[clamp(1.85rem,4.2vw,4.25rem)] font-black tracking-wide">
         <Trophy className="h-[0.9em] w-[0.9em] text-amber-300" /> TACTICAL LEADERBOARD
       </h2>
@@ -581,7 +585,6 @@ function HostLeaderboard({ state, view }: { state: LiveState; view: View }) {
 
 function HostFinal({ state, view, sfx, sessionId }: { state: LiveState; view: View; sfx: (name: Sfx) => void; sessionId: string }) {
   const final = state.final;
-  const rest = useMemo(() => (final?.standings ?? []).filter((row) => row.rank > 3), [final?.standings]);
   const onEvent = useCallback(
     (event: PodiumEvent) => {
       switch (event) {
@@ -615,7 +618,7 @@ function HostFinal({ state, view, sfx, sessionId }: { state: LiveState; view: Vi
         {final.early ? 'SESI DIHENTIKAN' : 'FINAL CHAMPIONS'}
       </h2>
       {final.podium.length ? (
-        <PodiumStage podium={final.podium} rest={rest} animate={view.animate} fancy={view.fancy} onEvent={onEvent} />
+        <PodiumStage podium={final.podium} animate={view.animate} fancy={view.fancy} onEvent={onEvent} />
       ) : (
         <p className="text-xl text-sky-100">Tidak ada peserta.</p>
       )}
@@ -860,7 +863,7 @@ export function LiveHostPage() {
 
         {/* Konten + kolom khusus reaksi (reaksi tidak pernah menimpa konten) */}
         <div className="flex min-h-0 flex-1 gap-2 px-6 pb-3">
-          <main className="min-h-0 min-w-0 flex-1">{body}</main>
+          <main className="flex h-full min-h-0 min-w-0 flex-1 flex-col">{body}</main>
           {laneVisible && <ReactionLane ref={laneRef} lite={!view.fancy} />}
         </div>
 

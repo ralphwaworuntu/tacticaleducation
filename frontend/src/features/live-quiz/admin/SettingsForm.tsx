@@ -64,8 +64,10 @@ export function SettingsForm({ value, onChange, compact }: Props) {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="space-y-4">
+      <section className="rounded-[14px] border border-slate-200/80 bg-slate-50/60 p-4">
+        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Timer & skor</h3>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Durasi default per soal">
           <select
             className={selectClass}
@@ -101,17 +103,18 @@ export function SettingsForm({ value, onChange, compact }: Props) {
         </Field>
         <Field label="Poin maksimal per soal">{num('maxPoints', 100, 10000)}</Field>
         <Field label="Jumlah baris leaderboard">{num('leaderboardSize', 3, 10)}</Field>
-        {!compact && <Field label="Maksimal peserta">{num('maxPlayers', 1, 500)}</Field>}
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        </div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Field label="Hitung mundur (dtk)">{num('countdownSec', 1, 10)}</Field>
         <Field label="Tampil jawaban benar (dtk)">{num('resultDurationSec', 1, 30)}</Field>
         <Field label="Tampil poin (dtk)">{num('scoreDurationSec', 1, 30)}</Field>
         <Field label="Leaderboard otomatis (dtk)">{num('leaderboardDurationSec', 1, 60)}</Field>
-      </div>
+        </div>
+      </section>
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <section className="rounded-[14px] border border-slate-200/80 bg-slate-50/60 p-4">
+        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Gameplay</h3>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
         <Toggle label="Acak urutan soal" checked={value.shuffleQuestions} onChange={(v) => set('shuffleQuestions', v)} />
         <Toggle label="Acak urutan pilihan" checked={value.shuffleOptions} onChange={(v) => set('shuffleOptions', v)} />
         <Toggle
@@ -154,11 +157,12 @@ export function SettingsForm({ value, onChange, compact }: Props) {
           checked={value.projectorMode}
           onChange={(v) => set('projectorMode', v)}
         />
-      </div>
+        </div>
+      </section>
 
-      <div>
-        <span className="admin-field-label">Avatar &amp; reaksi emoji</span>
-        <div className="grid gap-2 sm:grid-cols-2">
+      <section className="rounded-[14px] border border-slate-200/80 bg-slate-50/60 p-4">
+        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Avatar & emoji</h3>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
           <Toggle
             label="Izinkan peserta mengganti avatar di lobby"
             hint="Peserta hanya bisa mengganti avatarnya sendiri, dan hanya sebelum permainan dimulai."
@@ -184,7 +188,16 @@ export function SettingsForm({ value, onChange, compact }: Props) {
             onChange={(v) => set('reactionsOnProjector', v)}
           />
         </div>
-      </div>
+      </section>
+
+      {!compact && (
+        <section className="rounded-[14px] border border-slate-200/80 bg-slate-50/60 p-4">
+          <h3 className="text-sm font-bold uppercase tracking-wide text-slate-500">Pengaturan peserta</h3>
+          <div className="mt-3 max-w-xs">
+            <Field label="Maksimal peserta">{num('maxPlayers', 1, 500)}</Field>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

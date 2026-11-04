@@ -195,8 +195,8 @@ export function AdminExamControlPage() {
       <Card>
         <CardContent className="space-y-4 p-6">
           <div>
-            <p className="eyebrow-label">Blokir Ujian</p>
-            <h3 className="mt-1 text-lg font-semibold text-slate-900">Aktifkan / nonaktifkan fitur blokir</h3>
+            <p className="eyebrow-label">Keamanan ujian</p>
+            <h3 className="mt-1 text-lg font-semibold text-slate-900">Blokir fullscreen</h3>
             <p className="mt-1 text-sm text-slate-500">
               Jika dimatikan, member tidak akan terblokir saat keluar dari fullscreen.
             </p>
@@ -226,13 +226,14 @@ export function AdminExamControlPage() {
           </form>
         </CardContent>
       </Card>
+      <form className="space-y-4" onSubmit={onSubmit}>
       <Card>
         <CardContent className="space-y-4 p-6">
           <div>
-            <p className="eyebrow-label">Kontrol Ujian</p>
-            <h3 className="mt-1 text-lg font-semibold text-slate-900">Kelola akses & kuota Ujian</h3>
+            <p className="eyebrow-label">Akses ujian</p>
+            <h3 className="mt-1 text-lg font-semibold text-slate-900">Siapa yang boleh masuk section ujian</h3>
           </div>
-          <form className="grid gap-4 md:grid-cols-2" onSubmit={onSubmit}>
+          <div className="grid gap-4 md:grid-cols-2">
             <label className="admin-check-row">
               <input type="checkbox" {...form.register('enabled')} />
               Aktifkan section Ujian
@@ -264,6 +265,15 @@ export function AdminExamControlPage() {
               </div>
               {targetAll && <p className="text-[11px] text-slate-500">Saat aktif, seluruh member otomatis mendapatkan akses.</p>}
             </div>
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="grid gap-4 p-6 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <p className="eyebrow-label">Kuota</p>
+            <h3 className="mt-1 text-lg font-semibold text-slate-900">Batas pengerjaan</h3>
+          </div>
             <div>
               <label className="admin-field-label">Kuota Tryout</label>
               <Input
@@ -280,6 +290,14 @@ export function AdminExamControlPage() {
                 {...form.register('examQuota', { valueAsNumber: true })}
               />
             </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="grid gap-4 p-6 md:grid-cols-2">
+          <div className="md:col-span-2">
+            <p className="eyebrow-label">Jadwal</p>
+            <h3 className="mt-1 text-lg font-semibold text-slate-900">Periode section ujian</h3>
+          </div>
             <div>
               <label className="admin-field-label">Jadwal Mulai Ujian</label>
               <Input type="datetime-local" placeholder="Pilih tanggal & jam mulai" {...form.register('startAt')} />
@@ -288,13 +306,11 @@ export function AdminExamControlPage() {
               <label className="admin-field-label">Jadwal Berakhir Ujian</label>
               <Input type="datetime-local" placeholder="Pilih tanggal & jam berakhir" {...form.register('endAt')} />
             </div>
-            <div className="md:col-span-2">
-              <Button type="submit" disabled={saveControl.isPending}>
-                {saveControl.isPending ? 'Menyimpan...' : 'Simpan Kontrol Ujian'}
-              </Button>
-            </div>
-          </form>
-          <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="space-y-4 p-6">
+          <div className="rounded-[14px] border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
             <p className="font-semibold text-slate-900">Status saat ini</p>
             {examStatus.data ? (
               <ul className="mt-2 space-y-1">
@@ -315,8 +331,12 @@ export function AdminExamControlPage() {
               <p className="text-slate-500">Memuat status ujian...</p>
             )}
           </div>
+          <Button type="submit" disabled={saveControl.isPending}>
+            {saveControl.isPending ? 'Menyimpan...' : 'Simpan Kontrol Ujian'}
+          </Button>
         </CardContent>
       </Card>
+      </form>
       <Card>
         <CardContent className="space-y-4 p-6">
           <div>

@@ -11,7 +11,7 @@ type Rect = { left: number; top: number; width: number; height: number };
 type Bounds = { minX: number; maxX: number; minY: number; maxY: number };
 type IconPad = Partial<{ left: number; top: number; right: number; bottom: number }>;
 
-/** Grid 3×2 — lewati baju duplikat (bawah kiri) */
+/** Grid 3×2 — 6 ikon, termasuk baju kedua */
 const KOLOM7_ICONS: ReadonlyArray<{
   key: string;
   row: number;
@@ -26,6 +26,13 @@ const KOLOM7_ICONS: ReadonlyArray<{
   { key: 'sepatu-olahraga', row: 0, col: 1, marginRatio: 0.12 },
   { key: 'baju', row: 1, col: 0, marginRatio: 0.12 },
   { key: 'tas', row: 1, col: 1, marginRatio: 0.12 },
+  {
+    key: 'baju-polos',
+    row: 2,
+    col: 0,
+    pad: { top: -0.22, left: 0.02, right: 0.02, bottom: 0.02 },
+    marginRatio: 0.12,
+  },
   { key: 'celana', row: 2, col: 1, marginRatio: 0.16, centerInk: true },
 ];
 

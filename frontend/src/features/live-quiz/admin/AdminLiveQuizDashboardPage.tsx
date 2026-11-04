@@ -17,10 +17,10 @@ export function AdminLiveQuizDashboardPage() {
   });
 
   const stats = [
-    { label: 'Total kuis', value: data?.quizCount, icon: Layers },
-    { label: 'Total sesi', value: data?.sessionCount, icon: Radio },
-    { label: 'Sesi selesai', value: data?.finishedSessions, icon: ListChecks },
-    { label: 'Total peserta', value: data?.playerCount, icon: Users },
+    { label: 'Total kuis', value: data?.quizCount, icon: Layers, tone: 'blue' as const },
+    { label: 'Total sesi', value: data?.sessionCount, icon: Radio, tone: 'teal' as const },
+    { label: 'Sesi selesai', value: data?.finishedSessions, icon: ListChecks, tone: 'purple' as const },
+    { label: 'Total peserta', value: data?.playerCount, icon: Users, tone: 'amber' as const },
   ];
 
   return (
@@ -50,10 +50,12 @@ export function AdminLiveQuizDashboardPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((item) => (
-          <div key={item.label} className="admin-metric-card">
+          <div key={item.label} className="admin-metric-card" data-tone={item.tone}>
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-slate-500">{item.label}</p>
-              <item.icon className="h-5 w-5 text-brand-500" aria-hidden />
+              <span className={`te-icon-sm te-icon-${item.tone}`}>
+                <item.icon className="h-4 w-4" aria-hidden />
+              </span>
             </div>
             {isLoading ? (
               <Skeleton className="mt-3 h-8 w-16" />

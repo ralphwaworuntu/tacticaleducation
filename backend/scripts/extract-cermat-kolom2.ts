@@ -11,7 +11,7 @@ type Rect = { left: number; top: number; width: number; height: number };
 type Bounds = { minX: number; maxX: number; minY: number; maxY: number };
 type IconPad = Partial<{ left: number; top: number; right: number; bottom: number }>;
 
-/** Grid 2×3 — lewati mobil duplikat (bawah kiri) */
+/** Grid 2×3 — 6 ikon, termasuk larangan mobil kedua */
 const KOLOM2_ICONS: ReadonlyArray<{
   key: string;
   row: number;
@@ -23,6 +23,7 @@ const KOLOM2_ICONS: ReadonlyArray<{
   { key: 'larangan-jalan', row: 0, col: 0, marginRatio: 0.12 },
   { key: 'larangan-merokok', row: 0, col: 1, marginRatio: 0.12 },
   { key: 'larangan-mobil', row: 0, col: 2, marginRatio: 0.12 },
+  { key: 'larangan-mobil-2', row: 1, col: 0, marginRatio: 0.12 },
   { key: 'larangan-sampah', row: 1, col: 1, marginRatio: 0.12 },
   { key: 'larangan-kosong', row: 1, col: 2, marginRatio: 0.12 },
 ];

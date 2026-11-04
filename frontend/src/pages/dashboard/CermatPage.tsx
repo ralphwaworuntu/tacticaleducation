@@ -64,7 +64,7 @@ function getTestVariants(config: CermatConfig): Array<{ mode: CermatMode; title:
       mode: 'IMAGE',
       title: 'Tes Kecermatan Gambar Hilang',
       description:
-        `5 gambar referensi ditampilkan dengan label A-E. Tiap soal menampilkan 4 gambar — tentukan huruf gambar yang hilang. Total ${sessionInfo}.`,
+        `5 gambar referensi ditampilkan dengan label A-E. Urutan huruf diacak setiap pengerjaan. Tiap soal menampilkan 4 gambar — tentukan huruf gambar yang hilang. Total ${sessionInfo}.`,
     },
     {
       mode: 'LETTER',

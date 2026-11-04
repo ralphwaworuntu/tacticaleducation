@@ -52,9 +52,9 @@ export function StartSessionDialog({ quiz, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/60 px-4 py-8">
-      <div className="w-full max-w-3xl rounded-3xl bg-white p-6 shadow-2xl">
-        <div className="flex items-start justify-between gap-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-3 py-4 sm:px-4">
+      <div className="flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-[16px] bg-white shadow-2xl">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
           <div>
             <p className="eyebrow-label">Mulai sesi live</p>
             <h2 className="mt-1 text-xl font-bold text-slate-900">{quiz.title}</h2>
@@ -72,7 +72,7 @@ export function StartSessionDialog({ quiz, onClose }: Props) {
           </button>
         </div>
 
-        <div className="mt-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
           {settings ? (
             <SettingsForm value={settings} onChange={setSettings} />
           ) : (
@@ -80,7 +80,7 @@ export function StartSessionDialog({ quiz, onClose }: Props) {
           )}
         </div>
 
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <div className="flex shrink-0 flex-col gap-2 border-t border-slate-100 bg-white px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
           <Button variant="outline" onClick={onClose} disabled={submitting}>
             Batal
           </Button>

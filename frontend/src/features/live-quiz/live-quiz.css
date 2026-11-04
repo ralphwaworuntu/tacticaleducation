@@ -131,6 +131,12 @@
 /* ---------- Kartu jawaban ---------- */
 .lq-answer {
   position: relative;
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  color: #fff;
+  text-align: center;
   transition:
     transform var(--lq-micro) var(--lq-ease-spring),
     opacity 200ms ease,
@@ -148,6 +154,201 @@
 .lq-answer-picked {
   outline: 4px solid #fff;
   outline-offset: 2px;
+}
+
+.lq-answer-grid {
+  display: grid;
+  min-height: 0;
+  align-content: start;
+  gap: clamp(12px, 1.35vw, 20px);
+}
+
+.lq-answer-grid-host {
+  flex: 1 1 auto;
+  width: 100%;
+  align-self: stretch;
+  align-content: stretch;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: minmax(0, 1fr);
+  gap: clamp(10px, 1.2vh, 16px);
+}
+
+.lq-answer-grid-host > * {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.lq-answer-grid-host.lq-answer-grid-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.lq-host-board {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  gap: clamp(10px, 1.2vh, 16px);
+}
+
+.lq-answer-grid-player {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-content: stretch;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.lq-answer-grid-player > * {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.lq-answer-grid-player.lq-answer-grid-symbols {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lq-answer-host {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0.55rem 1rem;
+  border-radius: 1.35rem;
+}
+
+.lq-answer-player {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0.4rem 0.7rem;
+  border-radius: 1.15rem;
+}
+
+.lq-answer-badge {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.55rem;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 0.8rem;
+  background: rgba(0, 0, 0, 0.22);
+  padding: 0.18rem 0.55rem 0.18rem 0.28rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.lq-answer-host .lq-answer-badge {
+  font-size: clamp(1.2rem, 1.5vw, 1.65rem);
+}
+
+.lq-answer-player .lq-answer-badge {
+  font-size: clamp(1.05rem, 3.6vw, 1.25rem);
+}
+
+.lq-answer-badge svg {
+  width: 1.05em;
+  height: 1.05em;
+  flex-shrink: 0;
+}
+
+.lq-answer-body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  overflow: hidden;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.lq-answer-host .lq-answer-body {
+  padding: 0.2rem 4.5rem;
+  font-size: clamp(1.35rem, 2.8vh, 2.15rem);
+}
+
+.lq-answer-player .lq-answer-body {
+  padding: 0.1rem 2.8rem;
+  font-size: clamp(0.95rem, 4.2vw, 1.2rem);
+  line-height: 1.15;
+}
+
+.lq-answer-body img {
+  margin-inline: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.lq-answer-host .lq-answer-body img {
+  max-height: 3.25rem;
+}
+
+.lq-answer-player .lq-answer-body img {
+  max-height: 2.5rem;
+}
+
+.lq-answer-symbol {
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: clamp(6.5rem, 16vh, 8rem);
+}
+
+.lq-answer-player.lq-answer-symbol {
+  min-height: 0;
+}
+
+.lq-answer-symbol-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.lq-answer-host .lq-answer-symbol-stack {
+  font-size: clamp(2.4rem, 4vw, 3.4rem);
+}
+
+.lq-answer-player .lq-answer-symbol-stack {
+  font-size: clamp(1.65rem, 6.5vw, 2.15rem);
+}
+
+.lq-answer-mark {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.55rem;
+}
+
+@media (max-width: 767px) {
+  .lq-answer-grid-host {
+    flex: 0 1 auto;
+    width: 100%;
+    margin-inline: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: auto;
+  }
+
+  .lq-answer-host {
+    height: 100%;
+    min-height: 0;
+    padding: 0.4rem 0.7rem;
+  }
+
+  .lq-answer-host .lq-answer-body {
+    padding: 0.25rem 3.5rem;
+    font-size: clamp(1.25rem, 5.2vw, 1.5rem);
+  }
 }
 
 /* ---------- Animasi bantu ---------- */
@@ -238,14 +439,18 @@
 }
 .lq-beam {
   position: absolute;
-  top: -10%;
-  width: 22%;
-  height: 120%;
+  top: -8%;
+  width: 14%;
+  height: 95%;
   transform-origin: 50% 0;
-  background: linear-gradient(180deg, rgba(255, 233, 160, 0.55), transparent 85%);
-  clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%);
+  background: linear-gradient(180deg, rgba(255, 233, 160, 0.32), transparent 78%);
+  clip-path: polygon(42% 0, 58% 0, 92% 100%, 8% 100%);
   animation: lq-beam 5s ease-in-out infinite;
   pointer-events: none;
+}
+.lq-beam-soft {
+  width: 11%;
+  background: linear-gradient(180deg, rgba(255, 233, 160, 0.18), transparent 78%);
 }
 
 /* Reaksi melayang (lajur tepi). Hanya transform + opacity. */

@@ -155,7 +155,7 @@ export function AdminUsersPage() {
                         <button
                           type="button"
                           className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold ${
-                            user.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                            user.isActive ? 'status-chip status-chip-success' : 'bg-slate-100 text-slate-500'
                           } ${statusDisabled ? 'opacity-50' : ''}`}
                           disabled={statusDisabled || statusMutation.isPending}
                           onClick={() =>

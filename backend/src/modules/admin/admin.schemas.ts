@@ -166,10 +166,9 @@ const practiceSubSubCategoryBase = z.object({
 const memberSlideBase = z.object({
   title: z.string().min(3).optional(),
   subtitle: z.string().min(3).optional(),
-  imageUrl: z.string().url(),
   ctaLabel: z.string().min(2).optional(),
   ctaLink: z.string().url().optional(),
-  order: z.number().int().nonnegative().optional(),
+  order: z.coerce.number().int().nonnegative().optional(),
 });
 
 const materialBase = z.object({

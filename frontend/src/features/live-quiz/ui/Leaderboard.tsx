@@ -13,12 +13,12 @@ const RANK_STYLE: Record<number, { bar: string; badge: string; text: string }> =
 };
 
 function scaleFor(count: number, large: boolean) {
-  if (!large) return { avatar: 42, pad: 'gap-3 px-3 py-2 sm:gap-4 sm:px-4', rank: 'h-9 w-9 text-lg', name: 'text-base sm:text-lg', score: 'w-24 text-lg', crown: 'h-5 w-5' };
-  if (count <= 2) return { avatar: 96, pad: 'gap-5 px-6 py-5 sm:px-8', rank: 'h-16 w-16 text-4xl', name: 'text-3xl xl:text-5xl', score: 'w-44 text-4xl xl:text-5xl', crown: 'h-9 w-9' };
-  if (count <= 5) return { avatar: 80, pad: 'gap-4 px-5 py-4 sm:px-7', rank: 'h-14 w-14 text-3xl', name: 'text-2xl xl:text-4xl', score: 'w-40 text-3xl xl:text-4xl', crown: 'h-8 w-8' };
-  if (count <= 10) return { avatar: 64, pad: 'gap-4 px-4 py-3 sm:px-5', rank: 'h-12 w-12 text-2xl', name: 'text-xl xl:text-3xl', score: 'w-36 text-2xl xl:text-3xl', crown: 'h-7 w-7' };
-  if (count <= 20) return { avatar: 52, pad: 'gap-3 px-4 py-2.5', rank: 'h-11 w-11 text-xl', name: 'text-lg xl:text-2xl', score: 'w-32 text-xl xl:text-2xl', crown: 'h-6 w-6' };
-  return { avatar: 44, pad: 'gap-3 px-3 py-2', rank: 'h-10 w-10 text-lg', name: 'text-base xl:text-xl', score: 'w-28 text-lg xl:text-xl', crown: 'h-5 w-5' };
+  if (!large) return { avatar: 42, pad: 'gap-3 px-3 py-2 sm:gap-4 sm:px-4', rank: 'h-9 w-9 text-lg', name: 'text-base sm:text-lg', score: 'w-24 text-lg', crown: 'h-5 w-5', listGap: 'gap-3' };
+  if (count <= 2) return { avatar: 96, pad: 'gap-5 px-6 py-5 sm:px-8', rank: 'h-16 w-16 text-4xl', name: 'text-3xl xl:text-5xl', score: 'w-44 text-4xl xl:text-5xl', crown: 'h-9 w-9', listGap: 'gap-4' };
+  if (count <= 5) return { avatar: 80, pad: 'gap-4 px-5 py-4 sm:px-7', rank: 'h-14 w-14 text-3xl', name: 'text-2xl xl:text-4xl', score: 'w-40 text-3xl xl:text-4xl', crown: 'h-8 w-8', listGap: 'gap-4' };
+  if (count <= 10) return { avatar: 64, pad: 'gap-4 px-4 py-3 sm:px-5', rank: 'h-12 w-12 text-2xl', name: 'text-xl xl:text-3xl', score: 'w-36 text-2xl xl:text-3xl', crown: 'h-7 w-7', listGap: 'gap-3' };
+  if (count <= 20) return { avatar: 52, pad: 'gap-3 px-4 py-2.5', rank: 'h-11 w-11 text-xl', name: 'text-lg xl:text-2xl', score: 'w-32 text-xl xl:text-2xl', crown: 'h-6 w-6', listGap: 'gap-2' };
+  return { avatar: 40, pad: 'gap-2.5 px-3 py-1.5', rank: 'h-9 w-9 text-base', name: 'text-sm xl:text-lg', score: 'w-24 text-base xl:text-lg', crown: 'h-4 w-4', listGap: 'gap-1.5' };
 }
 
 /** TACTICAL LEADERBOARD: baris animasi spring dengan avatar, delta peringkat, dan skor yang menghitung naik. */
@@ -53,14 +53,15 @@ export function Leaderboard({
 
   const ordered = showFinal ? entries : previousOrder;
   const scale = scaleFor(entries.length, large);
-  const few = large && entries.length <= 5;
+  const compactGroup = large && entries.length <= 5;
 
   return (
     <ol
       className={cn(
         'mx-auto flex w-full min-h-0 flex-col',
-        large ? 'max-w-[min(92%,80rem)]' : 'max-w-xl',
-        few ? 'flex-1 justify-evenly gap-[clamp(0.5rem,1.4vh,1.25rem)]' : 'space-y-2 overflow-y-auto pr-1',
+        scale.listGap,
+        large ? 'max-w-[min(92%,72rem)]' : 'max-w-xl',
+        compactGroup ? 'flex-1 justify-center' : 'justify-start overflow-y-auto overscroll-contain pr-1',
         className,
       )}
     >
@@ -76,6 +77,7 @@ export function Leaderboard({
             transition={{ type: 'spring', stiffness: 260, damping: 28 }}
             className={cn(
               'relative flex items-center overflow-hidden rounded-[1.35rem] border text-white',
+              !compactGroup && 'shrink-0',
               scale.pad,
               mine ? 'border-amber-300 shadow-[0_0_0_2px_rgba(255,209,102,0.7)]' : 'border-white/10',
               gold && 'lq-rank-gold',

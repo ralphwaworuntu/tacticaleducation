@@ -60,7 +60,7 @@ export function RichText({ text, className }: { text: string; className?: string
 
 export function OptionContent({ label, imageUrl, className }: { label: string | null; imageUrl: string | null; className?: string }) {
   return (
-    <span className={cn('flex min-w-0 flex-1 flex-col gap-2 text-left', className)}>
+    <span className={cn('flex min-w-0 flex-1 flex-col items-center justify-center gap-1.5 text-center', className)}>
       {imageUrl && (
         <img src={getAssetUrl(imageUrl)} alt="" className="max-h-32 w-auto max-w-full rounded-lg bg-white/10 object-contain" />
       )}

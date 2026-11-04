@@ -141,7 +141,9 @@ export function validateQuestions(questions: ParsedQuestion[]): ConversionWarnin
       });
     }
 
-    const correctCount = question.options.filter((option) => option.isCorrect).length;
+    const correctCount = question.options.filter(
+      (option) => option.isCorrect && hasOptionContent(option),
+    ).length;
     if (correctCount === 0) {
       warnings.push({ row, field: 'correct', message: 'Kunci jawaban belum ditentukan.' });
     }
@@ -150,7 +152,7 @@ export function validateQuestions(questions: ParsedQuestion[]): ConversionWarnin
       warnings.push({
         row,
         field: 'images',
-        message: 'Soal membutuhkan gambar — isi URL gambar soal (file dari Word tidak disimpan otomatis).',
+        message: 'Gambar soal belum berhasil dipetakan otomatis — periksa hasil ekstraksi.',
       });
     }
 
@@ -158,19 +160,24 @@ export function validateQuestions(questions: ParsedQuestion[]): ConversionWarnin
       warnings.push({
         row,
         field: 'images',
-        message: 'Pembahasan membutuhkan gambar — isi URL gambar pembahasan.',
+        message: 'Gambar pembahasan belum berhasil dipetakan otomatis — periksa hasil ekstraksi.',
       });
     }
 
     const missingImageOptions = question.options
       .map((option, optionIndex) => ({ option, letter: OPTION_LETTERS[optionIndex] }))
-      .filter(({ option }) => isImageOptionLabel(option.label) && !option.imageUrl?.trim());
+      .filter(
+        ({ option }) =>
+          isImageOptionLabel(option.label) &&
+          !option.imageUrl?.trim() &&
+          !question.imageUrl?.trim(),
+      );
 
     if (missingImageOptions.length) {
       warnings.push({
         row,
         field: 'images',
-        message: `Opsi ${missingImageOptions.map((item) => item.letter).join(', ')} berbasis gambar — isi URL gambar opsi.`,
+        message: `Gambar opsi ${missingImageOptions.map((item) => item.letter).join(', ')} belum berhasil dipetakan otomatis.`,
       });
     }
   });
