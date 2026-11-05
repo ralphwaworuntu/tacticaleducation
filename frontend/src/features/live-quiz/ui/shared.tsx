@@ -4,6 +4,7 @@ import katex from 'katex';
 import confetti from 'canvas-confetti';
 import { ArrowDown, ArrowUp, Minus, Music2, Volume2, VolumeX, Wifi } from 'lucide-react';
 import { getAssetUrl } from '@/lib/media';
+import { QuizImage } from './QuizImage';
 import { cn } from '@/utils/cn';
 import { liveAudio } from '../audio';
 import 'katex/dist/katex.min.css';
@@ -58,13 +59,27 @@ export function RichText({ text, className }: { text: string; className?: string
   );
 }
 
-export function OptionContent({ label, imageUrl, className }: { label: string | null; imageUrl: string | null; className?: string }) {
+export function OptionContent({
+  label,
+  imageUrl,
+  className,
+  enlarge = false,
+}: {
+  label: string | null;
+  imageUrl: string | null;
+  className?: string;
+  enlarge?: boolean;
+}) {
+  const text = (label ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!imageUrl && !text) return null;
   return (
-    <span className={cn('flex min-w-0 flex-1 flex-col items-center justify-center gap-1.5 text-center', className)}>
-      {imageUrl && (
-        <img src={getAssetUrl(imageUrl)} alt="" className="max-h-32 w-auto max-w-full rounded-lg bg-white/10 object-contain" />
-      )}
-      {label ? <RichText text={label} /> : null}
+    <span className={cn('lq-option', imageUrl && text && 'lq-option-mixed', imageUrl && !text && 'lq-option-photo', className)}>
+      {imageUrl ? (
+        <span className="lq-option-figure">
+          <QuizImage src={getAssetUrl(imageUrl)} enlarge={enlarge} />
+        </span>
+      ) : null}
+      {text ? <RichText text={label ?? ''} /> : null}
     </span>
   );
 }

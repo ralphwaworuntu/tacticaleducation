@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Copy, Pencil, Play, Plus, Search, Trash2 } from 'lucide-react';
+import { Copy, History, Pencil, Play, Plus, Search, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -19,7 +19,9 @@ export function AdminLiveQuizListPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [toDelete, setToDelete] = useState<QuizListItem | null>(null);
+  const [confirmPermanent, setConfirmPermanent] = useState(false);
   const [toStart, setToStart] = useState<QuizListItem | null>(null);
+  const startTrigger = useRef<HTMLButtonElement | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['live-quiz', 'quizzes', search],
@@ -36,17 +38,23 @@ export function AdminLiveQuizListPage() {
   });
 
   const remove = useMutation({
-    mutationFn: (id: string) => liveQuizApi.deleteQuiz(id),
+    mutationFn: (id: string) => liveQuizApi.deleteQuiz(id, true),
     onSuccess: () => {
       toast.success('Kuis dihapus.');
       setToDelete(null);
+      setConfirmPermanent(false);
       void queryClient.invalidateQueries({ queryKey: ['live-quiz'] });
     },
     onError: (error) => {
       toast.error(getApiErrorMessage(error, 'Gagal menghapus kuis.'));
-      setToDelete(null);
     },
   });
+
+  const closeDelete = () => {
+    if (remove.isPending) return;
+    setToDelete(null);
+    setConfirmPermanent(false);
+  };
 
   return (
     <div className="page-shell">
@@ -94,15 +102,40 @@ export function AdminLiveQuizListPage() {
                   <p className="mt-1 text-xs text-slate-400">Diubah {formatDateTime(quiz.updatedAt)}</p>
                 </div>
                 <div className="mt-auto flex flex-wrap items-center gap-2">
-                  <Button size="sm" onClick={() => setToStart(quiz)} disabled={quiz.questionCount === 0}>
-                    <Play className="h-3.5 w-3.5" />
-                    Mulai sesi
-                  </Button>
                   <Button asChild size="sm" variant="outline">
                     <Link to={`/admin/live-quiz/kuis/${quiz.id}`}>
                       <Pencil className="h-3.5 w-3.5" />
-                      Edit
+                      Edit Kuis
                     </Link>
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={(event) => {
+                      startTrigger.current = event.currentTarget;
+                      setToStart(quiz);
+                    }}
+                    disabled={quiz.questionCount === 0}
+                  >
+                    <Play className="h-3.5 w-3.5" />
+                    Mulai Live Quiz
+                  </Button>
+                  <Button asChild size="sm" variant="outline">
+                    <Link to={`/admin/live-quiz/riwayat?quizId=${quiz.id}`}>
+                      <History className="h-3.5 w-3.5" />
+                      Lihat Riwayat
+                    </Link>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                    onClick={() => {
+                      setConfirmPermanent(false);
+                      setToDelete(quiz);
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Hapus Kuis
                   </Button>
                   <Button
                     size="icon"
@@ -112,15 +145,6 @@ export function AdminLiveQuizListPage() {
                     onClick={() => duplicate.mutate(quiz.id)}
                   >
                     <Copy className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-9 w-9 text-red-600 hover:bg-red-50 hover:text-red-700"
-                    title="Hapus"
-                    onClick={() => setToDelete(quiz)}
-                  >
-                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </CardContent>
@@ -136,15 +160,39 @@ export function AdminLiveQuizListPage() {
       )}
 
       <ConfirmDialog
-        open={Boolean(toDelete)}
+        open={Boolean(toDelete) && !confirmPermanent}
         title="Hapus kuis?"
-        description={`Kuis "${toDelete?.title ?? ''}" akan dihapus permanen. Kuis yang sudah pernah dimainkan tidak dapat dihapus.`}
-        confirmText="Hapus"
+        description={
+          toDelete
+            ? toDelete.sessionCount > 0
+              ? `Kuis "${toDelete.title}" punya ${toDelete.questionCount} soal dan ${toDelete.sessionCount} riwayat sesi. Langkah berikutnya adalah konfirmasi permanen. Riwayat nilai sesi kuis ini ikut terhapus. Akun siswa, kuis lain, dan sesi yang masih berjalan tidak dihapus.`
+              : `Kuis "${toDelete.title}" (${toDelete.questionCount} soal) belum punya riwayat sesi. Bank soal kuis ini akan dihapus permanen. Akun siswa tidak terpengaruh.`
+            : undefined
+        }
+        confirmText="Lanjut"
+        loading={false}
+        onConfirm={() => setConfirmPermanent(true)}
+        onCancel={closeDelete}
+      />
+      <ConfirmDialog
+        open={Boolean(toDelete) && confirmPermanent}
+        title="Hapus permanen?"
+        description={`Konfirmasi terakhir: kuis "${toDelete?.title ?? ''}" akan dihapus dan tidak bisa dikembalikan. ${
+          (toDelete?.sessionCount ?? 0) > 0 ? 'Riwayat sesi kuis ini juga dihapus. ' : ''
+        }Akun siswa tetap ada.`}
+        confirmText="Hapus permanen"
         loading={remove.isPending}
         onConfirm={() => toDelete && remove.mutate(toDelete.id)}
-        onCancel={() => setToDelete(null)}
+        onCancel={closeDelete}
       />
-      <StartSessionDialog quiz={toStart} onClose={() => setToStart(null)} />
+      <StartSessionDialog
+        quiz={toStart}
+        onClose={() => {
+          setToStart(null);
+          const trigger = startTrigger.current;
+          window.setTimeout(() => trigger?.focus(), 0);
+        }}
+      />
     </div>
   );
 }

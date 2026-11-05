@@ -1836,6 +1836,19 @@ export class LiveEngine {
     return stale.length;
   }
 
+  /**
+   * Lepas satu sesi yang sudah selesai dari memori.
+   * Sesi aktif tidak disentuh, jadi menghapus riwayat tidak memutus permainan lain.
+   */
+  releaseFinished(sessionId: string) {
+    const rt = this.runtimes.get(sessionId);
+    if (!rt || !isTerminalPhase(rt.status)) return;
+    this.clearTimer(rt);
+    rt.reactions.dispose();
+    if (rt.evictTimer) clearTimeout(rt.evictTimer);
+    this.runtimes.delete(sessionId);
+  }
+
   /** Hentikan semua timer (untuk shutdown/test). */
   shutdown() {
     for (const rt of this.runtimes.values()) {

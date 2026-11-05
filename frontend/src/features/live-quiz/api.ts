@@ -33,7 +33,9 @@ export const liveQuizApi = {
   createQuiz: (payload: QuizPayload) => apiPost<QuizDetail, QuizPayload>(`${base}/quizzes`, payload),
   updateQuiz: (id: string, payload: QuizPayload) => apiPut<QuizDetail, QuizPayload>(`${base}/quizzes/${id}`, payload),
   duplicateQuiz: (id: string) => apiPost<QuizDetail>(`${base}/quizzes/${id}/duplicate`),
-  deleteQuiz: (id: string) => apiDelete(`${base}/quizzes/${id}`),
+  deleteQuiz: (id: string, permanent = false) =>
+    apiDelete(`${base}/quizzes/${id}`, { params: permanent ? { permanent: '1' } : undefined }),
+  deleteSession: (id: string) => apiDelete(`${base}/sessions/${id}`),
   uploadImage: async (file: File) => {
     const form = new FormData();
     form.append('image', file);
@@ -48,7 +50,7 @@ export const liveQuizApi = {
       { id: string; pin: string; status: LivePhase; title: string; totalQuestions: number; join: JoinInfo },
       { quizId: string; settings?: Partial<QuizSettings> }
     >(`${base}/sessions`, { quizId, ...(settings ? { settings } : {}) }),
-  listSessions: (params: { status?: string; page?: number; pageSize?: number }) =>
+  listSessions: (params: { status?: string; quizId?: string; page?: number; pageSize?: number }) =>
     apiGet<{ total: number; page: number; pageSize: number; items: SessionListItem[] }>(`${base}/sessions`, { params }),
   sessionMeta: (id: string) => apiGet<SessionMeta>(`${base}/sessions/${id}`),
   report: (id: string) => apiGet<ReportData>(`${base}/sessions/${id}/report`),

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
 import { BarChart3, Check, Expand, Lock, LogOut, Pause, Play, SkipForward, SmilePlus, Trophy, Unlock, Users, X } from 'lucide-react';
@@ -21,6 +20,8 @@ import { GameStage, LiveBrand } from '../ui/GameStage';
 import { Leaderboard } from '../ui/Leaderboard';
 import { PodiumStage, type PodiumEvent } from '../ui/PodiumStage';
 import { ReactionLane, type ReactionLaneHandle } from '../ui/ReactionLane';
+import { QuizImage } from '../ui/QuizImage';
+import { SessionQr } from '../ui/SessionQr';
 import {
   AnimatedNumber,
   AudioUnlockHint,
@@ -122,15 +123,11 @@ function HostLobby({ state, join, onKick, view }: { state: LiveState; join: Join
         <p className="text-xs font-black uppercase tracking-[0.35em] text-sky-200">PIN Game</p>
         <p
           className="rounded-2xl bg-white/10 px-5 py-1 text-6xl font-black tracking-widest text-amber-300 sm:text-7xl"
-          aria-label={`PIN ${state.session?.pin ?? ''}`}
+          aria-label={`PIN ${join?.pin ?? state.session?.pin ?? ''}`}
         >
-          {state.session?.pin ? formatPin(state.session.pin) : '------'}
+          {join?.pin ?? state.session?.pin ? formatPin((join?.pin ?? state.session?.pin) as string) : '------'}
         </p>
-        {url && (
-          <div className="rounded-3xl bg-white p-4 shadow-2xl">
-            <QRCodeSVG value={url} size={190} level="M" marginSize={0} fgColor="#102A43" />
-          </div>
-        )}
+        {url && <SessionQr url={url} pin={(join?.pin ?? state.session?.pin) || ''} title={state.session?.title ?? 'Live Quiz'} />}
         <p className="text-sm font-semibold text-sky-100">Scan QR dengan kamera HP atau masukkan PIN.</p>
         {isLocalOnly && (
           <p className="rounded-xl bg-amber-400/20 px-3 py-2 text-xs text-amber-100">
@@ -235,28 +232,48 @@ function HostQuestion({ state, serverNow, sfx, view }: { state: LiveState; serve
   if (!payload) return null;
   const question = payload.question;
   const multi = question.type === 'MULTIPLE';
+  const promptText = (question.prompt ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
+  const optionCount = question.options.length;
+  const hostGrid =
+    optionCount === 5
+      ? 'lq-answer-grid-host-5'
+      : optionCount === 4
+        ? 'lq-answer-grid-host-4'
+        : optionCount === 3
+          ? 'lq-answer-grid-host-3'
+          : optionCount === 2
+            ? 'lq-answer-grid-host-2'
+            : optionCount >= 6
+              ? 'lq-answer-grid-host-6'
+              : 'lq-answer-grid-host-1';
 
   return (
-    <div
-      className="lq-host-board min-h-0 flex-1 text-white"
-      style={{ gridTemplateRows: `minmax(0, 2fr) repeat(${question.options.length}, minmax(0, 1fr))` }}
-    >
-      <div className="flex min-h-0 items-stretch gap-4">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-3 text-white">
+      <div className="flex max-h-[38%] shrink-0 items-stretch gap-4">
         <motion.div
           key={question.index}
           initial={view.animate ? { opacity: 0, y: -16 } : false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className="lq-glass flex min-h-0 min-w-0 flex-1 flex-col justify-center overflow-hidden rounded-[1.5rem] px-6 py-4"
+          className="lq-glass flex min-h-0 min-w-0 flex-1 flex-col justify-center overflow-y-auto rounded-[1.5rem] px-5 py-3"
         >
-          <p className="mb-2 shrink-0 text-sm font-black uppercase tracking-widest text-sky-200">
+          <p className="mb-1 shrink-0 text-sm font-black uppercase tracking-widest text-sky-200">
             Soal {question.index + 1} dari {question.total}
             {multi ? ' · pilih semua jawaban yang benar' : question.type === 'TRUE_FALSE' ? ' · benar atau salah' : ''}
             {question.weight === 'DOUBLE' ? ' · POIN 2x' : question.weight === 'NONE' ? ' · tanpa poin' : ''}
           </p>
-          <div className="text-2xl font-extrabold leading-snug xl:text-4xl">{question.prompt && <RichText text={question.prompt} />}</div>
+          <div className="text-xl font-extrabold leading-snug sm:text-2xl xl:text-3xl">{question.prompt && <RichText text={question.prompt} />}</div>
           {question.imageUrl && (
-            <img src={getAssetUrl(question.imageUrl)} alt="" className="mt-3 max-h-[42%] max-w-full rounded-xl bg-white/10 object-contain" />
+            <QuizImage
+              src={getAssetUrl(question.imageUrl)}
+              enlarge
+              className={cn(
+                'lq-question-image mx-auto',
+                !promptText && 'lq-question-image-solo',
+                promptText.length > 160 && 'lq-question-image-compact',
+              )}
+            />
           )}
         </motion.div>
         <div className="flex shrink-0 flex-col items-center justify-center gap-3">
@@ -271,17 +288,19 @@ function HostQuestion({ state, serverNow, sfx, view }: { state: LiveState; serve
         </div>
       </div>
 
-      {question.options.map((option, index) => (
-        <motion.div
-          key={option.id}
-          initial={view.animate ? { opacity: 0, y: 22 } : false}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: view.animate ? 0.1 + index * 0.06 : 0, duration: 0.3 }}
-          className="flex min-h-0 min-w-0"
-        >
-          <AnswerCard option={option} index={index} size="host" />
-        </motion.div>
-      ))}
+      <div className={cn('lq-answer-grid lq-answer-grid-host min-h-0 flex-1', hostGrid)}>
+        {question.options.map((option, index) => (
+          <motion.div
+            key={option.id}
+            initial={view.animate ? { opacity: 0, y: 22 } : false}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: view.animate ? 0.1 + index * 0.06 : 0, duration: 0.3 }}
+            className="flex min-h-0 min-w-0"
+          >
+            <AnswerCard option={option} index={index} size="host" />
+          </motion.div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -702,7 +721,7 @@ export function LiveHostPage() {
     [sfx],
   );
 
-  const { state, hostAction, serverNow } = useLiveSession({ role: 'host', sessionId, onEvent });
+  const { state, hostAction, serverNow, retry } = useLiveSession({ role: 'host', sessionId, onEvent });
   settingsRef.current = state.settings;
   useEffect(() => {
     setAnimationsAllowed(state.settings?.animationsEnabled ?? true);
@@ -765,17 +784,52 @@ export function LiveHostPage() {
   const canPause = status === 'QUESTION_RESULT' || status === 'SCORE_RESULT' || status === 'LEADERBOARD';
 
   let body: React.ReactNode = null;
-  if (state.connection === 'denied' && !state.hasSynced) {
+  if (!state.hasSynced && meta.data?.status === 'LOBBY' && meta.data.pin) {
+    const preview: LiveState = {
+      ...state,
+      session: {
+        id: meta.data.id,
+        pin: meta.data.pin,
+        title: meta.data.title,
+        totalQuestions: meta.data.totalQuestions,
+      },
+    };
+    body = (
+      <div className="flex h-full min-h-0 flex-col gap-2">
+        <p className="shrink-0 text-center text-sm font-semibold text-sky-100">
+          {state.connection === 'denied'
+            ? (state.deniedReason ?? 'Realtime belum tersambung.')
+            : 'Menyambungkan realtime… PIN dan QR sudah aktif.'}{' '}
+          <button type="button" className="font-black text-amber-300 underline" onClick={retry}>
+            Coba lagi
+          </button>
+        </p>
+        <div className="min-h-0 flex-1">
+          <HostLobby state={preview} join={join} onKick={setKickTarget} view={view} />
+        </div>
+      </div>
+    );
+  } else if (state.connection === 'denied' && !state.hasSynced) {
     body = (
       <CenterCard>
         <p className="text-xl font-bold">{state.deniedReason}</p>
-        <Link to="/admin/live-quiz" className="lq-btn lq-btn-gold mt-6 px-6 py-2">
+        <button type="button" onClick={retry} className="lq-btn lq-btn-gold mt-6 px-6 py-2">
+          Coba lagi
+        </button>
+        <Link to="/admin/live-quiz" className="mt-3 text-sm font-semibold text-sky-200 underline">
           Kembali ke Live Quiz
         </Link>
       </CenterCard>
     );
   } else if (!state.hasSynced) {
-    body = <p className="flex h-full items-center justify-center text-xl text-sky-100">Menghubungkan ke sesi…</p>;
+    body = (
+      <div className="flex h-full flex-col items-center justify-center gap-4 text-center text-xl text-sky-100">
+        <p>Menghubungkan ke sesi…</p>
+        <button type="button" onClick={retry} className="lq-btn lq-btn-gold h-11 px-6 text-base">
+          Coba lagi
+        </button>
+      </div>
+    );
   } else {
     switch (status) {
       case 'LOBBY':

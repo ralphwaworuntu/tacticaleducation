@@ -15,6 +15,8 @@ import { normalizeAvatarId } from './liveAvatars';
 import { rankPlayers } from './liveRanking';
 import { computeAccuracy } from './liveScoring';
 import { csvSafeCell } from './liveText';
+import { decideQuizDelete, sessionHistoryDeleteBlock } from './liveDeletePolicy';
+import { liveEngine } from './liveEngine';
 import type { QuizBody } from './liveQuiz.schemas';
 import type { SessionSnapshot } from './live.types';
 
@@ -191,23 +193,38 @@ export async function duplicateQuiz(id: string, userId: string) {
   return getQuiz(created.id);
 }
 
-export async function deleteQuiz(id: string) {
+export async function deleteQuiz(id: string, permanent = false) {
   const quiz = await prisma.quiz.findUnique({
     where: { id },
-    select: { id: true, _count: { select: { sessions: true } } },
+    select: { id: true, sessions: { select: { id: true, status: true } } },
   });
   if (!quiz) throw new HttpError('Kuis tidak ditemukan.', 404);
-  if (quiz._count.sessions > 0) {
-    throw new HttpError(
-      'Kuis ini sudah pernah dimainkan sehingga tidak dapat dihapus (riwayat & laporan dipertahankan). Gunakan Duplikat bila ingin versi baru.',
-      409,
-    );
-  }
-  await prisma.$transaction([
-    prisma.quizOption.deleteMany({ where: { question: { quizId: id } } }),
-    prisma.quizQuestion.deleteMany({ where: { quizId: id } }),
-    prisma.quiz.delete({ where: { id } }),
-  ]);
+  const decision = decideQuizDelete(quiz.sessions, permanent);
+  if (!decision.ok) throw new HttpError(decision.message, decision.status);
+  for (const sessionId of decision.sessionIds) liveEngine.releaseFinished(sessionId);
+  await prisma.$transaction(async (tx) => {
+    if (decision.sessionIds.length) {
+      // Hanya sesi kuis ini yang sudah selesai. Akun siswa (User) tidak ikut terhapus.
+      await tx.liveSession.deleteMany({
+        where: { id: { in: decision.sessionIds }, quizId: id, status: { in: ['FINISHED', 'CANCELLED'] } },
+      });
+    }
+    await tx.quiz.delete({ where: { id } });
+  });
+}
+
+/** Hapus satu riwayat sesi selesai. Kuis, bank soal, dan sesi lain tetap ada. */
+export async function deleteSessionHistory(id: string) {
+  const row = await prisma.liveSession.findUnique({
+    where: { id },
+    select: { id: true, status: true, quizId: true },
+  });
+  if (!row) throw new HttpError('Sesi tidak ditemukan.', 404);
+  const block = sessionHistoryDeleteBlock(row.status);
+  if (block) throw new HttpError(block, 409);
+  liveEngine.releaseFinished(row.id);
+  await prisma.liveSession.delete({ where: { id: row.id } });
+  return { deleted: true, quizId: row.quizId };
 }
 
 /* ---------------------------------------------------------------------- */
@@ -373,8 +390,9 @@ export async function getSessionMeta(id: string) {
   };
 }
 
-export async function listSessions(params: { status?: string; page: number; pageSize: number }) {
+export async function listSessions(params: { status?: string; quizId?: string; page: number; pageSize: number }) {
   const where: Prisma.LiveSessionWhereInput = {};
+  if (params.quizId) where.quizId = params.quizId;
   if (params.status === 'ACTIVE') where.status = { notIn: ['FINISHED', 'CANCELLED'] };
   else if (params.status === 'FINISHED' || params.status === 'CANCELLED') where.status = params.status;
   const [total, rows] = await prisma.$transaction([

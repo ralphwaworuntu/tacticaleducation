@@ -18,6 +18,7 @@ import {
   createQuiz,
   dashboardStats,
   deleteQuiz,
+  deleteSessionHistory,
   duplicateQuiz,
   getGlobalSettings,
   getQuiz,
@@ -66,7 +67,8 @@ liveQuizAdminRouter.post('/quizzes/:id/duplicate', async (req, res) =>
   ok(res, await duplicateQuiz(param(req, 'id'), req.user!.id), 201),
 );
 liveQuizAdminRouter.delete('/quizzes/:id', async (req, res) => {
-  await deleteQuiz(param(req, 'id'));
+  const permanent = req.query.permanent === '1' || req.query.permanent === 'true';
+  await deleteQuiz(param(req, 'id'), permanent);
   ok(res, { deleted: true });
 });
 
@@ -100,7 +102,11 @@ liveQuizAdminRouter.get('/sessions', async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 20));
   const status = typeof req.query.status === 'string' ? req.query.status : undefined;
-  ok(res, await listSessions({ page, pageSize, ...(status ? { status } : {}) }));
+  const quizId = typeof req.query.quizId === 'string' ? req.query.quizId : undefined;
+  ok(res, await listSessions({ page, pageSize, ...(status ? { status } : {}), ...(quizId ? { quizId } : {}) }));
+});
+liveQuizAdminRouter.delete('/sessions/:id', async (req, res) => {
+  ok(res, await deleteSessionHistory(param(req, 'id')));
 });
 liveQuizAdminRouter.get('/sessions/:id', async (req, res) => ok(res, await getSessionMeta(param(req, 'id'))));
 liveQuizAdminRouter.get('/sessions/:id/report', async (req, res) => ok(res, await buildReport(param(req, 'id'))));

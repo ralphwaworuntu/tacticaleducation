@@ -97,7 +97,7 @@ export function AnswerCard({
             <span>{theme.letter}</span>
           </span>
           <span className="lq-answer-body">
-            <OptionContent label={option.label} imageUrl={option.imageUrl} />
+            <OptionContent label={option.label} imageUrl={option.imageUrl} enlarge={host} />
           </span>
         </>
       )}

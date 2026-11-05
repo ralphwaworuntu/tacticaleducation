@@ -189,6 +189,44 @@ body {
     @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500;
   }
 
+  .session-settings {
+    container-type: inline-size;
+  }
+
+  .session-grid-timer,
+  .session-grid-pair,
+  .session-grid-times,
+  .session-grid-checks {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+    align-items: end;
+  }
+
+  .session-grid-checks {
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+
+  @container (min-width: 640px) {
+    .session-grid-timer,
+    .session-grid-pair,
+    .session-grid-times,
+    .session-grid-checks {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @container (min-width: 920px) {
+    .session-grid-timer {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .session-grid-times {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
   .admin-check-row {
     @apply flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-white;
   }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { API_BASE_ORIGIN } from '@/lib/api';
 import { authStore } from '@/store/auth';
@@ -346,6 +346,7 @@ export function useLiveSession(options: Options) {
   const role = options.role;
   const sessionId = options.sessionId;
   const playerToken = options.role === 'player' ? options.playerToken : '';
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     let disposed = false;
@@ -387,8 +388,15 @@ export function useLiveSession(options: Options) {
       if (best && !disposed) dispatch({ type: 'offset', offsetMs: best.offset });
     };
 
+    const askSync = () => {
+      if (disposed || !socket.connected) return;
+      socket.emit('request_sync', null, () => undefined);
+    };
+
     socket.on('connect', () => {
+      if (disposed) return;
       dispatch({ type: 'connection', status: 'connected' });
+      askSync();
       void calibrate();
     });
     socket.on('disconnect', (reason) => {
@@ -400,7 +408,9 @@ export function useLiveSession(options: Options) {
       }
     });
     socket.io.on('reconnect_attempt', () => dispatch({ type: 'connection', status: 'reconnecting' }));
+    let failures = 0;
     socket.on('connect_error', (error) => {
+      failures += 1;
       const message = error.message;
       if (message === 'unauthorized' && role === 'host' && !refreshedOnce) {
         // Token akses mungkin kedaluwarsa: panggilan REST memicu refresh otomatis lalu coba lagi.
@@ -413,17 +423,26 @@ export function useLiveSession(options: Options) {
           });
         return;
       }
-      if (!socket.active) {
+      if (!socket.active || failures >= 4) {
         const reasons: Record<string, string> = {
           unauthorized: role === 'host' ? 'Sesi login tidak valid. Silakan login ulang.' : 'Sesi permainan tidak ditemukan atau Anda sudah dikeluarkan.',
           forbidden: 'Anda bukan host sesi ini.',
           session_not_found: 'Sesi tidak ditemukan.',
         };
-        dispatch({ type: 'connection', status: 'denied', reason: reasons[message] ?? 'Tidak dapat terhubung ke server.' });
-      } else {
-        dispatch({ type: 'connection', status: 'reconnecting' });
+        dispatch({
+          type: 'connection',
+          status: 'denied',
+          reason: reasons[message] ?? 'Tidak dapat terhubung ke server live quiz. Periksa jaringan lalu coba lagi.',
+        });
+        return;
       }
+      dispatch({ type: 'connection', status: 'reconnecting' });
     });
+
+    const watchdog = window.setInterval(() => {
+      if (disposed || stateRef.current.hasSynced) return;
+      if (socket.connected) askSync();
+    }, 2000);
 
     SERVER_EVENTS.forEach((event) => {
       socket.on(event, (payload: unknown) => {
@@ -434,12 +453,13 @@ export function useLiveSession(options: Options) {
 
     return () => {
       disposed = true;
+      window.clearInterval(watchdog);
       socket.removeAllListeners();
       socket.io.removeAllListeners();
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [role, sessionId, playerToken]);
+  }, [role, sessionId, playerToken, retryKey]);
 
   const hostAction = useCallback((action: HostAction): Promise<AckResult> => {
     const socket = socketRef.current;
@@ -520,8 +540,13 @@ export function useLiveSession(options: Options) {
   /** Waktu server saat ini (ms) berdasarkan offset terkalibrasi. */
   const serverNow = useCallback(() => Date.now() + stateRef.current.offsetMs, []);
 
+  const retry = useCallback(() => {
+    dispatch({ type: 'connection', status: 'connecting' });
+    setRetryKey((key) => key + 1);
+  }, []);
+
   return useMemo(
-    () => ({ state, hostAction, submit, requestSync, serverNow, setAvatar, sendReaction }),
-    [state, hostAction, submit, requestSync, serverNow, setAvatar, sendReaction],
+    () => ({ state, hostAction, submit, requestSync, serverNow, setAvatar, sendReaction, retry }),
+    [state, hostAction, submit, requestSync, serverNow, setAvatar, sendReaction, retry],
   );
 }

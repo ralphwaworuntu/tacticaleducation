@@ -11,6 +11,7 @@ import type { ClientSettings, PublicQuestion } from '../types';
 import { useLiveSession, type LiveState } from '../useLiveSession';
 import { useMotionLevel } from '../useMotionLevel';
 import { AnswerCard, themeFor } from '../ui/AnswerCard';
+import { QuizImage } from '../ui/QuizImage';
 import { AvatarPicker } from '../ui/AvatarPicker';
 import { GameCountdown } from '../ui/Countdown';
 import { GameStage } from '../ui/GameStage';
@@ -117,6 +118,34 @@ function PlayerCountdown({ state, serverNow, sfx, view }: { state: LiveState; se
   return <GameCountdown seconds={seconds} animate={view.animate} fancy={view.fancy} compact />;
 }
 
+type PlayerAnswerLayout = 'pair' | 'stack' | 'five';
+
+function optionIsLong(option: { label: string | null; imageUrl: string | null }) {
+  if (option.imageUrl) return true;
+  const text = (option.label ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return text.length > 40;
+}
+
+/**
+ * Mode proyektor (teks disembunyikan): 4 pilihan 2×2, 5 pilihan 2+2+E di tengah.
+ * Jika teks tampil, 4 pilihan menyesuaikan panjangnya. Lima pilihan panjang tetap vertikal.
+ */
+function playerAnswerLayout(
+  options: Array<{ label: string | null; imageUrl: string | null }>,
+  hidden: boolean,
+): PlayerAnswerLayout {
+  const count = options.length;
+  if (hidden) {
+    if (count === 4) return 'pair';
+    if (count === 5) return 'five';
+    return 'stack';
+  }
+  const long = options.some(optionIsLong);
+  if (count === 4) return long ? 'stack' : 'pair';
+  if (count === 5 && !long) return 'five';
+  return 'stack';
+}
+
 function PlayerQuestion({
   state,
   serverNow,
@@ -177,6 +206,10 @@ function PlayerQuestion({
   const fraction = Math.min(1, remaining / payload.durationMs);
   const hidden = question.prompt === null && question.options.every((o) => o.label === null);
   const urgent = remaining <= 5000 && !state.questionClosed;
+  const answerLayout = playerAnswerLayout(question.options, hidden);
+  const chosenLetters = question.options
+    .flatMap((option, index) => (chosen.includes(option.id) ? [themeFor(index).letter] : []))
+    .join(' ');
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden text-white">
@@ -201,10 +234,10 @@ function PlayerQuestion({
       </div>
 
       {!hidden && (question.prompt || question.imageUrl) && (
-        <div className="lq-glass shrink-0 rounded-2xl px-3 py-2 text-base font-extrabold leading-snug">
+        <div className="lq-glass max-h-[34%] shrink-0 overflow-y-auto rounded-2xl px-3 py-2 text-base font-extrabold leading-snug">
           {question.prompt && <RichText text={question.prompt} />}
           {question.imageUrl && (
-            <img src={getAssetUrl(question.imageUrl)} alt="" className="mt-2 max-h-16 max-w-full rounded-lg bg-white/10 object-contain" />
+            <QuizImage src={getAssetUrl(question.imageUrl)} className="lq-question-image lq-question-image-player mx-auto" />
           )}
         </div>
       )}
@@ -213,7 +246,8 @@ function PlayerQuestion({
       <div
         className={cn(
           'lq-answer-grid lq-answer-grid-player',
-          hidden && question.options.length <= 4 && 'lq-answer-grid-symbols',
+          answerLayout === 'pair' && 'lq-answer-grid-player-2',
+          answerLayout === 'five' && 'lq-answer-grid-player-5',
         )}
       >
         {question.options.map((option, index) => {
@@ -225,7 +259,7 @@ function PlayerQuestion({
               initial={view.animate ? { opacity: 0, y: 18 } : false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: view.animate ? index * 0.05 : 0, duration: 0.28 }}
-              className="flex h-full min-h-0 min-w-0"
+              className={cn('flex min-w-0', answerLayout === 'stack' ? 'h-auto' : 'h-full min-h-0')}
             >
               <AnswerCard
                 option={option}
@@ -248,13 +282,24 @@ function PlayerQuestion({
 
       <div className="shrink-0 text-center text-sm font-bold" aria-live="polite">
         {sending && (
-          <span className="inline-flex items-center gap-2 text-sky-100">
-            <Loader2 className="h-4 w-4 animate-spin" /> Mengirim…
+          <span className="inline-flex items-center justify-center gap-2 text-sky-100">
+            <Loader2 className="h-4 w-4 animate-spin" /> Mengirim {chosenLetters || 'jawaban'}…
           </span>
         )}
-        {!sending && state.myAnswer !== null && <span className="text-emerald-300">✓ Jawaban terkirim. Menunggu yang lain…</span>}
+        {!sending && state.myAnswer !== null && (
+          <span className="text-emerald-300">Jawaban {chosenLetters} diterima. Menunggu yang lain…</span>
+        )}
         {!sending && state.myAnswer === null && timeIsUp && <span className="text-rose-300">Waktu habis</span>}
-        {problem && <span className="text-rose-300">{problem}</span>}
+        {!sending && state.myAnswer === null && problem && (
+          <div className="flex flex-col items-center gap-2">
+            <span className="text-rose-300">{problem}</span>
+            {!timeIsUp && chosen.length > 0 && (
+              <button type="button" onClick={() => void send(chosen)} className="h-11 rounded-full bg-white px-4 text-sm font-bold text-slate-900">
+                Coba kirim {chosenLetters} lagi
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -474,7 +519,7 @@ function PlayView({ sessionId, playerToken }: { sessionId: string; playerToken: 
     [sfx],
   );
 
-  const { state, submit, serverNow, setAvatar, sendReaction } = useLiveSession({ role: 'player', sessionId, playerToken, onEvent });
+  const { state, submit, serverNow, setAvatar, sendReaction, retry } = useLiveSession({ role: 'player', sessionId, playerToken, onEvent });
   settingsRef.current = state.settings;
   useEffect(() => {
     setSettingsForMotion(state.settings?.animationsEnabled ?? true);
@@ -528,8 +573,13 @@ function PlayView({ sessionId, playerToken }: { sessionId: string; playerToken: 
     );
   } else if (!state.hasSynced) {
     body = (
-      <div className="flex flex-1 items-center justify-center text-sky-100">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Menghubungkan…
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sky-100">
+        <p className="inline-flex items-center">
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Menghubungkan…
+        </p>
+        <button type="button" onClick={retry} className="text-sm font-bold text-amber-200 underline">
+          Coba lagi
+        </button>
       </div>
     );
   } else {
