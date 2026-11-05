@@ -7,6 +7,7 @@ import { env } from '../../config/env';
 import { prisma } from '../../config/prisma';
 import { liveEngine, type HostAction, type LiveEngine } from './liveEngine';
 import { LIVE_EVENTS, type LiveEmitter } from './live.types';
+import { isLiveSocketOriginAllowed } from './liveSocketOrigin';
 
 type SocketData =
   | { role: 'host'; sessionId: string; userId: string }
@@ -108,9 +109,11 @@ async function verifyHostToken(token: string): Promise<string | null> {
 /* ---------------------------------------------------------------------- */
 
 export function attachLiveGateway(httpServer: HttpServer, engine: LiveEngine = liveEngine) {
-  const allowedOrigins = env.FRONTEND_URL.split(',').map((origin) => origin.trim());
   const io = new Server(httpServer, {
     path: '/socket.io',
+    // Polling dulu, lalu upgrade WebSocket. Jangan kunci ke websocket saja.
+    transports: ['polling', 'websocket'],
+    allowUpgrades: true,
     serveClient: false,
     maxHttpBufferSize: 64 * 1024,
     pingInterval: 10_000,
@@ -118,7 +121,13 @@ export function attachLiveGateway(httpServer: HttpServer, engine: LiveEngine = l
     connectTimeout: 10_000,
     cors: {
       origin: (origin, callback) => {
-        if (!origin || env.NODE_ENV !== 'production' || allowedOrigins.includes(origin) || origin === env.APP_URL) {
+        if (
+          isLiveSocketOriginAllowed(origin, {
+            nodeEnv: env.NODE_ENV,
+            frontendUrl: env.FRONTEND_URL,
+            appUrl: env.APP_URL,
+          })
+        ) {
           callback(null, true);
           return;
         }

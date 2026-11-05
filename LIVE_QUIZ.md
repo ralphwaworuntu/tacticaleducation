@@ -126,23 +126,34 @@ Tidak ada variabel baru yang wajib. Pengaturan default Live Quiz disimpan di tab
 > Konfigurasi produksi **tidak diubah** oleh pekerjaan ini. Langkah di bawah untuk Anda terapkan setelah menyetujuinya.
 
 1. `git pull`, `npm ci` di backend & frontend, `npx prisma migrate deploy` (hanya menambah tabel), `npm run build` keduanya.
-2. **Nginx**: WebSocket wajib diteruskan untuk `/socket.io/` pada host API:
+2. **Nginx** pada host `api.tacticaleducation.id`. Jangan pakai `Connection "upgrade"` untuk setiap permintaan: polling HTTP harus `Connection: close`, dan hanya permintaan yang membawa header `Upgrade` yang diteruskan sebagai WebSocket.
 
 ```nginx
-location /socket.io/ {
-    proxy_pass http://127.0.0.1:5000;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_read_timeout 120s;     # > pingInterval+pingTimeout (25 dtk)
-    proxy_send_timeout 120s;
-    proxy_buffering off;
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    server_name api.tacticaleducation.id;
+
+    location /socket.io/ {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+        proxy_buffering off;
+    }
 }
 ```
+
+`FRONTEND_URL` harus memuat `https://app.tacticaleducation.id` (CORS Socket.IO juga mengizinkan origin itu secara eksplisit). Cloudflare atau proxy lain harus mengizinkan WebSocket pada subdomain API. Satu proses PM2 (bukan cluster).
 
 3. **PM2: satu instance (fork mode)**. Ruang permainan disimpan di memori proses; menjalankan beberapa instance
    (cluster) akan memecah pemain & tutor ke proses berbeda.

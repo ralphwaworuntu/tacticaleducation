@@ -353,10 +353,18 @@ export function useLiveSession(options: Options) {
     let refreshedOnce = false;
     const socket = io(`${API_BASE_ORIGIN}/live`, {
       path: '/socket.io',
-      transports: ['websocket', 'polling'],
+      // WebSocket sebagai transport pertama tidak jatuh ke polling (Engine.IO hanya mencoba transport berikutnya bila tryAllTransports).
+      // Polling yang sudah terbukti di produksi menjadi awal, lalu WebSocket dicoba lewat upgrade.
+      transports: ['polling', 'websocket'],
+      upgrade: true,
+      tryAllTransports: true,
+      rememberUpgrade: false,
       reconnection: true,
-      reconnectionDelay: 500,
-      reconnectionDelayMax: 4000,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 15000,
+      randomizationFactor: 0.5,
+      timeout: 20000,
       auth: (cb) =>
         cb(
           role === 'host'
@@ -407,10 +415,11 @@ export function useLiveSession(options: Options) {
         dispatch({ type: 'connection', status: 'reconnecting' });
       }
     });
-    socket.io.on('reconnect_attempt', () => dispatch({ type: 'connection', status: 'reconnecting' }));
-    let failures = 0;
+    socket.io.on('reconnect_attempt', () => {
+      if (!disposed) dispatch({ type: 'connection', status: 'reconnecting' });
+    });
     socket.on('connect_error', (error) => {
-      failures += 1;
+      if (disposed) return;
       const message = error.message;
       if (message === 'unauthorized' && role === 'host' && !refreshedOnce) {
         // Token akses mungkin kedaluwarsa: panggilan REST memicu refresh otomatis lalu coba lagi.
@@ -423,7 +432,8 @@ export function useLiveSession(options: Options) {
           });
         return;
       }
-      if (!socket.active || failures >= 4) {
+      const authFailure = message === 'unauthorized' || message === 'forbidden' || message === 'session_not_found';
+      if (authFailure || !socket.active) {
         const reasons: Record<string, string> = {
           unauthorized: role === 'host' ? 'Sesi login tidak valid. Silakan login ulang.' : 'Sesi permainan tidak ditemukan atau Anda sudah dikeluarkan.',
           forbidden: 'Anda bukan host sesi ini.',
