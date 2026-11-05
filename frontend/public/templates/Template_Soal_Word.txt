@@ -31,3 +31,30 @@ PANDUAN FORMAT WORD
 4. Pembahasan: PEMBAHAASAN: ... (wajib diisi).
 5. Gambar: sisipkan [GAMBAR] di teks soal atau pembahasan untuk menandai posisi gambar.
 6. Simpan sebagai .docx lalu unggah di halaman Konversi Word → CSV.
+
+---
+FORMAT ALTERNATIF (bank soal bernomor)
+
+1. Pertanyaan di sini...
+
+A. Opsi A
+B. Opsi B
+C. Opsi C
+D. Opsi D
+E. Opsi E
+
+Kunci Jawaban: B. Opsi B
+atau
+KUNCI JAWABAN   B
+
+Pembahasan:
+A. Alasan opsi A
+B. Alasan opsi B
+C. Alasan opsi C
+D. Alasan opsi D
+E. Alasan opsi E
+
+Contoh: contoh singkat (opsional)
+Kesimpulan: ringkasan jawaban
+
+Tabel "REKAP KUNCI JAWABAN" atau "REKAPITULASI KUNCI JAWABAN" di akhir dokumen tidak ikut masuk ke soal.

@@ -1,6 +1,13 @@
 import { Router } from 'express';
 import { validateResource } from '../../middlewares/validateResource';
-import { heroImageUpload, examAssetUpload, contentImageUpload, optimizeUploadedImages, wordDocUpload } from '../../config/upload';
+import {
+  heroImageUpload,
+  examAssetUpload,
+  contentImageUpload,
+  memberSlideImageUpload,
+  optimizeUploadedImages,
+  wordDocUpload,
+} from '../../config/upload';
 import {
   adminLandingOverviewController,
   createHeroSlideController,
@@ -431,8 +438,20 @@ adminRouter.post('/site/hero-slides', heroImageUpload.single('slide'),
   optimizeUploadedImages, createHeroSlideController);
 adminRouter.delete('/site/hero-slides/:id', deleteHeroSlideController);
 adminRouter.get('/dashboard/slides', listMemberSlidesController);
-adminRouter.post('/dashboard/slides', validateResource(createMemberSlideSchema), createMemberSlideController);
-adminRouter.put('/dashboard/slides/:id', validateResource(updateMemberSlideSchema), updateMemberSlideController);
+adminRouter.post(
+  '/dashboard/slides',
+  memberSlideImageUpload.single('image'),
+  optimizeUploadedImages,
+  validateResource(createMemberSlideSchema),
+  createMemberSlideController,
+);
+adminRouter.put(
+  '/dashboard/slides/:id',
+  memberSlideImageUpload.single('image'),
+  optimizeUploadedImages,
+  validateResource(updateMemberSlideSchema),
+  updateMemberSlideController,
+);
 adminRouter.delete('/dashboard/slides/:id', deleteMemberSlideController);
 adminRouter.get('/monitoring/users', adminMonitoringUsersController);
 adminRouter.get('/monitoring/users/:id', adminMonitoringUserDetailController);

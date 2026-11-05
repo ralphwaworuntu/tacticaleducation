@@ -5,7 +5,7 @@ export type CermatQuestion = {
   answer: string;
 };
 
-/** Seed per attempt — dipakai untuk urutan 10 kolom (satu permutasi, tanpa pengulangan). */
+/** Seed per attempt — dipakai untuk mengacak seluruh bank kolom. Hanya sesi yang dimainkan (totalSessions) yang mengambil kolom. */
 export type CermatAttemptSeed = {
   userId: string;
   attemptId: string;
@@ -57,18 +57,28 @@ function shuffleArray<T>(items: T[], random: () => number = Math.random): T[] {
 
 const LETTERS = Array.from({ length: 26 }, (_, idx) => String.fromCharCode(65 + idx));
 
-/** 10 kolom × 5 ikon — sesuai lembar referensi KOLOM 1–10 */
+/** Bank kolom gambar. Satu pengerjaan hanya memakai totalSessions kolom acak; sisanya tidak muncul. */
 export const CERMAT_IMAGE_COLUMNS = [
-  ['bulu-tangkis', 'bola-voly', 'sarung-tinju', 'bowling', 'sepatu'],
-  ['larangan-jalan', 'larangan-merokok', 'larangan-mobil', 'larangan-sampah', 'larangan-kosong'],
-  ['emoji-lidah', 'emoji-kacamata', 'emoji-baik', 'emoji-datar', 'emoji-senang'],
-  ['apel', 'semangka', 'anggur', 'alpukat', 'pisang'],
-  ['pesawat', 'mobil', 'kapal', 'bus', 'kereta-api'],
-  ['diagram-batang', 'panah-naik', 'donut-chart', 'diagram-turun', 'garis-naik'],
-  ['topi', 'sepatu-olahraga', 'baju', 'tas', 'celana'],
+  ['bulu-tangkis', 'bola-voly', 'sarung-tinju', 'pin-bowling', 'bowling', 'sepatu'],
+  ['larangan-jalan', 'larangan-merokok', 'larangan-mobil', 'larangan-mobil-2', 'larangan-sampah', 'larangan-kosong'],
+  ['emoji-lidah', 'emoji-kacamata', 'emoji-baik', 'emoji-senyum', 'emoji-datar', 'emoji-senang'],
+  ['apel', 'semangka', 'anggur', 'keranjang-buah', 'alpukat', 'pisang'],
+  ['pesawat', 'mobil', 'kapal', 'bus', 'kereta-api', 'taksi'],
+  ['diagram-batang', 'panah-naik', 'donut-chart', 'diagram-turun', 'diagram-lingkaran', 'garis-naik'],
+  ['topi', 'sepatu-olahraga', 'baju', 'tas', 'baju-polos', 'celana'],
   ['gitar', 'harpa', 'suling', 'drum', 'piano'],
-  ['kucing', 'ikan', 'jerapah', 'ayam', 'burung'],
+  ['kucing', 'ikan', 'jerapah', 'ayam', 'burung', 'anjing'],
   ['saturnus', 'bulan-sabit', 'bulan-purnama', 'bintang', 'matahari'],
+  ['burung-terbang', 'ayam-jago', 'jerapah-totol', 'kucing-duduk', 'ikan-badut'],
+  ['apel-daun', 'pisang-ganda', 'jeruk', 'nanas', 'semangka-biji'],
+  ['buku', 'pensil', 'penggaris', 'gunting', 'tas-sekolah'],
+  ['kulkas', 'televisi', 'lampu', 'kipas', 'kursi'],
+  ['piano-tegak', 'gitar-akustik', 'biola', 'terompet', 'drum-snare'],
+  ['kapal-feri', 'kereta-uap', 'pesawat-penumpang', 'mobil-sedan', 'sepeda'],
+  ['bola-basket', 'raket-bulu-tangkis', 'dumbbell', 'sarung-tinju-samping', 'sepatu-lari'],
+  ['panci', 'wajan', 'teko', 'blender', 'spatula'],
+  ['mawar', 'bunga-matahari', 'tulip', 'anggrek', 'kembang-sepatu'],
+  ['palu', 'gergaji', 'obeng', 'tang', 'kunci-inggris'],
 ] as const;
 
 export type CermatImageIconKey = (typeof CERMAT_IMAGE_COLUMNS)[number][number];
@@ -86,8 +96,10 @@ export function parseCermatMode(value: unknown, fallback: CermatMode = 'NUMBER')
 }
 
 /**
- * Satu permutasi 10 kolom per attempt — tiap kolom muncul tepat sekali
- * (sesi 1 → kolom ke-1 dari permutasi, … sesi 10 → kolom ke-10).
+ * Acak seluruh bank kolom sekali per attempt.
+ * Sesi 1 memakai kolom pertama hasil acak, sesi 2 kolom kedua, dan seterusnya.
+ * Attempt hanya membuat sesi sampai totalSessions, jadi kolom di luar batas itu tidak muncul
+ * dan tidak diulang. Bank yang bertambah tidak menaikkan jumlah sesi.
  */
 export function getImageColumnOrderForAttempt(seed: CermatAttemptSeed): number[] {
   const columnRng = createAttemptSeededRandom(seed, 'column-order');
@@ -115,7 +127,8 @@ function generateBaseSet(mode: CermatMode, sessionIndex = 1, seed?: CermatSessio
       : CERMAT_IMAGE_COLUMNS[Math.min(Math.max(sessionIndex, 1), CERMAT_IMAGE_COLUMNS.length) - 1] ??
         CERMAT_IMAGE_COLUMNS[0];
     const iconRng = seed ? createSessionSeededRandom(seed, 'icon-order') : Math.random;
-    return shuffleArray([...column], iconRng);
+    // Kolom 6 ikon: ambil 5 acak. Urutan A–E diacak tiap sesi dan tetap selama sesi itu.
+    return shuffleArray([...column], iconRng).slice(0, 5);
   }
   const rng = seed ? createSessionSeededRandom(seed, 'base-set') : Math.random;
   const digits = shuffleArray(Array.from({ length: 10 }, (_, idx) => idx.toString()), rng);

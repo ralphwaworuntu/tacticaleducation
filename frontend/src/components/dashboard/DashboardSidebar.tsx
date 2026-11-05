@@ -1,7 +1,6 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   BookOpen,
@@ -22,8 +21,9 @@ import {
   ScanLine,
   Users,
 } from 'lucide-react';
-import { dashboardMenu } from '@/constants/navigation';
+import { dashboardMenu, sectionContainsPath } from '@/constants/navigation';
 import { BrandMark } from '@/components/common/BrandMark';
+import { CollapsibleNavSection } from '@/components/navigation/CollapsibleNavSection';
 import { SidebarToggleButton } from '@/components/dashboard/SidebarToggleButton';
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/hooks/useAuth';
@@ -95,15 +95,6 @@ function SidebarNavLink({ to, label, end, onNavigate }: SidebarNavLinkProps) {
   );
 }
 
-function SidebarSection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div>
-      <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-[0.14em] text-brand-700/70">{title}</p>
-      <div className="space-y-1">{children}</div>
-    </div>
-  );
-}
-
 type DashboardSidebarPanelProps = {
   onNavigate?: () => void;
   showDesktopToggle?: boolean;
@@ -120,6 +111,7 @@ export function DashboardSidebarPanel({
   showMobileToggle = false,
 }: DashboardSidebarPanelProps) {
   const { user } = useAuth();
+  const location = useLocation();
   const examStatusQuery = useExamControlStatus();
   const membership = useMembershipStatus();
   const examEnabled = examStatusQuery.data?.enabled && examStatusQuery.data?.allowed;
@@ -173,13 +165,13 @@ export function DashboardSidebarPanel({
         </span>
       </div>
 
-      <nav className="sidebar-nav min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-3 py-4">
+      <nav className="sidebar-nav min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-3">
         {dashboardMenu.map((section) => {
           let items = section.items;
-          if (section.title === 'Latihan' && showCermatOnly) {
+          if (section.title === 'Pembelajaran' && showCermatOnly) {
             return null;
           }
-          if (restrictFeatures && section.title === 'Latihan') {
+          if (restrictFeatures && section.title === 'Pembelajaran') {
             items = items.filter((item) => {
               if (item.label.includes('Tryout')) return allowTryout;
               if (item.label.includes('Latihan Soal')) return allowPractice;
@@ -199,30 +191,34 @@ export function DashboardSidebarPanel({
             return null;
           }
 
+          const active =
+            sectionContainsPath(section, location.pathname) ||
+            (section.title === 'Pembelajaran' && location.pathname.startsWith('/app/ujian'));
+
           return (
-            <SidebarSection key={section.title} title={section.title}>
+            <CollapsibleNavSection key={section.title} title={section.title} active={active}>
               {items.map((item) => (
                 <SidebarNavLink key={item.to} to={item.to} label={item.label} end={item.exact} onNavigate={onNavigate} />
               ))}
-              {section.title === 'Latihan' && examEnabled && (allowTryout || allowPractice) && (
-                <div className="mt-4 border-t border-slate-100 pt-4">
-                  <p className="mb-2 px-3 text-[11px] font-bold uppercase tracking-[0.14em] text-brand-700/70">Ujian</p>
-                  <div className="space-y-1">
+              {section.title === 'Pembelajaran' && examEnabled && (allowTryout || allowPractice) && (
+                <div className="mt-3 border-t border-slate-100 pt-3">
+                  <p className="mb-1 px-3 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">Ujian</p>
+                  <div className="space-y-0.5">
                     {examSection.map((item) => (
                       <SidebarNavLink key={item.to} to={item.to} label={item.label} onNavigate={onNavigate} />
                     ))}
                   </div>
                 </div>
               )}
-            </SidebarSection>
+            </CollapsibleNavSection>
           );
         })}
 
         {showCermatOnly && (
-          <SidebarSection title="Tes Kecermatan">
+          <CollapsibleNavSection title="Tes Kecermatan" active={location.pathname.includes('kecermatan')}>
             <SidebarNavLink to="/app/tes-kecermatan" label="Tes Kecermatan" onNavigate={onNavigate} />
             <SidebarNavLink to="/app/tes-kecermatan/riwayat" label="Riwayat Kecermatan" onNavigate={onNavigate} />
-          </SidebarSection>
+          </CollapsibleNavSection>
         )}
       </nav>
 
@@ -257,10 +253,10 @@ export function DashboardSidebar() {
       <aside
         className={cn(
           'sticky top-0 hidden h-[100dvh] shrink-0 flex-col border-r border-slate-200 bg-white transition-[width] duration-300 ease-in-out lg:flex',
-          isOpen ? 'w-[17.5rem]' : 'w-0 overflow-hidden border-r-0',
+          isOpen ? 'w-64' : 'w-0 overflow-hidden border-r-0',
         )}
       >
-        <div className="flex h-full min-h-0 min-w-[17.5rem] flex-col">
+        <div className="flex h-full min-h-0 min-w-64 flex-col">
           <DashboardSidebarPanel showDesktopToggle onToggleDesktop={toggle} />
         </div>
       </aside>

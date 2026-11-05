@@ -69,13 +69,13 @@ export function AdminMemberActivationPage() {
                   </p>
                 </div>
                 <span
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                  className={
                     trx.status === 'PAID'
-                      ? 'bg-emerald-50 text-emerald-700'
+                      ? 'status-chip status-chip-success'
                       : trx.status === 'PENDING'
-                      ? 'bg-brand-50 text-brand-700'
-                      : 'bg-rose-50 text-rose-700'
-                  }`}
+                        ? 'status-chip status-chip-warning'
+                        : 'status-chip status-chip-danger'
+                  }
                 >
                   {trx.status}
                 </span>

@@ -11,7 +11,7 @@ type Rect = { left: number; top: number; width: number; height: number };
 type Bounds = { minX: number; maxX: number; minY: number; maxY: number };
 type IconPad = Partial<{ left: number; top: number; right: number; bottom: number }>;
 
-/** Grid 3×2 — lewati anjing (bawah kanan) */
+/** Grid 3×2 — 6 ikon, termasuk anjing */
 const KOLOM9_ICONS: ReadonlyArray<{
   key: string;
   row: number;
@@ -25,6 +25,7 @@ const KOLOM9_ICONS: ReadonlyArray<{
   { key: 'jerapah', row: 1, col: 0, marginRatio: 0.1 },
   { key: 'ayam', row: 1, col: 1, marginRatio: 0.1 },
   { key: 'burung', row: 2, col: 0, marginRatio: 0.1 },
+  { key: 'anjing', row: 2, col: 1, marginRatio: 0.1 },
 ];
 
 const GRID = { rows: 3, cols: 2, borderInsetRatio: 0.018, cellInsetRatio: 0.055, minArea: 20 };

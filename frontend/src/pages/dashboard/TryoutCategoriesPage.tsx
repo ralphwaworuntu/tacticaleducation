@@ -107,7 +107,7 @@ export function TryoutCategoriesPage() {
           Belum ada tryout yang tersedia.
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {categoryGroups.map((category) => {
             const totalTryouts = category.subCategories.reduce((acc, subCategory) => acc + subCategory.tryouts.length, 0);
             const cover = getAssetUrl(category.thumbnail) || '/Alumni.png';

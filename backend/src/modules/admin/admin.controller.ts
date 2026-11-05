@@ -4,7 +4,7 @@ import { nanoid } from 'nanoid';
 import { Prisma, Role } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { HttpError } from '../../middlewares/errorHandler';
-import { buildPublicUploadPath } from '../../config/upload';
+import { buildPublicUploadPath, removePublicUploadPath } from '../../config/upload';
 import { adminUpdateTransaction, getPaymentSetting, grantFreeTryoutQuota, updatePaymentSetting } from '../commerce/commerce.service';
 import { regenerateExamBlockCode } from '../exams/exam-block.service';
 import { parsePracticeCsv, parseTryoutCsv } from '../../utils/examCsv';
@@ -2256,11 +2256,14 @@ export async function listMemberSlidesController(_req: Request, res: Response, n
 }
 
 export async function createMemberSlideController(req: Request, res: Response, next: NextFunction) {
+  const imageFile = req.file as Express.Multer.File | undefined;
   try {
+    if (!imageFile) {
+      throw new HttpError('Gambar slide member wajib diunggah.', 400);
+    }
     const payload = req.body as {
       title?: string;
       subtitle?: string;
-      imageUrl: string;
       ctaLabel?: string;
       ctaLink?: string;
       order?: number;
@@ -2270,7 +2273,7 @@ export async function createMemberSlideController(req: Request, res: Response, n
       data: {
         title: payload.title ?? null,
         subtitle: payload.subtitle ?? null,
-        imageUrl: payload.imageUrl,
+        imageUrl: buildPublicUploadPath(imageFile.path),
         ctaLabel: payload.ctaLabel ?? null,
         ctaLink: payload.ctaLink ?? null,
         order: payload.order ?? fallbackOrder,
@@ -2278,17 +2281,43 @@ export async function createMemberSlideController(req: Request, res: Response, n
     });
     res.status(201).json({ status: 'success', data: slide });
   } catch (error) {
+    if (imageFile?.path) {
+      fs.promises.unlink(imageFile.path).catch(() => undefined);
+    }
     next(error);
   }
 }
 
 export async function updateMemberSlideController(req: Request, res: Response, next: NextFunction) {
+  const imageFile = req.file as Express.Multer.File | undefined;
   try {
-    ensurePayload(req.body);
+    if (!imageFile) {
+      ensurePayload(req.body);
+    }
     const id = getIdParam(req);
-    const slide = await prisma.memberOverviewSlide.update({ where: { id }, data: req.body });
+    const current = await prisma.memberOverviewSlide.findUniqueOrThrow({ where: { id } });
+    const payload = req.body as {
+      title?: string;
+      subtitle?: string;
+      ctaLabel?: string;
+      ctaLink?: string;
+      order?: number;
+    };
+    const slide = await prisma.memberOverviewSlide.update({
+      where: { id },
+      data: {
+        ...payload,
+        ...(imageFile ? { imageUrl: buildPublicUploadPath(imageFile.path) } : {}),
+      },
+    });
+    if (imageFile) {
+      await removePublicUploadPath(current.imageUrl);
+    }
     res.json({ status: 'success', data: slide });
   } catch (error) {
+    if (imageFile?.path) {
+      fs.promises.unlink(imageFile.path).catch(() => undefined);
+    }
     next(error);
   }
 }
@@ -2296,7 +2325,8 @@ export async function updateMemberSlideController(req: Request, res: Response, n
 export async function deleteMemberSlideController(req: Request, res: Response, next: NextFunction) {
   try {
     const id = getIdParam(req);
-    await prisma.memberOverviewSlide.delete({ where: { id } });
+    const slide = await prisma.memberOverviewSlide.delete({ where: { id } });
+    await removePublicUploadPath(slide.imageUrl);
     res.status(204).send();
   } catch (error) {
     next(error);

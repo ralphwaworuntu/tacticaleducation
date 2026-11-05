@@ -13,7 +13,7 @@ type Bounds = { minX: number; maxX: number; minY: number; maxY: number };
 
 type IconPad = Partial<{ left: number; top: number; right: number; bottom: number }>;
 
-/** Slot 3×2 — lewati pin+bola (slot 3) */
+/** Slot 3×2 — 6 ikon, termasuk pin+bola */
 const KOLOM1_ICONS: ReadonlyArray<{
   key: string;
   row: number;
@@ -26,6 +26,7 @@ const KOLOM1_ICONS: ReadonlyArray<{
   { key: 'bulu-tangkis', row: 0, col: 0 },
   { key: 'bola-voly', row: 0, col: 1 },
   { key: 'sarung-tinju', row: 0, col: 2 },
+  { key: 'pin-bowling', row: 1, col: 0 },
   { key: 'bowling', row: 1, col: 1 },
   {
     key: 'sepatu',

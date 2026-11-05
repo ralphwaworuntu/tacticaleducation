@@ -10,6 +10,8 @@ import { contactRouter } from '../modules/contact/contact.routes';
 import { adminRouter } from '../modules/admin/admin.routes';
 import { calculatorsRouter } from '../modules/calculators/calculators.routes';
 import { authenticate, authorize } from '../middlewares/auth';
+import { liveQuizAdminRouter } from '../modules/live-quiz/liveQuiz.admin.routes';
+import { liveQuizPublicRouter } from '../modules/live-quiz/liveQuiz.public.routes';
 
 export const router = Router();
 
@@ -27,4 +29,6 @@ router.use('/commerce', commerceRouter);
 router.use('/referrals', referralsRouter);
 router.use('/contact', contactRouter);
 router.use('/calculators', calculatorsRouter);
+router.use('/live', liveQuizPublicRouter);
+router.use('/admin/live-quiz', authenticate, authorize(['ADMIN']), liveQuizAdminRouter);
 router.use('/admin', authenticate, authorize(['ADMIN']), adminRouter);

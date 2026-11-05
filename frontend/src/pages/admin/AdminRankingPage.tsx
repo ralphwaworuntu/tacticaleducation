@@ -169,15 +169,15 @@ export function AdminRankingPage() {
                         <div className="text-xs text-slate-500">{item.user.email}</div>
                       </td>
                       <td>
-                        <div className="font-semibold text-slate-900">{item.tryoutAvg.toFixed(1)}%</div>
+                        <div className="font-semibold text-accent-amber">{item.tryoutAvg.toFixed(1)}%</div>
                         <div className="text-xs text-slate-500">{item.tryoutCount} sesi</div>
                       </td>
                       <td>
-                        <div className="font-semibold text-slate-900">{item.practiceAvg.toFixed(1)}%</div>
+                        <div className="font-semibold text-accent-amber">{item.practiceAvg.toFixed(1)}%</div>
                         <div className="text-xs text-slate-500">{item.practiceCount} sesi</div>
                       </td>
                       <td>
-                        <div className="font-semibold text-slate-900">{item.cermatAvg.toFixed(1)}%</div>
+                        <div className="font-semibold text-accent-amber">{item.cermatAvg.toFixed(1)}%</div>
                         <div className="text-xs text-slate-500">{item.cermatCount} sesi</div>
                       </td>
                     </tr>
@@ -210,7 +210,7 @@ export function AdminRankingPage() {
                     <div className="mt-2 text-xs text-slate-500">
                       Mulai {toInputDateTime(item.startedAt)} - Selesai {item.completedAt ? toInputDateTime(item.completedAt) : '-'}
                     </div>
-                    <div className="mt-2 font-semibold">{(item.score ?? 0).toFixed(1)}%</div>
+                    <div className="mt-2 font-semibold text-accent-amber">{(item.score ?? 0).toFixed(1)}%</div>
                   </div>
                 ))}
                 {!data?.tryouts?.length && <p className="text-sm text-slate-500">Belum ada data tryout.</p>}
@@ -232,7 +232,7 @@ export function AdminRankingPage() {
                     <div className="mt-2 text-xs text-slate-500">
                       Mulai {toInputDateTime(item.createdAt)} - Selesai {item.completedAt ? toInputDateTime(item.completedAt) : '-'}
                     </div>
-                    <div className="mt-2 font-semibold">{(item.score ?? 0).toFixed(1)}%</div>
+                    <div className="mt-2 font-semibold text-accent-amber">{(item.score ?? 0).toFixed(1)}%</div>
                   </div>
                 ))}
                 {!data?.practices?.length && <p className="text-sm text-slate-500">Belum ada data latihan.</p>}
@@ -254,7 +254,7 @@ export function AdminRankingPage() {
                     <div className="mt-2 text-xs text-slate-500">
                       Mulai {toInputDateTime(item.startedAt)} - Selesai {item.finishedAt ? toInputDateTime(item.finishedAt) : '-'}
                     </div>
-                    <div className="mt-2 font-semibold">{(item.averageScore ?? 0).toFixed(1)}%</div>
+                    <div className="mt-2 font-semibold text-accent-amber">{(item.averageScore ?? 0).toFixed(1)}%</div>
                   </div>
                 ))}
                 {!data?.cermat?.length && <p className="text-sm text-slate-500">Belum ada data kecermatan.</p>}

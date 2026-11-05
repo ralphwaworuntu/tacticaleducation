@@ -142,19 +142,19 @@ export function AdminReportingPage() {
 
       {summary && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="admin-metric-card">
+          <div className="admin-metric-card" data-tone="blue">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Total Member</p>
             <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
               {summary.members.toLocaleString('id-ID')}
             </p>
           </div>
-          <div className="admin-metric-card">
+          <div className="admin-metric-card" data-tone="purple">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kategori & Soal Tryout</p>
             <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
               {summary.tryoutCategories} / {summary.tryoutQuestions}
             </p>
           </div>
-          <div className="admin-metric-card">
+          <div className="admin-metric-card" data-tone="purple">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Kategori & Soal Latihan</p>
             <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">
               {summary.practiceCategories} / {summary.practiceQuestions}
@@ -240,8 +240,8 @@ export function AdminReportingPage() {
                       <span
                         className={
                           user.isActive
-                            ? 'rounded-lg bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700'
-                            : 'rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500'
+                            ? 'status-chip status-chip-success'
+                            : 'status-chip bg-slate-100 text-slate-500'
                         }
                       >
                         {user.isActive ? 'Aktif' : 'Nonaktif'}

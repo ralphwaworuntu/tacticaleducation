@@ -52,7 +52,7 @@ type ConvertResponse = {
   questionCount: number;
 };
 
-/** Hanya info deteksi otomatis yang tidak memblokir unduh. Error gambar (URL wajib) bersifat blocking. */
+/** Info deteksi otomatis tidak memblokir unduh; gambar yang gagal dipetakan tetap blocking. */
 const NON_BLOCKING_WARNING_FIELDS = new Set(['auto']);
 
 const IMAGE_OPTION_LABEL = /^gambar\s*[a-e]$/i;
@@ -104,7 +104,9 @@ function validateQuestionsLocal(questions: ParsedQuestion[]): ConversionWarning[
       });
     }
 
-    const correctCount = question.options.filter((option) => option.isCorrect).length;
+    const correctCount = question.options.filter(
+      (option) => option.isCorrect && (option.label?.trim() || option.imageUrl?.trim()),
+    ).length;
     if (correctCount === 0) {
       warnings.push({ row, field: 'correct', message: 'Kunci jawaban belum ditentukan.' });
     }
@@ -113,7 +115,7 @@ function validateQuestionsLocal(questions: ParsedQuestion[]): ConversionWarning[
       warnings.push({
         row,
         field: 'images',
-        message: 'Soal membutuhkan gambar — isi URL gambar soal (file dari Word tidak disimpan otomatis).',
+        message: 'Gambar soal belum berhasil dipetakan — pilih hasil ekstraksi atau isi URL koreksi.',
       });
     }
 
@@ -121,19 +123,24 @@ function validateQuestionsLocal(questions: ParsedQuestion[]): ConversionWarning[
       warnings.push({
         row,
         field: 'images',
-        message: 'Pembahasan membutuhkan gambar — isi URL gambar pembahasan.',
+        message: 'Gambar pembahasan belum berhasil dipetakan — pilih hasil ekstraksi atau isi URL koreksi.',
       });
     }
 
     const missingImageOptions = question.options
       .map((option, optionIndex) => ({ option, letter: OPTION_LABELS[optionIndex] }))
-      .filter(({ option }) => IMAGE_OPTION_LABEL.test((option.label ?? '').trim()) && !option.imageUrl?.trim());
+      .filter(
+        ({ option }) =>
+          IMAGE_OPTION_LABEL.test((option.label ?? '').trim()) &&
+          !option.imageUrl?.trim() &&
+          !question.imageUrl?.trim(),
+      );
 
     if (missingImageOptions.length) {
       warnings.push({
         row,
         field: 'images',
-        message: `Opsi ${missingImageOptions.map((item) => item.letter).join(', ')} berbasis gambar — isi URL gambar opsi.`,
+        message: `Gambar opsi ${missingImageOptions.map((item) => item.letter).join(', ')} belum berhasil dipetakan.`,
       });
     }
   });
@@ -301,8 +308,8 @@ export function AdminWordConverterPage() {
         ...fromServer,
         {
           row: 0,
-          field: 'images',
-          message: `Dokumen berisi ${embeddedImageCount} gambar. File dari Word tidak disimpan otomatis — isi URL gambar di kolom yang diminta.`,
+          field: 'auto',
+          message: `${embeddedImageCount} gambar dari Word sudah diunggah dan dipetakan otomatis.`,
         },
       ];
     }
@@ -418,7 +425,7 @@ export function AdminWordConverterPage() {
       } else if (hasBlocking) {
         // Error dokumen (mis. gambar tertanam) tanpa error baris soal spesifik.
         toast.warning(
-          `${result.questionCount} soal terdeteksi. Ada catatan penting — isi URL gambar jika diminta, lalu periksa preview.`,
+          `${result.questionCount} soal terdeteksi. Ada gambar yang perlu diperiksa pemetaannya di preview.`,
         );
       } else if (infoOnly) {
         // field "auto" = info deteksi format, bukan kesalahan soal.
@@ -496,7 +503,7 @@ export function AdminWordConverterPage() {
       if (blocking.length) {
         setShowErrorPanel(true);
         setErrorPanelOpen(true);
-        toast.error('Masih ada error. Isi URL gambar / perbaiki soal sebelum unduh CSV.');
+        toast.error('Masih ada error. Periksa pemetaan gambar atau perbaiki soal sebelum unduh CSV.');
         const firstRow = blocking.find((warning) => warning.row > 0)?.row;
         if (firstRow) scrollToQuestion(firstRow);
         return;
@@ -548,7 +555,8 @@ export function AdminWordConverterPage() {
             <p className="mt-2 text-xs text-slate-500">
               Sistem menganalisis dokumen secara otomatis — urutan pertanyaan, opsi, kunci, dan pembahasan boleh acak.
               Minimal wajib ada opsi A–E dan kunci jawaban (mis. <strong>Kunci: B</strong> atau <strong>Jawab: C</strong>).
-              Foto memakai <strong>link URL</strong> (https://...), bukan upload file — tempel di preview per soal/opsi/pembahasan.
+              Gambar yang tertanam di Word akan diunggah dan dipetakan otomatis ke soal, opsi, atau pembahasan.
+              Kolom URL di preview hanya diperlukan untuk koreksi manual.
             </p>
             <p className="font-semibold text-slate-800">Contoh format (bebas urutan):</p>
             <pre className="mt-1 overflow-x-auto whitespace-pre-wrap rounded-lg bg-white p-3 text-xs text-slate-700">{`1. Pertanyaan bernomor...
@@ -601,7 +609,7 @@ Kunci Jawaban: B`}</pre>
                   size="sm"
                   onClick={handleDownloadCsv}
                   disabled={isDownloading || hasBlockingWarnings}
-                  title={hasBlockingWarnings ? 'Perbaiki error (termasuk URL gambar) sebelum unduh' : undefined}
+                  title={hasBlockingWarnings ? 'Perbaiki error dan pemetaan gambar sebelum unduh' : undefined}
                 >
                   <Download className="mr-1.5 h-3.5 w-3.5" />
                   {isDownloading ? 'Menyiapkan...' : 'Download CSV'}
@@ -762,14 +770,13 @@ Kunci Jawaban: B`}</pre>
             )}
 
             {embeddedImageCount > 0 && (
-              <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:px-6">
+              <div className="border-b border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950 sm:px-6">
                 <p className="font-semibold">
-                  <AlertTriangle className="mr-1.5 inline h-4 w-4" />
-                  {embeddedImageCount} gambar terdeteksi di Word — URL wajib diisi
+                  <CheckCircle2 className="mr-1.5 inline h-4 w-4" />
+                  {embeddedImageCount} gambar Word berhasil diunggah otomatis
                 </p>
-                <p className="mt-1 text-xs text-amber-900/90">
-                  File gambar tidak disimpan otomatis agar storage server tidak penuh. Unggah gambar ke hosting
-                  (Drive/Imgur/CDN), lalu tempel URL di kolom gambar soal, opsi, atau pembahasan yang diminta.
+                <p className="mt-1 text-xs text-emerald-900/90">
+                  Periksa preview untuk memastikan setiap gambar sudah berada pada soal, opsi, atau pembahasan yang tepat.
                 </p>
               </div>
             )}

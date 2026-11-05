@@ -14,6 +14,9 @@ const avatarRoot = path.join(uploadsRoot, 'avatars');
 const examCoverRoot = path.join(uploadsRoot, 'exams', 'covers');
 const examCsvRoot = path.join(uploadsRoot, 'exams', 'questions');
 const examDocxRoot = path.join(uploadsRoot, 'exams', 'docx');
+export const examWordAssetsRoot = path.join(uploadsRoot, 'exams', 'word-assets');
+const memberSlideRoot = path.join(uploadsRoot, 'member-slides');
+const liveQuizRoot = path.join(uploadsRoot, 'live-quiz');
 
 const normalizePath = (value: string) => value.replace(/\\/g, '/');
 
@@ -72,6 +75,15 @@ export function buildPublicUploadPath(fullPath: string) {
     return `/uploads${relative}`;
   }
   return `/uploads/${path.basename(fullPath)}`;
+}
+
+export async function removePublicUploadPath(publicPath?: string | null) {
+  if (!publicPath?.startsWith('/uploads/')) return;
+  const relative = publicPath.slice('/uploads/'.length).replace(/\//g, path.sep);
+  const fullPath = path.resolve(uploadsRoot, relative);
+  const normalizedRoot = `${path.resolve(uploadsRoot)}${path.sep}`;
+  if (!fullPath.startsWith(normalizedRoot)) return;
+  await fs.promises.unlink(fullPath).catch(() => undefined);
 }
 
 export const paymentProofUpload = multer({
@@ -150,6 +162,32 @@ export const contentImageUpload = multer({
   },
   limits: {
     fileSize: 4 * 1024 * 1024,
+  },
+});
+
+export const memberSlideImageUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      fs.mkdirSync(memberSlideRoot, { recursive: true });
+      cb(null, memberSlideRoot);
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const base = path.basename(file.originalname, ext) || 'member-slide';
+      const safeBase = slugify(base, { lower: true, strict: true }) || 'member-slide';
+      cb(null, `${safeBase}-${Date.now()}${ext}`);
+    },
+  }),
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new HttpError('Gunakan gambar JPG, PNG, atau WEBP untuk slide member.', 400));
+    }
+  },
+  limits: {
+    fileSize: 8 * 1024 * 1024,
   },
 });
 
@@ -247,5 +285,29 @@ export const examAssetUpload = multer({
   },
   limits: {
     fileSize: 5 * 1024 * 1024,
+  },
+});
+
+export const liveQuizImageUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      fs.mkdirSync(liveQuizRoot, { recursive: true });
+      cb(null, liveQuizRoot);
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `live-${Date.now()}-${Math.round(Math.random() * 1e6)}${ext}`);
+    },
+  }),
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new HttpError('Gunakan gambar JPG, PNG, atau WEBP.', 400));
+    }
+  },
+  limits: {
+    fileSize: 4 * 1024 * 1024,
   },
 });

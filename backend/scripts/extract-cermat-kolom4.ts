@@ -11,7 +11,7 @@ type Rect = { left: number; top: number; width: number; height: number };
 type Bounds = { minX: number; maxX: number; minY: number; maxY: number };
 type IconPad = Partial<{ left: number; top: number; right: number; bottom: number }>;
 
-/** Grid 2×3 — lewati keranjang buah (bawah kiri) */
+/** Grid 2×3 — 6 ikon, termasuk keranjang buah */
 const KOLOM4_ICONS: ReadonlyArray<{
   key: string;
   row: number;
@@ -23,6 +23,7 @@ const KOLOM4_ICONS: ReadonlyArray<{
   { key: 'apel', row: 0, col: 0, marginRatio: 0.12 },
   { key: 'semangka', row: 0, col: 1, marginRatio: 0.12 },
   { key: 'anggur', row: 0, col: 2, marginRatio: 0.12 },
+  { key: 'keranjang-buah', row: 1, col: 0, marginRatio: 0.12 },
   { key: 'alpukat', row: 1, col: 1, marginRatio: 0.12 },
   { key: 'pisang', row: 1, col: 2, marginRatio: 0.12 },
 ];

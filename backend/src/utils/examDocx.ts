@@ -1,10 +1,12 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import mammoth from 'mammoth';
-import JSZip from 'jszip';
+import sharp from 'sharp';
 import WordExtractor from 'word-extractor';
 import type { ConversionWarning, ParsedQuestion } from './examImport';
-import { isImageOptionLabel, validateQuestions } from './examImport';
+import { validateQuestions } from './examImport';
+import { buildPublicUploadPath, examWordAssetsRoot } from '../config/upload';
 
 const OPTION_LINE = /^(?:\(([A-Ea-e])\)|([A-Ea-e])[.)]|([A-Ea-e])[:：=\-])\s*(.+)$/i;
 const SOAL_SPLIT = /(?:^|\n)\s*(?:\[)?SOAL\s*(\d+)(?:\])?\s*(?:\n|$)/gi;
@@ -12,9 +14,12 @@ const KUNCI_LINE = /^(?:KUNCI(?:\s*JAWABAN)?|Kunci\s*Jawaban|JAWABAN|Jawaban(?:\
 const PEMBAHASAN_LINE = /^(?:PEMBAHASAN|Pembahasan|Penjelasan|PENJELASAN|Alasan)\s*[:：=\-]?\s*(.*)$/i;
 /** Deteksi kunci jawaban — variasi label & tanda baca. */
 const FLEXIBLE_KUNCI = /(?:Kunci(?:\s*Jawaban)?|KUNCI(?:\s*JAWABAN)?|Jawaban(?:\s*Benar)?|Jawab|Answer|Key)\s*[:：=\-]?\s*([A-Ea-e])\b/gi;
-const PEMBAHASAN_HEADER = /(?:Pembahasan|PEMBAHASAN|Penjelasan|PENJELASAN|Alasan|Discuss)\s*[:：=\-]?\s*/i;
+const PEMBAHASAN_HEADER =
+  /(?:Pembahasan|Pembhasan|Pemabahsan|Penjelasan|Alasan|Discuss)(?:\s+(?:singkat(?:\s*(?:&|dan)\s*jelas)?|final(?:\s*(?:&|dan)\s*benar)?|benar\s*(?:&|dan)\s*urut))?(?:\s*\([^)]*\))?\s*[:：=\-]?\s*/i;
 const GAMBAR_MARKER = /\[GAMBAR\]/gi;
-const NUMBERED_QUESTION_START = /(?:^|\n)\s*(\d+)\.\s+/g;
+const WORD_IMAGE_MARKER = /\[\[WORD_IMAGE:(\d+)\]\]/g;
+const NUMBERED_QUESTION_START =
+  /(?:^|\n)\s*(?:No\.\s*)?(\d{1,3})(?:\.(?:\s+|(?=[A-ZÀ-Ú][^\n]{20,}))|\s*\n)/gi;
 const JAWAB_IN_BLOCK = /(?:^|\n)\s*Jawab\s*[:：=\-]?\s*([A-Ea-e])\b/i;
 const NEXT_NUMBERED_QUESTION = /\n\s*(\d+)\.\s+\S/;
 const NEXT_QUESTION_HINT = /\n\n([^\n]{20,}(?:\?|…|\.{3}))\s*\n+\s*(?:\(?[A-Ea-e][)\].]|A[.)]\s)/;
@@ -27,19 +32,36 @@ const OPTION_LETTERS = ['A', 'B', 'C', 'D', 'E'] as const;
 type ParseDocxResult = {
   questions: ParsedQuestion[];
   warnings: ConversionWarning[];
-  /** Selalu kosong — gambar Word tidak disimpan ke server. */
+  /** Path publik gambar Word yang sudah disimpan otomatis. */
   extractedImages: string[];
   embeddedImageCount: number;
+};
+
+type ExtractedWordContent = {
+  text: string;
+  imageUrls: string[];
+  assetDirectory: string | null;
 };
 
 function normalizeText(value: string) {
   return value
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
+    .replace(/(^|\n)\s*No\.\s*(\d{1,3})(?!\.)\s+/gi, '$1$2. ')
     .replace(/\u00a0/g, ' ')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+/**
+ * Bank soal Tactical Edukasi menutup naskah dengan tabel "REKAP KUNCI JAWABAN".
+ * Tabel itu bukan bagian soal; jika ikut terbawa, kunci seluruh paket masuk ke pembahasan soal terakhir.
+ */
+function stripAnswerKeyRecap(text: string): string {
+  const index = text.search(/(?:^|\n)[ \t]*(?:REKAPITULASI|REKAP)\s+KUNCI\s+JAWABAN\b/i);
+  if (index <= 0) return text;
+  return text.slice(0, index).trim();
 }
 
 function findNextQuestionStart(text: string): number {
@@ -123,6 +145,7 @@ function extractAnswerKeyFromPembahasan(explanation: string): string | null {
 
   // Huruf kunci boleh menempel teks berikutnya (mis. "ideal: CPilihan..." / "C.utara").
   const patterns = [
+    /^\s*([A-Ea-e])(?:\b|[.)])/i,
     /(?:➡️|→)\s*([A-Ea-e])(?:\s*[\.:)（]|\s+\d|\s*$)/i,
     /(?:✅|👉)\s*Jawaban\s*(?:benar\s*)?[:：]?\s*([A-Ea-e])(?:\s*dan\s*([A-Ea-e]))?/i,
     /Jawaban\s*benar\s*[:：]?\s*([A-Ea-e])(?:\s*dan\s*([A-Ea-e]))?/i,
@@ -134,6 +157,8 @@ function extractAnswerKeyFromPembahasan(explanation: string): string | null {
     /Pilihan\s*([A-Ea-e])\s*paling\s*ideal\b/i,
     /Jawaban\s*([A-Ea-e])\s*(?:dinilai|paling\s*sesuai|paling\s*tepat|paling\s*ideal|paling\s*baik)\b/i,
     /(?:dari\s+opsi[^.]*adalah\s*|gambar\s+\w+\s+adalah\s*)([A-Ea-e])\b/i,
+    /\b(?:adalah|ialah|hasilnya)\s*(?:opsi\s*)?([A-Ea-e])(?:\b|[.)])/i,
+    /(?:=|adalah)\s*([A-Ea-e])\.\s*/i,
     /\b\d+\s+bangunan\s*\(\s*([A-Ea-e])\s*\)/i,
     /\(\s*([A-Ea-e])\s*\)\s*[:：]/i,
     /Jawaban\s*([A-Ea-e])(?![A-Ea-e])/i,
@@ -169,7 +194,21 @@ function scrubJawabanFromOptions(options: ParsedQuestion['options']): ParsedQues
 
 function splitNumberedPembahasanBlocks(text: string): Array<{ order: number; body: string }> {
   const normalized = normalizeText(text);
-  const matches = [...normalized.matchAll(NUMBERED_QUESTION_START)];
+  const allMatches = [...normalized.matchAll(NUMBERED_QUESTION_START)];
+  const matches: RegExpMatchArray[] = [];
+  let lastOrder = 0;
+  for (const match of allMatches) {
+    const order = Number(match[1]);
+    if (!order) continue;
+    if (
+      lastOrder === 0 ||
+      (order > lastOrder && order <= lastOrder + 2) ||
+      (order === lastOrder && order >= 90)
+    ) {
+      matches.push(match);
+      lastOrder = order;
+    }
+  }
   if (!matches.length) return [];
 
   const blocks: Array<{ order: number; body: string }> = [];
@@ -178,7 +217,12 @@ function splitNumberedPembahasanBlocks(text: string): Array<{ order: number; bod
     const start = (match.index ?? 0) + match[0].length;
     const end = matches[index + 1]?.index ?? normalized.length;
     const body = normalized.slice(start, end).trim();
-    if (body && /Pembahasan\s*[:：]/i.test(body)) {
+    if (
+      body &&
+      (/(?:Pembahasan|Pembhasan|Pemabahsan)\b/i.test(body) ||
+        blockHasMcqOptions(body) ||
+        countFilledOptions(extractBestOptions(body)) >= 2)
+    ) {
       blocks.push({ order, body });
     }
   });
@@ -197,18 +241,25 @@ function parseYaTidakInlineOptions(text: string): ParsedQuestion['options'] | nu
 
 function parseNumberedPembahasanBlock(order: number, body: string, imageQueue: string[]): ParsedQuestion | null {
   // Izinkan menempel: "TIDAKPembahasan:" (tanpa newline).
-  const pembahasanMatch = body.match(/Pembahasan\s*[:：]?\s*/i);
-  if (!pembahasanMatch || pembahasanMatch.index === undefined) return null;
+  const pembahasanMatch = body.match(PEMBAHASAN_HEADER);
+  let rawBefore = '';
+  let explanation = '';
+  if (pembahasanMatch?.index !== undefined) {
+    rawBefore = body.slice(0, pembahasanMatch.index).trim();
+    explanation = body.slice(pembahasanMatch.index + pembahasanMatch[0].length).trim();
+  } else {
+    const lines = body.split('\n');
+    let optionEnd = -1;
+    lines.forEach((line, index) => {
+      if (optionEnd < 0 && /(?:^|\s)E[.)]\s*\S/i.test(line)) optionEnd = index;
+    });
+    if (optionEnd < 0) return null;
+    rawBefore = lines.slice(0, optionEnd + 1).join('\n').trim();
+    explanation = lines.slice(optionEnd + 1).join('\n').trim();
+  }
 
-  const rawBefore = body.slice(0, pembahasanMatch.index).trim();
   const inlineJawaban = extractInlineJawabanKey(rawBefore);
   const before = inlineJawaban.clean;
-  let explanation = body.slice(pembahasanMatch.index + pembahasanMatch[0].length).trim();
-  // Hindari menyeret nomor soal berikutnya ke pembahasan.
-  const nextNumbered = explanation.search(/\n\s*\d+\.\s+/);
-  if (nextNumbered >= 0) {
-    explanation = explanation.slice(0, nextNumbered).trim();
-  }
   // Rapikan teks Word yang menempel: "ideal: CPilihan" / "YAMenunjukkan"
   explanation = explanation
     .replace(/(Jawaban\s*paling\s*ideal\s*[:：]?\s*[A-Ea-e])(?=[A-ZÀ-ú])/gi, '$1. ')
@@ -429,6 +480,197 @@ function parseNoSoalKunciFormat(text: string, imageQueue: string[]): ParsedQuest
   }
 
   return questions;
+}
+
+/**
+ * Format bank soal bernomor dengan kunci eksplisit, mis. "1. Soal… / A. xB. yC. z… /
+ * Kunci Jawaban: B. teks / Pembahasan: …". Opsi A–E boleh menempel dalam satu baris.
+ */
+/** "Kunci Jawaban: B", "Kunci: B", atau "KUNCI JAWABAN   C" (spasi, tanpa titik dua). */
+const KUNCI_LABEL_INLINE = /(?<![A-Za-z])Kunci(?:\s+Jawaban)?(?:\s*[:：=\-]\s*|\s+)([A-Ea-e])(?![A-Za-z])/i;
+const PEMBAHASAN_LABEL_LINE = /(?:^|\n)[ \t]*(?:Pembahasan|PEMBAHASAN|Penjelasan|PENJELASAN)[ \t]*[:：]?[ \t]*/;
+const SECTION_HEADING_LINE = /^[ \t]*(?:TINGKAT|LEVEL|BAGIAN|KATEGORI)[ \t]+\S.*$/i;
+
+type SequentialMarkers = Array<{ letter: string; index: number; end: number }>;
+
+/** Cari rangkaian A→E terbaik di dalam segmen (mulai dari penanda "A" terakhir yang membentuk urutan terpanjang). */
+function pickBestOptionMarkers(segment: string): SequentialMarkers {
+  const allMarkers = findAllOptionMarkers(segment);
+  let best: SequentialMarkers = [];
+
+  for (let i = 0; i < allMarkers.length; i += 1) {
+    if (allMarkers[i]?.letter !== 'A') continue;
+
+    const picked: SequentialMarkers = [allMarkers[i]!];
+    let expected = 1;
+    let lastEnd = allMarkers[i]!.end;
+
+    for (let j = i + 1; j < allMarkers.length && expected < OPTION_LETTERS.length; j += 1) {
+      const marker = allMarkers[j]!;
+      if (marker.letter !== OPTION_LETTERS[expected]) continue;
+      if (marker.index < lastEnd - 1) continue;
+      picked.push(marker);
+      lastEnd = marker.end;
+      expected += 1;
+    }
+
+    // Utamakan urutan terpanjang; jika sama, ambil "A" yang lebih akhir (paling dekat ke kunci).
+    if (picked.length >= best.length) {
+      best = picked;
+    }
+  }
+
+  return best;
+}
+
+function parseOptionsFromSegment(segment: string): {
+  prompt: string;
+  options: ParsedQuestion['options'];
+} {
+  const markers = pickBestOptionMarkers(segment);
+  const options: ParsedQuestion['options'] = OPTION_LETTERS.map(() => ({
+    label: '',
+    imageUrl: null,
+    isCorrect: false,
+  }));
+
+  if (markers.length < 2) {
+    return { prompt: segment.trim(), options };
+  }
+
+  markers.forEach((marker, index) => {
+    const labelEnd = markers[index + 1]?.index ?? segment.length;
+    const label = segment.slice(marker.end, labelEnd).replace(/\s*\n\s*/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    const target = marker.letter.charCodeAt(0) - 'A'.charCodeAt(0);
+    if (options[target]) {
+      options[target].label = label;
+    }
+  });
+
+  return { prompt: segment.slice(0, markers[0]!.index).trim(), options };
+}
+
+/** Pecah teks menjadi blok soal bernomor berurutan (1, 2, 3, …) yang diikuti opsi "A.". */
+function splitNumberedKunciBlocks(text: string): Array<{ order: number; body: string }> {
+  const normalized = normalizeText(text);
+  const candidates = [...normalized.matchAll(/(?:^|\n)[ \t]*(\d{1,3})[.)][ \t]+(?=\S)/g)];
+
+  const hasOptionsAhead = (from: number) => {
+    const window = normalized.slice(from, from + 1500);
+    const kunciAt = window.search(KUNCI_LABEL_INLINE);
+    const scope = kunciAt >= 0 ? window.slice(0, kunciAt) : window;
+    return /(?<![A-Za-z0-9])A[.)]\s*\S/.test(scope);
+  };
+
+  // Soal pertama: nomor 1 jika ada (lengkap dengan opsi), jika tidak kandidat pertama yang punya opsi.
+  const startsAtOne = candidates.some(
+    (c) => Number(c[1]) === 1 && hasOptionsAhead((c.index ?? 0) + c[0].length),
+  );
+
+  const starts: Array<{ order: number; index: number; end: number }> = [];
+  let expected: number | null = null;
+
+  for (const match of candidates) {
+    const order = Number(match[1]);
+    const index = match.index ?? 0;
+    const end = index + match[0].length;
+
+    if (expected === null) {
+      if (startsAtOne && order !== 1) continue;
+    } else if (order !== expected) {
+      continue;
+    }
+
+    if (!hasOptionsAhead(end)) continue;
+
+    starts.push({ order, index, end });
+    expected = order + 1;
+  }
+
+  return starts.map((start, i) => ({
+    order: start.order,
+    body: normalized.slice(start.end, starts[i + 1]?.index ?? normalized.length).trim(),
+  }));
+}
+
+function parseNumberedKunciBlock(order: number, body: string, imageQueue: string[]): ParsedQuestion {
+  const kunciMatch = body.match(KUNCI_LABEL_INLINE);
+  const kunciIndex = kunciMatch?.index ?? -1;
+  const answerKey = kunciMatch?.[1]?.toUpperCase() ?? '';
+
+  const beforeKunci = (kunciIndex >= 0 ? body.slice(0, kunciIndex) : body).trim();
+  const afterKunci = kunciIndex >= 0 ? body.slice(kunciIndex + (kunciMatch?.[0].length ?? 0)) : '';
+
+  const { prompt, options } = parseOptionsFromSegment(beforeKunci);
+
+  // Pembahasan: setelah header "Pembahasan:"; jika tak ada, ambil sisa teks setelah baris kunci.
+  let explanation = '';
+  const pembahasanMatch = afterKunci.match(PEMBAHASAN_LABEL_LINE);
+  if (pembahasanMatch?.index !== undefined) {
+    explanation = afterKunci.slice(pembahasanMatch.index + pembahasanMatch[0].length);
+  } else {
+    const newline = afterKunci.indexOf('\n');
+    explanation = newline >= 0 ? afterKunci.slice(newline + 1) : '';
+  }
+
+  // Judul bagian ("TINGKAT SEDANG", dst.) di akhir blok milik soal berikutnya, bukan pembahasan.
+  const explanationLines = explanation.split('\n');
+  while (explanationLines.length && (!explanationLines[explanationLines.length - 1]!.trim() || SECTION_HEADING_LINE.test(explanationLines[explanationLines.length - 1]!))) {
+    explanationLines.pop();
+  }
+  explanation = explanationLines.map((line) => line.trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+
+  if (answerKey) {
+    markCorrectAnswer(options, answerKey);
+  }
+
+  const images = applyImageMarkers(prompt, explanation, imageQueue);
+
+  return {
+    prompt: images.prompt || `Soal ${order}`,
+    imageUrl: images.imageUrl,
+    explanation: images.explanation,
+    explanationImageUrl: images.explanationImageUrl,
+    requiresPromptImage: images.requiresPromptImage,
+    requiresExplanationImage: images.requiresExplanationImage,
+    order,
+    options,
+  };
+}
+
+/** Soal "bermasalah": tanpa prompt, opsi < 2, atau tanpa kunci jawaban. */
+function countQuestionsWithIssues(questions: ParsedQuestion[]): number {
+  return questions.filter(
+    (question) =>
+      !question.prompt.trim() ||
+      countFilledOptions(question.options) < 2 ||
+      !question.options.some((option) => option.isCorrect),
+  ).length;
+}
+
+function detectNumberedKunciInlineFormat(text: string): boolean {
+  const blocks = splitNumberedKunciBlocks(text);
+  if (blocks.length < 2) return false;
+
+  const threshold = Math.ceil(blocks.length * 0.8);
+  let withKunci = 0;
+  let withOptions = 0;
+
+  for (const block of blocks) {
+    const kunciIndex = block.body.search(KUNCI_LABEL_INLINE);
+    if (kunciIndex < 0) continue;
+    withKunci += 1;
+    const { options } = parseOptionsFromSegment(block.body.slice(0, kunciIndex));
+    if (countFilledOptions(options) >= 4) withOptions += 1;
+  }
+
+  return withKunci >= threshold && withOptions >= threshold;
+}
+
+function parseNumberedKunciInlineFormat(text: string, imageQueue: string[]): ParsedQuestion[] {
+  return splitNumberedKunciBlocks(text).map((block, index) =>
+    parseNumberedKunciBlock(block.order || index + 1, block.body, imageQueue),
+  );
 }
 
 function splitNumberedQuestionBlocks(text: string): Array<{ order: number; body: string }> {
@@ -1160,7 +1402,7 @@ function stripKnownSections(text: string, parts: string[]): string {
 function applyImageMarkers(
   prompt: string,
   explanation: string,
-  _imageQueue?: string[],
+  imageQueue: string[] = [],
 ): {
   prompt: string;
   explanation: string;
@@ -1173,6 +1415,27 @@ function applyImageMarkers(
   let nextExplanation = explanation;
   let requiresPromptImage = false;
   let requiresExplanationImage = false;
+  let imageUrl: string | null = null;
+  let explanationImageUrl: string | null = null;
+
+  const resolveEmbeddedImages = (value: string) => {
+    const urls: string[] = [];
+    const clean = value.replace(WORD_IMAGE_MARKER, (_marker, rawIndex: string) => {
+      const index = Number(rawIndex) - 1;
+      const url = imageQueue[index];
+      if (url) urls.push(url);
+      return ' ';
+    });
+    return { clean: clean.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim(), urls };
+  };
+
+  const promptImages = resolveEmbeddedImages(nextPrompt);
+  nextPrompt = promptImages.clean;
+  imageUrl = promptImages.urls[0] ?? null;
+
+  const explanationImages = resolveEmbeddedImages(nextExplanation);
+  nextExplanation = explanationImages.clean;
+  explanationImageUrl = explanationImages.urls[0] ?? null;
 
   // Marker [GAMBAR] = admin wajib isi URL; jangan ekstrak/simpan file dari Word.
   if (/\[GAMBAR\]/i.test(nextPrompt)) {
@@ -1188,8 +1451,8 @@ function applyImageMarkers(
   return {
     prompt: nextPrompt,
     explanation: nextExplanation,
-    imageUrl: null,
-    explanationImageUrl: null,
+    imageUrl,
+    explanationImageUrl,
     requiresPromptImage,
     requiresExplanationImage,
   };
@@ -1651,68 +1914,427 @@ function isLegacyDocFile(filePath: string): boolean {
   return path.extname(filePath).toLowerCase() === '.doc';
 }
 
-/** Baca teks dari .docx (mammoth) atau .doc lama (word-extractor). */
-async function extractTextFromWordFile(filePath: string): Promise<string> {
+function decodeHtmlEntities(value: string) {
+  const named: Record<string, string> = {
+    amp: '&',
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: "'",
+    nbsp: ' ',
+  };
+  return value.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (entity, code: string) => {
+    if (code.startsWith('#x')) return String.fromCodePoint(Number.parseInt(code.slice(2), 16));
+    if (code.startsWith('#')) return String.fromCodePoint(Number.parseInt(code.slice(1), 10));
+    return named[code.toLowerCase()] ?? entity;
+  });
+}
+
+function htmlToParserText(html: string) {
+  const text = decodeHtmlEntities(
+    html
+      .replace(
+        /<img\b[^>]*\bsrc=["']word-image:\/\/(\d+)["'][^>]*>/gi,
+        (_tag, index: string) => ` [[WORD_IMAGE:${index}]] `,
+      )
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(?:p|li|tr|h[1-6])>/gi, '\n\n')
+      .replace(/<\/(?:td|th)>/gi, '\t')
+      .replace(/<[^>]+>/g, ''),
+  );
+  // Floating image Word sering ditulis sebelum nomor pada XML/HTML. Pindahkan marker ke
+  // sesudah nomor agar nomor tetap dikenali sebagai awal soal dan gambar ikut ke soal itu.
+  return text.replace(
+    /(\[\[WORD_IMAGE:\d+\]\])\s*((?:No\.\s*)?\d{1,3}[.)])/gi,
+    '$2 $1',
+  ).replace(
+    /(\[\[WORD_IMAGE:\d+\]\])\s*(No\.\s*\d{1,3})(?=\s|$)/gi,
+    '$2 $1',
+  );
+}
+
+async function persistWordImages(
+  filePath: string,
+  images: Array<{ buffer: Buffer; contentType: string }>,
+): Promise<{ imageUrls: string[]; assetDirectory: string | null }> {
+  if (!images.length) return { imageUrls: [], assetDirectory: null };
+
+  const safeBase =
+    path
+      .basename(filePath, path.extname(filePath))
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 50) || 'word';
+  const conversionId = `${safeBase}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+  const assetDirectory = path.join(examWordAssetsRoot, conversionId);
+  await fs.promises.mkdir(assetDirectory, { recursive: true });
+
+  const savedByHash = new Map<string, string>();
+  const imageUrls: string[] = [];
+
+  for (const [index, image] of images.entries()) {
+    const hash = crypto.createHash('sha256').update(image.buffer).digest('hex');
+    const existing = savedByHash.get(hash);
+    if (existing) {
+      imageUrls.push(existing);
+      continue;
+    }
+
+    const filename = `image-${String(index + 1).padStart(3, '0')}-${hash.slice(0, 10)}.webp`;
+    const fullPath = path.join(assetDirectory, filename);
+    try {
+      await sharp(image.buffer)
+        .rotate()
+        .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 88 })
+        .toFile(fullPath);
+    } catch {
+      const extension =
+        image.contentType === 'image/jpeg'
+          ? '.jpg'
+          : image.contentType === 'image/png'
+            ? '.png'
+            : '.bin';
+      const fallbackPath = fullPath.replace(/\.webp$/, extension);
+      await fs.promises.writeFile(fallbackPath, image.buffer);
+      const publicPath = buildPublicUploadPath(fallbackPath);
+      savedByHash.set(hash, publicPath);
+      imageUrls.push(publicPath);
+      continue;
+    }
+
+    const publicPath = buildPublicUploadPath(fullPath);
+    savedByHash.set(hash, publicPath);
+    imageUrls.push(publicPath);
+  }
+
+  return { imageUrls, assetDirectory };
+}
+
+/** Baca Word sambil mempertahankan posisi gambar sebagai marker di aliran teks. */
+async function extractWordContent(filePath: string): Promise<ExtractedWordContent> {
   if (isLegacyDocFile(filePath)) {
     const extractor = new WordExtractor();
     const extracted = await extractor.extract(filePath);
-    return extracted.getBody() ?? '';
+    return { text: extracted.getBody() ?? '', imageUrls: [], assetDirectory: null };
   }
-  const { value } = await mammoth.extractRawText({ path: filePath });
-  return value;
-}
 
-/** Hanya menghitung media di .docx — .doc lama tidak diekstrak gambarnya. */
-async function countImagesInDocx(filePath: string): Promise<number> {
-  if (isLegacyDocFile(filePath)) return 0;
-  const buffer = fs.readFileSync(filePath);
-  const zip = await JSZip.loadAsync(buffer);
-  const mediaPrefix = 'word/media/';
-
-  return Object.entries(zip.files).filter(([name, file]) => name.startsWith(mediaPrefix) && !file.dir).length;
+  const images: Array<{ buffer: Buffer; contentType: string }> = [];
+  const result = await mammoth.convertToHtml(
+    { path: filePath },
+    {
+      convertImage: mammoth.images.imgElement(async (image) => {
+        const base64 = await image.read('base64');
+        images.push({ buffer: Buffer.from(base64, 'base64'), contentType: image.contentType });
+        return { src: `word-image://${images.length}` };
+      }),
+    },
+  );
+  const persisted = await persistWordImages(filePath, images);
+  return {
+    text: htmlToParserText(result.value),
+    imageUrls: persisted.imageUrls,
+    assetDirectory: persisted.assetDirectory,
+  };
 }
 
 function buildEmbeddedImageWarnings(
   questions: ParsedQuestion[],
-  embeddedImageCount: number,
+  imageUrls: string[],
 ): ConversionWarning[] {
+  const embeddedImageCount = new Set(imageUrls).size;
   if (embeddedImageCount <= 0) return [];
 
-  const warnings: ConversionWarning[] = [
-    {
-      row: 0,
-      field: 'images',
-      message: `Dokumen berisi ${embeddedImageCount} gambar. File gambar dari Word tidak disimpan otomatis agar storage tidak penuh — unggah gambar ke hosting lalu isi URL di kolom gambar soal/opsi/pembahasan.`,
-    },
-  ];
-
-  const hasRowImageError = questions.some((question) => {
-    if (question.requiresPromptImage && !question.imageUrl?.trim()) return true;
-    if (question.requiresExplanationImage && !question.explanationImageUrl?.trim()) return true;
-    return question.options.some((option) => isImageOptionLabel(option.label) && !option.imageUrl?.trim());
-  });
-
-  // Jika parser belum menandai baris spesifik, tetap minta admin isi URL di preview.
-  if (!hasRowImageError) {
-    warnings.push({
-      row: 0,
-      field: 'images',
-      message:
-        'Isi URL gambar pada soal yang memakai gambar. Unduh CSV diblokir sampai URL gambar yang wajib sudah diisi.',
+  const assigned = new Set<string>();
+  questions.forEach((question) => {
+    if (question.imageUrl) assigned.add(question.imageUrl);
+    if (question.explanationImageUrl) assigned.add(question.explanationImageUrl);
+    question.options.forEach((option) => {
+      if (option.imageUrl) assigned.add(option.imageUrl);
     });
+  });
+  const unassignedCount = [...new Set(imageUrls)].filter((url) => !assigned.has(url)).length;
+  if (unassignedCount > 0) {
+    const questionsExpectImages = questions.some((question) => {
+      if (question.requiresPromptImage || question.requiresExplanationImage || question.imageUrl || question.explanationImageUrl) {
+        return true;
+      }
+      return question.options.some(
+        (option) => Boolean(option.imageUrl) || /^gambar\s*[a-e]?$/i.test(option.label.trim()),
+      );
+    });
+    const promptStillNeedsImage = questions.some(
+      (question) => /\bgambar\b/i.test(question.prompt) && !question.imageUrl,
+    );
+    // Satu gambar di sampul (logo) bukan gambar soal. Jangan tandai konversi sebagai gagal.
+    if (!questionsExpectImages && embeddedImageCount === 1 && unassignedCount === 1) {
+      return [];
+    }
+    if (unassignedCount === 1 && assigned.size > 0 && !promptStillNeedsImage) {
+      return [];
+    }
+    return [{
+      row: 0,
+      field: 'images',
+      message: `${embeddedImageCount} gambar Word berhasil diunggah otomatis, tetapi ${unassignedCount} gambar belum dapat dipetakan ke soal. Periksa preview gambar.`,
+    }];
   }
 
-  return warnings;
+  return [];
 }
 
-export async function parseExamDocx(filePath: string): Promise<ParseDocxResult> {
-  const embeddedImageCount = await countImagesInDocx(filePath);
+function assignEmbeddedOptionImages(questions: ParsedQuestion[], imageUrls: string[]) {
+  questions.forEach((question) => {
+    question.options = question.options.map((option) => {
+      let resolvedUrl = option.imageUrl ?? null;
+      const label = (option.label ?? '').replace(
+        WORD_IMAGE_MARKER,
+        (_marker, rawIndex: string) => {
+          resolvedUrl = resolvedUrl ?? imageUrls[Number(rawIndex) - 1] ?? null;
+          return ' ';
+        },
+      );
+      return {
+        ...option,
+        label: label.replace(/\s{2,}/g, ' ').trim(),
+        imageUrl: resolvedUrl,
+      };
+    });
+  });
+}
 
-  const rawText = await extractTextFromWordFile(filePath);
-  const text = normalizeText(rawText);
-  // Slot kosong: panjang = jumlah media (untuk deteksi kebutuhan URL), tanpa path file.
-  const imageQueue = Array.from({ length: embeddedImageCount }, () => '');
+function remapFloatingWordImages(questions: ParsedQuestion[]) {
+  for (let index = 1; index < questions.length; index += 1) {
+    const question = questions[index]!;
+    const previous = questions[index - 1]!;
+    if (question.imageUrl || !previous.explanationImageUrl) continue;
 
+    const imageOptionCount = question.options.filter((option) =>
+      /^gambar\s*[a-e]?$/i.test(option.label.trim()),
+    ).length;
+    const sequenceOptionCount = question.options.filter((option) =>
+      /^\d+(?:\s*[–—-]\s*\d+){2,}/.test(option.label.trim()),
+    ).length;
+    if (imageOptionCount < 2 && sequenceOptionCount < 3) continue;
+
+    question.imageUrl = previous.explanationImageUrl;
+    previous.explanationImageUrl = null;
+  }
+}
+
+function assignRemainingWordImages(questions: ParsedQuestion[], imageUrls: string[]) {
+  const assigned = new Set<string>();
+  questions.forEach((question) => {
+    if (question.imageUrl) assigned.add(question.imageUrl);
+    if (question.explanationImageUrl) assigned.add(question.explanationImageUrl);
+    question.options.forEach((option) => {
+      if (option.imageUrl) assigned.add(option.imageUrl);
+    });
+  });
+
+  const imageQuestions = questions.filter((question) => {
+    const labels = question.options.map((option) => option.label.trim());
+    return (
+      labels.filter((label) => /^gambar\s*[a-e]?$/i.test(label)).length >= 2 ||
+      labels.filter((label) => /^\d+(?:\s*[–—-]\s*\d+){2,}/.test(label)).length >= 3
+    );
+  });
+
+  for (const url of [...new Set(imageUrls)].filter((item) => !assigned.has(item))) {
+    const withoutPrompt = imageQuestions.find((question) => !question.imageUrl);
+    if (withoutPrompt) {
+      withoutPrompt.imageUrl = url;
+      continue;
+    }
+    const withoutExplanation = imageQuestions.find((question) => !question.explanationImageUrl);
+    if (withoutExplanation) {
+      withoutExplanation.explanationImageUrl = url;
+    }
+  }
+
+  questions.forEach((question) => {
+    if (!question.imageUrl) return;
+    question.options.forEach((option, index) => {
+      if (option.isCorrect && !option.label.trim() && !option.imageUrl) {
+        option.label = `Pilihan ${OPTION_LETTERS[index]}`;
+      }
+    });
+  });
+}
+
+/**
+ * Bank soal terpisah dua bagian:
+ * Bagian I = soal bernomor + opsi A–D/E (tanpa kunci di tempat).
+ * Bagian II = "N. B. teks opsi" + "Pembahasan: …", opsional "KUNCI JAWABAN SINGKAT".
+ */
+const SPLIT_ANSWER_HEADING =
+  /(?:^|\n)[ \t]*(BAGIAN\s+(?:II|2|DUA)\b[^\n]{0,160}|KUNCI\s+JAWABAN\b[^\n]{0,80})\s*(?=\n|$)/gi;
+const SPLIT_KEY_START =
+  /(?:^|\n)[ \t]*(\d{1,3})[.)][ \t]+([A-Ea-e])(?=[.)](?:[ \t]|$)|[ \t]+\S|[ \t]*(?:\n|$))/g;
+
+function findSplitAnswerHeadingIndex(text: string): number {
+  for (const match of text.matchAll(SPLIT_ANSWER_HEADING)) {
+    const line = (match[1] ?? '').trim();
+    if (!line || line.length > 180) continue;
+    // Bukan baris kunci inline seperti "Kunci Jawaban: B".
+    if (/[:：]\s*[A-Ea-e]\b/.test(line)) continue;
+    const index = match.index ?? -1;
+    if (index >= 0) return index;
+  }
+  return -1;
+}
+
+function collectSplitAnswerEntries(answerText: string): Map<number, { key: string; explanation: string }> {
+  let body = answerText;
+  const tail = body.search(/(?:^|\n)[ \t]*(?:SARAN\s+PELAKSANAAN|REFERENSI(?:\s+UTAMA)?|CATATAN(?:\s+GURU)?)\b/i);
+  if (tail >= 0) body = body.slice(0, tail);
+
+  const singkatAt = body.search(/(?:^|\n)[ \t]*KUNCI\s+JAWABAN\s+SINGKAT\b/i);
+  const pembahasanBody = singkatAt >= 0 ? body.slice(0, singkatAt) : body;
+  const singkatBody = singkatAt >= 0 ? body.slice(singkatAt) : '';
+
+  const map = new Map<number, { key: string; explanation: string }>();
+  const starts = [...pembahasanBody.matchAll(SPLIT_KEY_START)];
+
+  starts.forEach((match, index) => {
+    const order = Number(match[1]);
+    const key = (match[2] ?? '').toUpperCase();
+    if (!order || !key) return;
+
+    const contentStart = (match.index ?? 0) + match[0].length;
+    const contentEnd = starts[index + 1]?.index ?? pembahasanBody.length;
+    let chunk = pembahasanBody.slice(contentStart, contentEnd).trim();
+
+    const pembahasanAt = chunk.search(/Pembahasan\s*[:：]/i);
+    if (pembahasanAt >= 0) {
+      chunk = chunk.slice(pembahasanAt);
+    } else if (/^[.)]/.test(chunk)) {
+      // Baris ini hanya mengulang teks opsi benar, bukan pembahasan.
+      chunk = '';
+    }
+
+    const header = chunk.match(/^Pembahasan\s*[:：]\s*/i);
+    let explanation = header ? chunk.slice(header[0].length).trim() : '';
+    explanation = explanation
+      .split(/\n[ \t]*(?:KUNCI\s+JAWABAN|SARAN\s+PELAKSANAAN|REFERENSI(?:\s+UTAMA)?)\b/i)[0]
+      ?.trim() ?? '';
+
+    const existing = map.get(order);
+    if (!existing || explanation.length > existing.explanation.length) {
+      map.set(order, { key, explanation });
+    }
+  });
+
+  for (const match of singkatBody.matchAll(SPLIT_KEY_START)) {
+    const order = Number(match[1]);
+    const key = (match[2] ?? '').toUpperCase();
+    if (!order || !key || map.has(order)) continue;
+    map.set(order, { key, explanation: '' });
+  }
+
+  return map;
+}
+
+function detectSplitAnswerSectionFormat(text: string): boolean {
+  const headingIndex = findSplitAnswerHeadingIndex(text);
+  if (headingIndex < 0) return false;
+
+  const questionsPart = text.slice(0, headingIndex);
+  const answersPart = text.slice(headingIndex);
+  const blocks = splitNumberedQuestionBlocks(questionsPart);
+  if (blocks.length < 3) return false;
+
+  const inlineKeys = [
+    ...questionsPart.matchAll(/(?:^|\n)\s*(?:Jawab|Kunci(?:\s*Jawaban)?)\s*[:：=\-]?\s*[A-Ea-e]\b/gi),
+  ].length;
+  if (inlineKeys >= Math.max(2, Math.floor(blocks.length * 0.3))) return false;
+
+  const answers = collectSplitAnswerEntries(answersPart);
+  if (answers.size < 3) return false;
+
+  let matched = 0;
+  for (const block of blocks) {
+    if (answers.has(block.order)) matched += 1;
+  }
+  return matched >= Math.ceil(blocks.length * 0.7);
+}
+
+function parseSplitSectionQuestion(
+  order: number,
+  body: string,
+  imageQueue: string[],
+  answer: { key: string; explanation: string } | undefined,
+): ParsedQuestion | null {
+  const options: ParsedQuestion['options'] = OPTION_LETTERS.map(() => ({
+    label: '',
+    imageUrl: null,
+    isCorrect: false,
+  }));
+
+  for (const line of body.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const match = trimmed.match(OPTION_LINE);
+    const letter = (match?.[1] ?? match?.[2] ?? match?.[3] ?? '').toUpperCase();
+    const label = match?.[4]?.trim() ?? '';
+    const index = letter.charCodeAt(0) - 'A'.charCodeAt(0);
+    if (!label || index < 0 || index >= OPTION_LETTERS.length) continue;
+    const option = options[index];
+    if (!option) continue;
+    option.label = option.label ? `${option.label} ${label}` : label;
+  }
+
+  if (countFilledOptions(options) < 2) {
+    const extracted = extractBestOptions(body);
+    if (countFilledOptions(extracted) >= 2) {
+      extracted.forEach((option, index) => {
+        if (options[index]) options[index].label = option.label;
+      });
+    }
+  }
+
+  if (countFilledOptions(options) < 2) return null;
+
+  const optionStart = findOptionSectionStart(body);
+  const prompt = (optionStart >= 0 ? body.slice(0, optionStart) : body).trim();
+  if (prompt.length < 5) return null;
+
+  if (answer?.key) {
+    markCorrectAnswer(options, answer.key);
+  }
+
+  const explanation = answer?.explanation?.trim() || (answer?.key ? '—' : '');
+  const images = applyImageMarkers(prompt, explanation, imageQueue);
+
+  return {
+    prompt: images.prompt || `Soal ${order}`,
+    imageUrl: images.imageUrl,
+    explanation: images.explanation,
+    explanationImageUrl: images.explanationImageUrl,
+    requiresPromptImage: images.requiresPromptImage,
+    requiresExplanationImage: images.requiresExplanationImage,
+    order,
+    options,
+  };
+}
+
+function parseSplitAnswerSectionFormat(text: string, imageQueue: string[]): ParsedQuestion[] {
+  const headingIndex = findSplitAnswerHeadingIndex(text);
+  if (headingIndex < 0) return [];
+
+  const answers = collectSplitAnswerEntries(text.slice(headingIndex));
+  const questions: ParsedQuestion[] = [];
+
+  for (const block of splitNumberedQuestionBlocks(text.slice(0, headingIndex))) {
+    const parsed = parseSplitSectionQuestion(block.order, block.body, imageQueue, answers.get(block.order));
+    if (parsed) questions.push(parsed);
+  }
+
+  return questions;
+}
+
+function parseTextSegment(text: string, imageQueue: string[]) {
   const blocks = splitQuestionBlocks(text);
   let questions: ParsedQuestion[] = [];
   let parseMode: 'template' | 'auto' = 'auto';
@@ -1730,33 +2352,110 @@ export async function parseExamDocx(filePath: string): Promise<ParseDocxResult> 
     questions = parseNarrativeUnlabeledFormat(text, imageQueue);
   } else if (detectOptionClusterFormat(text)) {
     questions = parseOptionClusterFormat(text, imageQueue);
+  } else if (detectSplitAnswerSectionFormat(text)) {
+    questions = parseSplitAnswerSectionFormat(text, imageQueue);
   } else if (detectNumberedJawabFormat(text)) {
     questions = parseNumberedJawabFormat(text, imageQueue);
   } else {
     questions = parseAutoFormat(text, imageQueue);
   }
 
-  const warnings = [
-    ...validateQuestions(questions),
-    ...buildEmbeddedImageWarnings(questions, embeddedImageCount),
-  ];
-
-  if (parseMode === 'auto' && questions.length > 0) {
-    warnings.unshift({
-      row: 0,
-      field: 'auto',
-      message: `${questions.length} soal terdeteksi otomatis (format fleksibel). Periksa preview sebelum unduh CSV.`,
-    });
+  // Fallback: soal bernomor + "Kunci Jawaban: X" + opsi menempel. Hanya dipakai jika hasil parser
+  // di atas buruk, sehingga format lama yang sudah bekerja tidak berubah.
+  if (parseMode === 'auto' && detectNumberedKunciInlineFormat(text)) {
+    const currentIssues = countQuestionsWithIssues(questions);
+    if (!questions.length || currentIssues / questions.length >= 0.5) {
+      const alternative = parseNumberedKunciInlineFormat(text, imageQueue);
+      if (alternative.length && (!questions.length || countQuestionsWithIssues(alternative) < currentIssues)) {
+        questions = alternative;
+      }
+    }
   }
 
-  if (!questions.length && text.length > 0) {
-    warnings.push({
-      row: 0,
-      field: 'format',
-      message:
-        'Tidak ada soal terdeteksi. Pastikan setiap soal memiliki opsi A–E dan kunci jawaban (mis. Kunci: B, Kunci Jawaban: B, atau Jawab: C). Pembahasan sangat disarankan.',
-    });
+  // Fallback: soal di Bagian I, kunci + pembahasan di Bagian II.
+  if (parseMode === 'auto' && detectSplitAnswerSectionFormat(text)) {
+    const currentIssues = countQuestionsWithIssues(questions);
+    if (!questions.length || currentIssues / questions.length >= 0.5) {
+      const alternative = parseSplitAnswerSectionFormat(text, imageQueue);
+      if (alternative.length && (!questions.length || countQuestionsWithIssues(alternative) < currentIssues)) {
+        questions = alternative;
+      }
+    }
   }
 
-  return { questions, warnings, extractedImages: [], embeddedImageCount };
+  return { questions, parseMode };
+}
+
+function splitNamedExamSections(text: string): string[] {
+  const heading = /(?:^|\n)\s*(?:PASS\s+HAND\.?|KECERDASAN\.?|KEPRIBADIAN\.?)\s*(?:\n|$)/gi;
+  const matches = [...text.matchAll(heading)];
+  if (matches.length < 2) return [text];
+
+  const segments: string[] = [];
+  matches.forEach((match, index) => {
+    const start = (match.index ?? 0) + match[0].length;
+    const end = matches[index + 1]?.index ?? text.length;
+    const segment = text.slice(start, end).trim();
+    if (segment) segments.push(segment);
+  });
+  return segments.length ? segments : [text];
+}
+
+export async function parseExamDocx(filePath: string): Promise<ParseDocxResult> {
+  let assetDirectory: string | null = null;
+  try {
+    const extracted = await extractWordContent(filePath);
+    assetDirectory = extracted.assetDirectory;
+    const text = stripAnswerKeyRecap(normalizeText(extracted.text));
+    const imageQueue = extracted.imageUrls;
+    const segments = splitNamedExamSections(text);
+
+    let questions: ParsedQuestion[] = [];
+    let usedAutoMode = false;
+    for (const segment of segments) {
+      const parsed = parseTextSegment(segment, imageQueue);
+      questions.push(...parsed.questions);
+      usedAutoMode ||= parsed.parseMode === 'auto';
+    }
+
+    questions = questions.map((question, index) => ({ ...question, order: index + 1 }));
+    assignEmbeddedOptionImages(questions, imageQueue);
+    remapFloatingWordImages(questions);
+    assignRemainingWordImages(questions, imageQueue);
+
+    const warnings = [
+      ...validateQuestions(questions),
+      ...buildEmbeddedImageWarnings(questions, imageQueue),
+    ];
+
+    if (usedAutoMode && questions.length > 0) {
+      warnings.unshift({
+        row: 0,
+        field: 'auto',
+        message: `${questions.length} soal terdeteksi otomatis (format fleksibel). Periksa preview sebelum unduh CSV.`,
+      });
+    }
+
+    if (!questions.length && text.length > 0) {
+      warnings.push({
+        row: 0,
+        field: 'format',
+        message:
+          'Tidak ada soal terdeteksi. Pastikan setiap soal memiliki opsi A–E dan kunci jawaban (mis. Kunci: B, Kunci Jawaban: B, atau Jawab: C). Pembahasan sangat disarankan.',
+      });
+    }
+
+    const extractedImages = [...new Set(imageQueue)];
+    return {
+      questions,
+      warnings,
+      extractedImages,
+      embeddedImageCount: extractedImages.length,
+    };
+  } catch (error) {
+    if (assetDirectory) {
+      await fs.promises.rm(assetDirectory, { recursive: true, force: true }).catch(() => undefined);
+    }
+    throw error;
+  }
 }

@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { PublicLayout } from '@/layouts/PublicLayout';
 import { AuthLayout } from '@/layouts/AuthLayout';
@@ -75,9 +76,19 @@ import { AdminExamControlPage } from '@/pages/admin/AdminExamControlPage';
 import { AdminRankingPage } from '@/pages/admin/AdminRankingPage';
 import { AdminWordConverterPage } from '@/pages/admin/AdminWordConverterPage';
 import { AdminKecermatanPage } from '@/pages/admin/AdminKecermatanPage';
+const AdminLiveQuizDashboardPage = lazy(() => import('@/features/live-quiz/admin/AdminLiveQuizDashboardPage').then((m) => ({ default: m.AdminLiveQuizDashboardPage })));
+const AdminLiveQuizListPage = lazy(() => import('@/features/live-quiz/admin/AdminLiveQuizListPage').then((m) => ({ default: m.AdminLiveQuizListPage })));
+const AdminLiveQuizEditorPage = lazy(() => import('@/features/live-quiz/admin/AdminLiveQuizEditorPage').then((m) => ({ default: m.AdminLiveQuizEditorPage })));
+const AdminLiveQuizHistoryPage = lazy(() => import('@/features/live-quiz/admin/AdminLiveQuizHistoryPage').then((m) => ({ default: m.AdminLiveQuizHistoryPage })));
+const AdminLiveQuizReportPage = lazy(() => import('@/features/live-quiz/admin/AdminLiveQuizReportPage').then((m) => ({ default: m.AdminLiveQuizReportPage })));
+const AdminLiveQuizSettingsPage = lazy(() => import('@/features/live-quiz/admin/AdminLiveQuizSettingsPage').then((m) => ({ default: m.AdminLiveQuizSettingsPage })));
+const LiveHostPage = lazy(() => import('@/features/live-quiz/host/LiveHostPage').then((m) => ({ default: m.LiveHostPage })));
+const LiveJoinPage = lazy(() => import('@/features/live-quiz/player/LiveJoinPage').then((m) => ({ default: m.LiveJoinPage })));
+const LivePlayPage = lazy(() => import('@/features/live-quiz/player/LivePlayPage').then((m) => ({ default: m.LivePlayPage })));
 
 export default function App() {
   return (
+    <Suspense fallback={<div className="flex min-h-[100dvh] items-center justify-center text-sm text-slate-500">Memuat…</div>}>
     <Routes>
       <Route element={<PublicLayout />}>
         <Route path="/" element={<HomePage />} />
@@ -149,6 +160,13 @@ export default function App() {
           <Route path="landing" element={<AdminLandingPage />} />
           <Route path="announcements" element={<AdminAnnouncementsPage />} />
           <Route path="exam-control" element={<AdminExamControlPage />} />
+          <Route path="live-quiz" element={<AdminLiveQuizDashboardPage />} />
+          <Route path="live-quiz/kuis" element={<AdminLiveQuizListPage />} />
+          <Route path="live-quiz/kuis/baru" element={<AdminLiveQuizEditorPage />} />
+          <Route path="live-quiz/kuis/:id" element={<AdminLiveQuizEditorPage />} />
+          <Route path="live-quiz/riwayat" element={<AdminLiveQuizHistoryPage />} />
+          <Route path="live-quiz/laporan/:id" element={<AdminLiveQuizReportPage />} />
+          <Route path="live-quiz/pengaturan" element={<AdminLiveQuizSettingsPage />} />
           <Route path="tryouts" element={<AdminTryoutsPage />} />
           <Route path="word-converter" element={<AdminWordConverterPage />} />
           <Route path="practice" element={<AdminPracticePage />} />
@@ -166,7 +184,17 @@ export default function App() {
         </Route>
       </Route>
 
+      {/* Live Quiz: peserta (tanpa login) */}
+      <Route path="/live/join" element={<LiveJoinPage />} />
+      <Route path="/live/play/:sessionId" element={<LivePlayPage />} />
+
+      {/* Live Quiz: layar tutor layar penuh (di luar AdminLayout) */}
+      <Route path="/admin/live-quiz/host/:sessionId" element={<ProtectedRoute roles={['ADMIN']} />}>
+        <Route index element={<LiveHostPage />} />
+      </Route>
+
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   );
 }

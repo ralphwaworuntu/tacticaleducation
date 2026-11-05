@@ -87,6 +87,9 @@ model User {
   memberArea             MemberArea?
   examBlocks             ExamBlock[]
   examQuotaUsage         ExamQuotaUsage?
+  quizzesCreated         Quiz[]                      @relation("QuizCreator")
+  liveSessionsHosted     LiveSession[]               @relation("LiveSessionHost")
+  livePlayers            LivePlayer[]
 }
 
 model MemberArea {
@@ -648,4 +651,194 @@ model PsychCalculatorSubmission {
   createdAt      DateTime                @default(now())
   calculator     PsychCalculatorTemplate @relation(fields: [calculatorId], references: [id])
   user           User?                   @relation("UserCalculatorSubmissions", fields: [userId], references: [id])
+}
+
+// ---------------------------------------------------------------------------
+// TACTICAL LIVE QUIZ (real-time multiplayer quiz). Semua tabel baru, aditif.
+// Tidak ada kolom pembahasan: Live Quiz tidak memiliki tahap explanation.
+// ---------------------------------------------------------------------------
+
+enum QuizQuestionType {
+  SINGLE
+  TRUE_FALSE
+  MULTIPLE
+}
+
+enum QuizPointsWeight {
+  NORMAL
+  DOUBLE
+  NONE
+}
+
+enum LiveSessionStatus {
+  DRAFT
+  LOBBY
+  COUNTDOWN
+  QUESTION_ACTIVE
+  QUESTION_RESULT
+  SCORE_RESULT
+  LEADERBOARD
+  FINISHED
+  CANCELLED
+}
+
+model Quiz {
+  id          String         @id @default(cuid())
+  title       String
+  description String?        @db.Text
+  subject     String?
+  category    String?
+  settings    Json
+  createdById String
+  createdBy   User           @relation("QuizCreator", fields: [createdById], references: [id])
+  questions   QuizQuestion[]
+  sessions    LiveSession[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([createdById, updatedAt])
+}
+
+model QuizQuestion {
+  id           String           @id @default(cuid())
+  quizId       String
+  order        Int
+  type         QuizQuestionType @default(SINGLE)
+  prompt       String           @db.LongText
+  imageUrl     String?
+  timeLimitSec Int?
+  weight       QuizPointsWeight @default(NORMAL)
+  sourceType   String?
+  sourceId     String?
+  quiz         Quiz             @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  options      QuizOption[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([quizId, order])
+}
+
+model QuizOption {
+  id         String       @id @default(cuid())
+  questionId String
+  order      Int
+  label      String       @db.LongText
+  imageUrl   String?
+  isCorrect  Boolean      @default(false)
+  question   QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId, order])
+}
+
+model LiveSession {
+  id              String              @id @default(cuid())
+  quizId          String
+  hostId          String
+  pin             String
+  // Diisi selama sesi aktif, di-NULL-kan saat selesai/batal => PIN unik di antara sesi aktif.
+  activePin       String?             @unique
+  status          LiveSessionStatus   @default(LOBBY)
+  settings        Json
+  // Snapshot soal saat sesi dibuat (termasuk kunci jawaban; tidak pernah dikirim ke klien sebelum waktunya).
+  snapshot        Json
+  lobbyLocked     Boolean             @default(false)
+  paused          Boolean             @default(false)
+  currentIndex    Int                 @default(-1)
+  stateVersion    Int                 @default(0)
+  phaseStartedAt  DateTime?           @db.DateTime(3)
+  phaseDeadlineAt DateTime?           @db.DateTime(3)
+  createdAt       DateTime            @default(now())
+  startedAt       DateTime?
+  endedAt         DateTime?
+  quiz            Quiz                @relation(fields: [quizId], references: [id])
+  host            User                @relation("LiveSessionHost", fields: [hostId], references: [id])
+  players         LivePlayer[]
+  answers         LiveAnswer[]
+  questionStates  LiveQuestionState[]
+  results         LiveResult[]
+
+  @@index([pin])
+  @@index([hostId, createdAt])
+  @@index([quizId])
+  @@index([status])
+}
+
+model LivePlayer {
+  id            String       @id @default(cuid())
+  sessionId     String
+  userId        String?
+  displayName   String
+  // ID avatar dari katalog bersama (liveAvatars.ts). Null = pakai avatar default deterministik.
+  avatarId      String?      @db.VarChar(32)
+  // Sisa kolom 2.1 (selfie kartun). Tidak dipakai lagi; tampilan memakai avatarId katalog. Jangan dihapus.
+  avatarUrl     String?      @db.VarChar(500)
+  // Nama dinormalisasi (lowercase) untuk keunikan per sesi.
+  nameKey       String
+  tokenHash     String
+  isConnected   Boolean      @default(true)
+  joinedAt      DateTime     @default(now())
+  lastSeenAt    DateTime     @default(now())
+  kickedAt      DateTime?
+  totalScore    Int          @default(0)
+  correctCount  Int          @default(0)
+  correctTimeMs Int          @default(0)
+  rank          Int?
+  session       LiveSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user          User?        @relation(fields: [userId], references: [id])
+  answers       LiveAnswer[]
+  result        LiveResult?
+
+  @@unique([sessionId, nameKey])
+  @@unique([sessionId, userId])
+  @@index([sessionId, totalScore])
+}
+
+model LiveAnswer {
+  id                String      @id @default(cuid())
+  sessionId         String
+  playerId          String
+  questionIndex     Int
+  selectedOptionIds Json
+  isCorrect         Boolean
+  responseMs        Int
+  scoreEarned       Int
+  receivedAt        DateTime    @db.DateTime(3)
+  session           LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  player            LivePlayer  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  // Satu jawaban final per pemain per soal: mencegah skor ganda akibat retry.
+  @@unique([playerId, questionIndex])
+  @@index([sessionId, questionIndex])
+}
+
+model LiveQuestionState {
+  id            String      @id @default(cuid())
+  sessionId     String
+  questionIndex Int
+  openedAt      DateTime    @db.DateTime(3)
+  deadlineAt    DateTime    @db.DateTime(3)
+  closedAt      DateTime?   @db.DateTime(3)
+  answeredCount Int         @default(0)
+  optionCounts  Json?
+  session       LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, questionIndex])
+}
+
+model LiveResult {
+  id              String      @id @default(cuid())
+  sessionId       String
+  playerId        String      @unique
+  finalRank       Int
+  totalPoints     Int
+  correctCount    Int
+  incorrectCount  Int
+  unansweredCount Int
+  totalQuestions  Int
+  accuracy        Float
+  finishedAt      DateTime    @default(now())
+  session         LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  player          LivePlayer  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, finalRank])
 }

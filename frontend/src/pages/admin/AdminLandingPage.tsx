@@ -168,26 +168,39 @@ export function AdminLandingPage() {
     onError: () => toast.error('Gagal menghapus slide'),
   });
 
-  const memberSlideForm = useForm<{ title: string; subtitle: string; imageUrl: string; ctaLabel: string; ctaLink: string; order?: number }>({
+  const memberSlideForm = useForm<{ title: string; subtitle: string; ctaLabel: string; ctaLink: string; order?: number }>({
     defaultValues: {
       title: '',
       subtitle: '',
-      imageUrl: '',
       ctaLabel: '',
       ctaLink: '',
       order: undefined,
     },
   });
+  const [memberSlideFile, setMemberSlideFile] = useState<File | null>(null);
+  const [memberSlideFileKey, setMemberSlideFileKey] = useState(0);
   const { data: memberSlides } = useQuery({ queryKey: ['admin-member-slides'], queryFn: () => apiGet<MemberOverviewSlide[]>('/admin/dashboard/slides') });
   const createMemberSlide = useMutation({
-    mutationFn: (values: { title: string; subtitle: string; imageUrl: string; ctaLabel: string; ctaLink: string; order?: number }) =>
-      apiPost('/admin/dashboard/slides', {
-        ...values,
-        order: Number.isFinite(values.order) ? Number(values.order) : undefined,
-      }),
+    mutationFn: ({ values, file }: {
+      values: { title: string; subtitle: string; ctaLabel: string; ctaLink: string; order?: number };
+      file: File;
+    }) => {
+      const formData = new FormData();
+      formData.append('image', file);
+      if (values.title.trim()) formData.append('title', values.title.trim());
+      if (values.subtitle.trim()) formData.append('subtitle', values.subtitle.trim());
+      if (values.ctaLabel.trim()) formData.append('ctaLabel', values.ctaLabel.trim());
+      if (values.ctaLink.trim()) formData.append('ctaLink', values.ctaLink.trim());
+      if (Number.isFinite(values.order)) formData.append('order', String(values.order));
+      return apiPost('/admin/dashboard/slides', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
     onSuccess: () => {
       toast.success('Slide member ditambahkan');
       memberSlideForm.reset();
+      setMemberSlideFile(null);
+      setMemberSlideFileKey((previous) => previous + 1);
       queryClient.invalidateQueries({ queryKey: ['admin-member-slides'] });
     },
     onError: () => toast.error('Gagal menyimpan slide member'),
@@ -219,7 +232,13 @@ export function AdminLandingPage() {
     onError: () => toast.error('Gagal memperbarui informasi kontak'),
   });
   const onSubmitContact = contactForm.handleSubmit((values) => saveContact.mutate(values));
-  const onSubmitMemberSlide = memberSlideForm.handleSubmit((values) => createMemberSlide.mutate(values));
+  const onSubmitMemberSlide = memberSlideForm.handleSubmit((values) => {
+    if (!memberSlideFile) {
+      toast.error('Pilih gambar slide member terlebih dahulu');
+      return;
+    }
+    createMemberSlide.mutate({ values, file: memberSlideFile });
+  });
 
   const [memberBackgroundFile, setMemberBackgroundFile] = useState<File | null>(null);
   const [memberBackgroundEnabled, setMemberBackgroundEnabled] = useState(true);
@@ -566,7 +585,17 @@ export function AdminLandingPage() {
           <form className="grid gap-3 md:grid-cols-2" onSubmit={onSubmitMemberSlide}>
             <Input placeholder="Judul" {...memberSlideForm.register('title')} />
             <Input placeholder="Subjudul" {...memberSlideForm.register('subtitle')} />
-            <Input placeholder="Image URL" {...memberSlideForm.register('imageUrl')} className="md:col-span-2" />
+            <div className="space-y-2 md:col-span-2">
+              <Input
+                key={memberSlideFileKey}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => setMemberSlideFile(event.target.files?.[0] ?? null)}
+              />
+              <p className="text-[11px] text-slate-500">
+                Unggah gambar JPG, PNG, atau WEBP maksimal 8MB. Tidak perlu menggunakan link gambar.
+              </p>
+            </div>
             <Input placeholder="CTA Label" {...memberSlideForm.register('ctaLabel')} />
             <Input placeholder="CTA Link" {...memberSlideForm.register('ctaLink')} />
             <Input type="number" placeholder="Urutan" {...memberSlideForm.register('order', { valueAsNumber: true })} />
@@ -579,7 +608,7 @@ export function AdminLandingPage() {
           <div className="grid gap-3 md:grid-cols-2">
             {(memberSlides ?? []).map((slide) => (
               <div key={slide.id} className="rounded-2xl border border-slate-100 p-4">
-                <img src={slide.imageUrl} alt={slide.title ?? 'Member slide'} className="h-40 w-full rounded-xl object-cover" loading="lazy" />
+                <img src={getAssetUrl(slide.imageUrl)} alt={slide.title ?? 'Member slide'} className="h-40 w-full rounded-xl object-cover" loading="lazy" />
                 <p className="mt-2 text-sm font-semibold text-slate-900">{slide.title ?? 'Tanpa judul'}</p>
                 {slide.subtitle && <p className="text-xs text-slate-500">{slide.subtitle}</p>}
                 <div className="mt-2 flex items-center justify-between text-xs text-slate-500">

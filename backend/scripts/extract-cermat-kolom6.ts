@@ -11,7 +11,7 @@ type Rect = { left: number; top: number; width: number; height: number };
 type Bounds = { minX: number; maxX: number; minY: number; maxY: number };
 type IconPad = Partial<{ left: number; top: number; right: number; bottom: number }>;
 
-/** Grid 3×2 — lewati lingkaran kuadran (bawah kiri) */
+/** Grid 3×2 — 6 ikon, termasuk lingkaran kuadran */
 const KOLOM6_ICONS: ReadonlyArray<{
   key: string;
   row: number;
@@ -24,6 +24,7 @@ const KOLOM6_ICONS: ReadonlyArray<{
   { key: 'panah-naik', row: 0, col: 1, marginRatio: 0.12 },
   { key: 'donut-chart', row: 1, col: 0, marginRatio: 0.12 },
   { key: 'diagram-turun', row: 1, col: 1, marginRatio: 0.12 },
+  { key: 'diagram-lingkaran', row: 2, col: 0, marginRatio: 0.12 },
   { key: 'garis-naik', row: 2, col: 1, marginRatio: 0.12 },
 ];
 
